@@ -1,6 +1,6 @@
 ## Instruction
 
-Provide a concise summary of the following text. Provide your reasoning and analysis of the key points first, but you must place the final summary at the very end of your response, enclosed in tags like this: <answer>[SUMMARY]</answer>. Do not include extra commentary inside the tags.
+Provide a concise summary of the following text. Provide your reasoning and analysis of the key points first, but you must place the final summary at the very end of your response, enclosed in tags like this: <summary>[SUMMARY]</summary>. Do not include extra commentary inside the tags.
 
 ## Question
 
@@ -17,8 +17,8 @@ def reward_fn(model_output, reference_answer):
     import re
     from sentence_transformers import SentenceTransformer, util
     
-    # 1. Format Objective: Check for <answer> tags
-    tag_pattern = r"<answer>(.*?)</answer>"
+    # 1. Format Objective: Check for <summary> tags
+    tag_pattern = r"<summary>(.*?)</summary>"
     match = re.search(tag_pattern, model_output, re.DOTALL)
     
     if not match:

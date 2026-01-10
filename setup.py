@@ -118,5 +118,7 @@ setup(
         "antlr4-python3-runtime==4.11.1",
         "sentence-transformers",
         "transformers",
+        "bs4",
+        "gguf",
     ],
 )

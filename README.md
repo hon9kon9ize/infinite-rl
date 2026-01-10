@@ -83,6 +83,48 @@ Evaluates text summarization quality using semantic similarity.
 
 See [examples/SUMMARIZATION.md](examples/SUMMARIZATION.md) for details.
 
+### 4. HTML Task
+Evaluates LLM-generated HTML code using syntax validation and CSS selector matching.
+
+**Features:**
+- HTML syntax validation using BeautifulSoup
+- CSS selector-based element matching
+- Support for multiple selectors validation
+- Custom validator functions
+
+**Example:**
+```python
+from infinite_rl import get_reward_functions
+
+reward_fns = get_reward_functions()
+html_fn = reward_fns["html"]
+
+# Example 1: Single CSS selector
+score, details = html_fn.compute_reward(
+    model_output="<div class='container'><h1>Hello</h1></div>",
+    reference_answer="div.container h1"
+)
+
+# Example 2: Multiple selectors
+score, details = html_fn.compute_reward(
+    model_output="<html><body><p id='intro'>Welcome</p></body></html>",
+    reference_answer={
+        "selectors": ["html", "body", "p#intro"]
+    }
+)
+
+# Example 3: Custom validator
+def validate_structure(soup):
+    has_body = soup.body is not None
+    has_main = soup.select("main")
+    return has_body and len(has_main) > 0
+
+score, details = html_fn.compute_reward(
+    model_output="<html><body><main>Content</main></body></html>",
+    reference_answer=validate_structure
+)
+```
+
 ## Usage
 
 Run the generator using the CLI:
@@ -131,6 +173,26 @@ int main() {
 """
 stdout, stderr = executor.run_single(code_cpp, "cpp")
 print(f"C++: {stdout}")
+
+# Test Rust
+code_rust = """
+fn main() {
+    println!("Hello, World!");
+}
+"""
+stdout, stderr = executor.run_single(code_rust, "rust")
+print(f"Rust: {stdout}")
+
+# Test Java
+code_java = """
+public class Main {
+    public static void main(String[] args) {
+        System.out.println("Hello, World!");
+    }
+}
+"""
+stdout, stderr = executor.run_single(code_java, "java")
+print(f"Java: {stdout}")
 ```
 
 ### Testing in Google Colab

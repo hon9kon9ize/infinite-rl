@@ -1,4 +1,11 @@
-from typing import Tuple
+from typing import Tuple, Union, Callable, Any
+from dataclasses import dataclass
+
+
+@dataclass
+class RewardFunctionScore:
+    format_score: float
+    correctness_score: float
 
 
 class RewardFunction:
@@ -10,6 +17,6 @@ class RewardFunction:
         raise NotImplementedError("This method should be overridden by subclasses.")
 
     def compute_reward(
-        self, model_output: str, reference_answer: str
-    ) -> Tuple[float, float]:
+        self, model_output: str, reference_answer: Union[str, int, Callable]
+    ) -> RewardFunctionScore:
         raise NotImplementedError("This method should be overridden by subclasses.")

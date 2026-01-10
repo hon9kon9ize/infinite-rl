@@ -1,6 +1,7 @@
 from .math import MathRewardFunction
 from .summarization import SummarizationRewardFunction
 from .coding import CodingRewardFunction
+from .html import HtmlRewardFunction
 
 
 def get_reward_functions():
@@ -8,6 +9,7 @@ def get_reward_functions():
         "math": MathRewardFunction("math"),
         "summarization": SummarizationRewardFunction("summarization"),
         "coding": CodingRewardFunction("coding"),
+        "html": HtmlRewardFunction("html"),
     }
 
     # Initialize the reward function

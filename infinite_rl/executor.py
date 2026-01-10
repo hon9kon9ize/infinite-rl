@@ -66,10 +66,60 @@ class RewardExecutor:
 
     def _execute_typescript(self, code, cwd):
         fpath = os.path.join(cwd, "script.ts")
+        js_path = os.path.join(cwd, "script.js")
+
         with open(fpath, "w") as f:
             f.write(code)
+
+        # Try ts-node first with transpile-only mode
+        try:
+            result = subprocess.run(
+                ["ts-node", "--transpile-only", fpath],
+                capture_output=True,
+                text=True,
+                timeout=self.timeout,
+            )
+            if result.returncode == 0:
+                return result
+        except FileNotFoundError:
+            pass
+
+        # Try tsx
+        try:
+            result = subprocess.run(
+                ["tsx", fpath],
+                capture_output=True,
+                text=True,
+                timeout=self.timeout,
+            )
+            if result.returncode == 0:
+                return result
+        except FileNotFoundError:
+            pass
+
+        # Try tsc compilation
+        try:
+            compile_result = subprocess.run(
+                ["tsc", fpath, "--outFile", js_path, "--lib", "es2020"],
+                capture_output=True,
+                timeout=self.timeout,
+            )
+            if compile_result.returncode == 0 and os.path.exists(js_path):
+                return subprocess.run(
+                    ["node", js_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=self.timeout,
+                )
+        except FileNotFoundError:
+            pass
+
+        # Last resort: TypeScript is valid JavaScript, run with node directly
         return subprocess.run(
-            ["ts-node", fpath], capture_output=True, text=True, timeout=self.timeout
+            ["node", fpath],
+            capture_output=True,
+            text=True,
+            timeout=self.timeout,
         )
 
     def run_single(self, code, lang):

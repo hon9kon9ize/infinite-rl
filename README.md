@@ -50,7 +50,7 @@ Evaluates LLM-generated code across multiple programming languages with test cas
 
 **Example:**
 ```python
-from src.reward_functions import get_reward_functions
+from infinite_rl import get_reward_functions
 
 reward_fns = get_reward_functions()
 coding_fn = reward_fns["coding"]
@@ -97,6 +97,71 @@ python main.py --model gemini-3-flash-preview --type coding,math,summarization -
 - `--type`: Comma-separated list of task types to generate. Supported: `coding`, `math`, `summarization`.
 - `--num_samples`: Total number of samples to generate. They will be distributed evenly across the specified types.
 - `--out`: The output directory where `dataset.csv` and `reward_function.py` will be saved.
+
+## Testing
+
+### Testing the RewardExecutor Locally
+
+Test the executor with different programming languages:
+
+```python
+from infinite_rl import RewardExecutor
+
+executor = RewardExecutor(timeout=5)
+
+# Test Python
+stdout, stderr = executor.run_single("print('Hello, World!')", "python")
+print(f"Python: {stdout}")  # Output: Hello, World!
+
+# Test JavaScript
+stdout, stderr = executor.run_single("console.log('Hello, World!')", "javascript")
+print(f"JavaScript: {stdout}")  # Output: Hello, World!
+
+# Test TypeScript
+stdout, stderr = executor.run_single("console.log('Hello, World!')", "typescript")
+print(f"TypeScript: {stdout}")  # Output: Hello, World!
+
+# Test C++
+code_cpp = """
+#include <iostream>
+int main() {
+    std::cout << "Hello, World!" << std::endl;
+    return 0;
+}
+"""
+stdout, stderr = executor.run_single(code_cpp, "cpp")
+print(f"C++: {stdout}")
+```
+
+### Testing in Google Colab
+
+Install and test in Colab with this notebook:
+
+```python
+# Install the package
+!pip install git+https://github.com/hon9kon9ize/infinite-rl.git
+
+# Import and test
+from infinite_rl import RewardExecutor, get_reward_functions
+
+# Test executor
+executor = RewardExecutor(timeout=5)
+stdout, stderr = executor.run_single("print(2 + 2)", "python")
+print(f"Executor test - Output: {stdout}, Error: {stderr}")
+
+# Test coding reward function
+reward_fns = get_reward_functions()
+coding_fn = reward_fns["coding"]
+coding_fn.set_language("python")
+
+score, details = coding_fn.compute_reward(
+    model_output="print(2 + 2)",
+    expected_output="4"
+)
+print(f"Reward Score: {score}")
+print(f"Execution Successful: {details['execution_success']}")
+print(f"Output Match: {details['output_match']}")
+```
 
 ## Output
 

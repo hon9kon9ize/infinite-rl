@@ -101,9 +101,9 @@ class CustomInstall(install):
 
 
 setup(
-    name="rl_data_generator",
+    name="infinite_rl",
     version="0.1",
-    packages=["src"],
+    packages=["src", "infinite_rl"],
     cmdclass={"install": CustomInstall},
     install_requires=[
         "requests",

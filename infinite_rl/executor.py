@@ -66,8 +66,6 @@ class RewardExecutor:
 
     def _execute_typescript(self, code, cwd):
         fpath = os.path.join(cwd, "script.ts")
-        js_path = os.path.join(cwd, "script.js")
-
         with open(fpath, "w") as f:
             f.write(code)
 
@@ -82,72 +80,73 @@ class RewardExecutor:
                 )
             return ""
 
-        # 1. Try ts-node directly
-        try:
-            result = subprocess.run(
-                [
-                    "ts-node",
-                    "--transpile-only",
-                    "--compiler-options",
-                    '{"module":"commonjs","target":"es2020"}',
-                    fpath,
-                ],
-                capture_output=True,
-                text=True,
-                timeout=self.timeout,
-            )
-            v_err = check_node_version_error(result.stderr)
-            if v_err:
-                result.stderr += v_err
-                return result
-            if result.returncode == 0 or "SyntaxError" in result.stderr:
-                return result
-        except FileNotFoundError:
-            pass
+        # Runners in order of preference
+        runners = [
+            ["tsx", fpath],
+            ["ts-node", "--transpile-only", fpath],
+            ["npx", "-y", "tsx", fpath],
+            ["npx", "-y", "ts-node", "--transpile-only", fpath],
+        ]
 
-        # 2. Try tsx
-        try:
-            result = subprocess.run(
-                ["tsx", fpath],
-                capture_output=True,
-                text=True,
-                timeout=self.timeout,
-            )
-            v_err = check_node_version_error(result.stderr)
-            if v_err:
-                result.stderr += v_err
-                return result
-            if result.returncode == 0 or "SyntaxError" in result.stderr:
-                return result
-        except FileNotFoundError:
-            pass
-
-        # 3. Try npx as a fallback (common in Colab)
-        for runner in ["ts-node", "tsx"]:
+        last_result = None
+        for cmd in runners:
             try:
                 result = subprocess.run(
-                    ["npx", "-y", runner, fpath],
+                    cmd,
                     capture_output=True,
                     text=True,
                     timeout=self.timeout,
                 )
+                
+                # Check for Node version error in any runner result
                 v_err = check_node_version_error(result.stderr)
                 if v_err:
                     result.stderr += v_err
                     return result
+
+                # If it pass or has a legitimate SyntaxError in the code itself, return it
                 if result.returncode == 0:
                     return result
+                
+                # If we have a non-zero return but it's clearly a code error, keep it
+                if "SyntaxError" in result.stderr or "ReferenceError" in result.stderr:
+                    last_result = result
+                    # Don't return yet, try next runner in case it's a runner configuration error
+                
+            except FileNotFoundError:
+                continue
             except Exception:
-                pass
+                continue
 
-        # 4. Try tsc compilation
+        if last_result:
+            return last_result
+
+        # Final fallback: tsc compilation
         try:
             compile_result = subprocess.run(
-                [
-                    "tsc",
-                    fpath,
-                    "--target",
-                    "es2020",
+                ["tsc", fpath, "--target", "es2020", "--module", "commonjs", "--outDir", cwd],
+                capture_output=True,
+                text=True,
+                timeout=self.timeout
+            )
+            if compile_result.returncode == 0:
+                js_path = os.path.join(cwd, "script.js")
+                return subprocess.run(
+                    ["node", js_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=self.timeout
+                )
+            return compile_result
+        except FileNotFoundError:
+            pass
+
+        return subprocess.CompletedProcess(
+            args=[],
+            returncode=1,
+            stdout="",
+            stderr="No TypeScript environment found (tsx, ts-node, or tsc). Please install: 'npm install -g ts-node'"
+        )
                     "--module",
                     "commonjs",
                     "--esModuleInterop",

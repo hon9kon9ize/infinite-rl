@@ -2,6 +2,7 @@ from setuptools import setup
 from setuptools.command.install import install
 import subprocess
 import platform
+import os
 
 
 class CustomInstall(install):
@@ -53,58 +54,49 @@ class CustomInstall(install):
     def _install_linux(self):
         """Install dependencies on Linux using apt-get and NodeSource"""
         print("Installing dependencies on Linux...")
+
+        # Helper to run commands with sudo if available
+        def run_cmd(cmd, shell=False):
+            if isinstance(cmd, str) and not shell:
+                cmd = cmd.split()
+
+            # Try with sudo first if it's linux and not root
+            if os.geteuid() != 0:
+                if shell:
+                    cmd = f"sudo {cmd}"
+                else:
+                    cmd = ["sudo"] + cmd
+
+            return subprocess.run(
+                cmd, shell=shell, check=False, capture_output=True, text=True
+            )
+
         try:
             # Check current node version
-            try:
-                node_v_proc = subprocess.run(
-                    ["node", "-v"], capture_output=True, text=True
-                )
+            node_v_proc = run_cmd(["node", "-v"])
+            if node_v_proc.returncode == 0:
                 node_v = node_v_proc.stdout.strip().replace("v", "")
                 major_v = int(node_v.split(".")[0]) if node_v else 0
                 if major_v >= 18:
                     print(f"Node.js version {node_v} is already modern enough.")
                 else:
                     raise ValueError("Node too old")
-            except (
-                subprocess.CalledProcessError,
-                FileNotFoundError,
-                ValueError,
-                IndexError,
-            ):
-                # Install NodeSource for a modern Node.js version (Node 20+)
-                print("Configuring NodeSource for Node.js 20...")
-                subprocess.run(
-                    "curl -fsSL https://deb.nodesource.com/setup_20.x | bash -",
-                    shell=True,
-                    check=False,
-                )
-                subprocess.run(["apt-get", "update"], check=True)
-                # Purge old versions first to be safe
-                subprocess.run(
-                    ["apt-get", "remove", "-y", "nodejs", "npm"], check=False
-                )
-                subprocess.run(
-                    ["apt-get", "install", "-y", "nodejs", "openjdk-17-jdk", "g++"],
-                    check=True,
-                )
-        except Exception as e:
-            print(f"Warning: Failed to install via apt-get or NodeSource: {e}")
-            # Fallback to standard apt-get if NodeSource fails
-            try:
-                subprocess.run(
-                    [
-                        "apt-get",
-                        "install",
-                        "-y",
-                        "nodejs",
-                        "npm",
-                        "openjdk-17-jdk",
-                        "g++",
-                    ],
-                    check=False,
-                )
-            except Exception:
-                pass
+            else:
+                raise FileNotFoundError()
+        except (ValueError, FileNotFoundError):
+            # Install NodeSource for a modern Node.js version (Node 20+)
+            print("Configuring NodeSource for Node.js 20...")
+            run_cmd(
+                "curl -fsSL https://deb.nodesource.com/setup_20.x | bash -", shell=True
+            )
+            run_cmd(["apt-get", "update"])
+            # Purge old versions first to be safe
+            run_cmd(["apt-get", "remove", "-y", "nodejs", "npm"])
+            run_cmd(["apt-get", "install", "-y", "nodejs", "openjdk-17-jdk", "g++"])
+
+        # Install ts-node and typescript globally
+        print("Installing ts-node and typescript globally...")
+        run_cmd(["npm", "install", "-g", "ts-node", "typescript"])
 
         # Install Rust
         try:
@@ -119,16 +111,6 @@ class CustomInstall(install):
             )
         except Exception as e:
             print(f"Warning: Failed to install Rust: {e}")
-
-        # Install ts-node for TypeScript execution
-        try:
-            print("Installing ts-node and typescript...")
-            # We install both to avoid peer dependency issues
-            subprocess.run(
-                ["npm", "install", "-g", "ts-node", "typescript"], check=False
-            )
-        except Exception as e:
-            print(f"Warning: Failed to install ts-node: {e}")
 
     def _install_windows(self):
         """Install dependencies on Windows"""
@@ -153,7 +135,7 @@ class CustomInstall(install):
 
 setup(
     name="infinite_rl",
-    version="0.1.6",
+    version="0.1.7",
     packages=["infinite_rl", "infinite_rl.reward_functions", "infinite_rl.examples"],
     include_package_data=True,
     package_data={

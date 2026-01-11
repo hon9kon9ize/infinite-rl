@@ -51,7 +51,7 @@ class HtmlRewardFunction(RewardFunction):
                 if isinstance(result, bool):
                     correctness_score = 1.0 if result else 0.0
                 elif isinstance(result, float):
-                    correctness_score = 1.0 if result > 0.5 else 0.0
+                    correctness_score = result
                 else:
                     correctness_score = 0.0
                 return RewardFunctionScore(

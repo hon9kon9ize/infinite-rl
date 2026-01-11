@@ -96,7 +96,7 @@ class SummarizationRewardFunction(RewardFunction):
                 format_score = (format_score + length_score) / 2.0
 
         if not self.initialized:
-            raise RuntimeError("Reward function not initialized.")
+            self.initialize()
 
         # Handle different expected_output types
         if callable(expected_output):
@@ -106,7 +106,7 @@ class SummarizationRewardFunction(RewardFunction):
                 if isinstance(result, bool):
                     correctness_score = 1.0 if result else 0.0
                 elif isinstance(result, float):
-                    correctness_score = 1.0 if result > 0.5 else 0.0
+                    correctness_score = result
                 else:
                     correctness_score = 0.0
                 return RewardFunctionScore(
@@ -126,9 +126,7 @@ class SummarizationRewardFunction(RewardFunction):
                 if pred_length >= expected_output:
                     correctness_score = 1.0
                 else:
-                    correctness_score = (
-                        1.0 if (pred_length / expected_output) > 0.5 else 0.0
-                    )
+                    correctness_score = pred_length / expected_output
                 return RewardFunctionScore(
                     format_score=format_score, correctness_score=correctness_score
                 )
@@ -140,14 +138,10 @@ class SummarizationRewardFunction(RewardFunction):
         else:
             # String: use semantic similarity
             try:
-                print("prompt")
-                # summary_embed = self.model.encode(
-                #     predicted_summary.strip(), prompt="summarization"
-                # )
                 summary_embed = self.model.encode(predicted_summary.strip())
                 doc_embed = self.model.encode(expected_output.strip())
                 similarity = self.model.similarity(summary_embed, doc_embed).item()
-                correctness_score = 1.0 if similarity > 0.5 else 0.0
+                correctness_score = similarity
             except Exception as e:
                 print(f"Error computing embeddings: {e}")
                 correctness_score = 0.0

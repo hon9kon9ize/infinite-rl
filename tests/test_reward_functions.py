@@ -179,9 +179,12 @@ print("hello world")
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
 
-        # It should have 1.0 format (executed fine) but 0.0 correctness (wrong order)
+        # It should have 1.0 format (executed fine) but low correctness (wrong order)
         self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 0.0)
+        self.assertLess(
+            score.correctness_score, 0.6
+        )  # Sequence ratio will be relatively low
+        self.assertGreater(score.correctness_score, 0.0)
 
     def test_json_robustness(self):
         """Test JSON output with different formatting and key order."""
@@ -209,8 +212,8 @@ print(3.141592653589)
 ```"""
         expected_output1 = 3.141592653590
         score1 = self.reward_fn.compute_reward(model_output1, expected_output1)
-        # Similarity should be 0.99, so correctness_score should be 1.0
-        self.assertEqual(score1.correctness_score, 1.0)
+        # Similarity should be 0.99 for small numeric differences
+        self.assertEqual(score1.correctness_score, 0.99)
 
         # Scenario 2: Larger difference outside tolerance
         model_output2 = """```python
@@ -218,8 +221,9 @@ print(3.14)
 ```"""
         expected_output2 = 3.14159
         score2 = self.reward_fn.compute_reward(model_output2, expected_output2)
-        # Ratio will be low, so 0.0
-        self.assertEqual(score2.correctness_score, 0.0)
+        # Ratio will be partial but higher than 0.0
+        self.assertLess(score2.correctness_score, 0.99)
+        self.assertGreater(score2.correctness_score, 0.5)
 
     def test_whitespace_normalization(self):
         """Test string matching with extreme whitespace differences."""
@@ -228,8 +232,8 @@ print("  hello      world\\n\\n  ")
 ```"""
         expected_output = "hello world"
         score = self.reward_fn.compute_reward(model_output, expected_output)
-        # Normalized whitespace comparison should return 0.9 similarity -> 1.0 correctness
-        self.assertEqual(score.correctness_score, 1.0)
+        # Normalized whitespace comparison should return 0.9 similarity
+        self.assertEqual(score.correctness_score, 0.9)
 
     def test_multiple_code_blocks(self):
         """Test that the reward function correctly extracts code from multiple blocks."""
@@ -351,8 +355,8 @@ Using the power rule:
         score = self.reward_fn.compute_reward(model_output, expected_output)
 
         self.assertEqual(score.format_score, 1.0)
-        # diff = |40-42| = 2, similarity = max(0, 1 - 2/42) = 0.952 > 0.5, so 1.0
-        self.assertEqual(score.correctness_score, 1.0)
+        # diff = |40-42| = 2, similarity = max(0, 1 - 2/42) = 0.952...
+        self.assertAlmostEqual(score.correctness_score, 0.9523809523809523)
 
 
 class TestHTMLRewardFunction(unittest.TestCase):
@@ -453,7 +457,9 @@ Remote work is shifting economic activity from city centers to suburbs, forcing 
         score = reward_fn.compute_reward(model_output, expected_output)
 
         self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 1.0)  # Binary: 0.95 > 0.5
+        self.assertEqual(
+            score.correctness_score, 0.95
+        )  # Direct: returns similarity value
 
     @patch("infinite_rl.reward_functions.summarization.SentenceTransformer")
     def test_valid_summary_with_low_similarity(self, mock_transformer_class):
@@ -480,7 +486,9 @@ Remote work is shifting economic activity from city centers to suburbs, forcing 
         score = reward_fn.compute_reward(model_output, expected_output)
 
         self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 0.0)  # Binary: 0.3 <= 0.5
+        self.assertEqual(
+            score.correctness_score, 0.3
+        )  # Direct: returns similarity value
 
     @patch("infinite_rl.reward_functions.summarization.SentenceTransformer")
     def test_missing_summary_tag(self, mock_transformer_class):

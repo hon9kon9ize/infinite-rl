@@ -12,9 +12,4 @@ def get_reward_functions():
         "html": HtmlRewardFunction("html"),
     }
 
-    # Initialize the reward function
-    for task_type in reward_fns:
-        reward_fn = reward_fns[task_type]
-        reward_fn.initialize()
-
     return reward_fns

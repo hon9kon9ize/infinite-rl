@@ -72,31 +72,49 @@ coding_fn = reward_fns["coding"]
 coding_fn.set_language("python")
 
 # Evaluate with expected output
-score, details = coding_fn.compute_reward(
+result = coding_fn.compute_reward(
     model_output="print(2 + 2)",
     expected_output="4"
 )
-
-# Evaluate with test cases
-test_cases = [
-    {"input": "1 + 1", "expected_output": "2"},
-    {"input": "5 * 3", "expected_output": "15"}
-]
-score, details = coding_fn.compute_reward(
-    model_output="print(eval(input()))",
-    test_cases=test_cases
-)
+print(f"Score: {result.correctness_score}")
 ```
 
 ### 2. Math Task
 Evaluates mathematical problem-solving using symbolic computation.
 
-See [examples/MATH.md](examples/MATH.md) for details.
+**Example:**
+```python
+from infinite_rl import get_reward_functions
+
+reward_fns = get_reward_functions()
+math_fn = reward_fns["math"]
+
+result = math_fn.compute_reward(
+    model_output="<answer>x^2 + 2x + 1</answer>",
+    expected_output="(x+1)^2"
+)
+print(f"Correctness: {result.correctness_score}") # Output: 1.0
+```
 
 ### 3. Summarization Task
 Evaluates text summarization quality using semantic similarity.
 
-See [examples/SUMMARIZATION.md](examples/SUMMARIZATION.md) for details.
+**Example:**
+```python
+from infinite_rl import get_reward_functions
+
+reward_fns = get_reward_functions()
+summ_fn = reward_fns["summarization"]
+# Optional: initialize to load embeddings model early
+summ_fn.initialize()
+
+result = summ_fn.compute_reward(
+    model_output="<summary>The quick brown fox jumps over the lazy dog.</summary>",
+    expected_output="A fast fox leaps over a sleepy canine.",
+    original_document="The quick brown fox jumps over the lazy dog. This is a longer text."
+)
+print(f"Semantic Similarity: {result.correctness_score}")
+```
 
 ### 4. HTML Task
 Evaluates LLM-generated HTML code using syntax validation and CSS selector matching.
@@ -115,13 +133,14 @@ reward_fns = get_reward_functions()
 html_fn = reward_fns["html"]
 
 # Example 1: Single CSS selector
-score, details = html_fn.compute_reward(
+result = html_fn.compute_reward(
     model_output="<div class='container'><h1>Hello</h1></div>",
     reference_answer="div.container h1"
 )
+print(f"Correctness: {result.correctness_score}")
 
 # Example 2: Multiple selectors
-score, details = html_fn.compute_reward(
+result = html_fn.compute_reward(
     model_output="<html><body><p id='intro'>Welcome</p></body></html>",
     reference_answer={
         "selectors": ["html", "body", "p#intro"]
@@ -134,26 +153,11 @@ def validate_structure(soup):
     has_main = soup.select("main")
     return has_body and len(has_main) > 0
 
-score, details = html_fn.compute_reward(
+result = html_fn.compute_reward(
     model_output="<html><body><main>Content</main></body></html>",
     reference_answer=validate_structure
 )
 ```
-
-## Usage
-
-Run the generator using the CLI:
-
-```bash
-python main.py --model gemini-3-flash-preview --type coding,math,summarization --num_samples 12 --out output_data
-```
-
-### Arguments
-
-- `--model`: The Gemini model name to use (e.g., `gemini-3-flash-preview`, `gemini-3-pro-preview`).
-- `--type`: Comma-separated list of task types to generate. Supported: `coding`, `math`, `summarization`.
-- `--num_samples`: Total number of samples to generate. They will be distributed evenly across the specified types.
-- `--out`: The output directory where `dataset.csv` and `reward_function.py` will be saved.
 
 ## Testing
 
@@ -231,13 +235,13 @@ reward_fns = get_reward_functions()
 coding_fn = reward_fns["coding"]
 coding_fn.set_language("python")
 
-score, details = coding_fn.compute_reward(
+result = coding_fn.compute_reward(
     model_output="print(2 + 2)",
     expected_output="4"
 )
-print(f"Reward Score: {score}")
-print(f"Execution Successful: {details['execution_success']}")
-print(f"Output Match: {details['output_match']}")
+print(f"Reward Result: {result}")
+print(f"Format Score: {result.format_score}")
+print(f"Correctness Score: {result.correctness_score}")
 ```
 
 ## Output
@@ -248,7 +252,7 @@ print(f"Output Match: {details['output_match']}")
 ## Project Structure
 
 ```
-src/
+infinite_rl/
 ├── executor.py              # Multi-language code executor
 ├── generator.py             # LLM prompt generation
 ├── prompts.py               # Task-specific prompts
@@ -262,7 +266,7 @@ src/
 ## Architecture
 
 ### RewardExecutor
-Handles execution of code in multiple languages with timeout protection and error handling. Located in [src/executor.py](src/executor.py).
+Handles execution of code in multiple languages with timeout protection and error handling. Located in [infinite_rl/executor.py](infinite_rl/executor.py).
 
 ### Reward Functions
 Each task type has a specialized reward function that:

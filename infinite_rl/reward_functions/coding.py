@@ -130,7 +130,7 @@ class CodingRewardFunction(RewardFunction):
                     if isinstance(result, bool):
                         correctness_score = 1.0 if result else 0.0
                     elif isinstance(result, (int, float)):
-                        correctness_score = 1.0 if result > 0.5 else 0.0
+                        correctness_score = float(result)
                     else:
                         correctness_score = 0.0
                     return RewardFunctionScore(
@@ -145,11 +145,12 @@ class CodingRewardFunction(RewardFunction):
 
             # Case B: String/Int/Other - use robust similarity matching
             similarity = self._compute_similarity(stdout, reference_stdout)
-            # 0.8 is a good balance for string similarity in coding outputs
-            correctness_score = 1.0 if similarity >= 0.8 else 0.0
+            correctness_score = similarity
 
             error_msg = ""
-            if correctness_score < 1.0:
+            if (
+                correctness_score < 0.5
+            ):  # Changed from 1.0 to 0.5 for less noise in error messages
                 error_msg = (
                     f"Output mismatch. Similarity: {similarity:.2f}.\n"
                     f"Expected Output: {reference_stdout}\n"

@@ -16,6 +16,9 @@ class MathRewardFunction(RewardFunction):
     def compute_reward(
         self, model_output: str, expected_output: Union[str, int, Callable]
     ) -> RewardFunctionScore:
+        if not self.initialized:
+            self.initialize()
+
         tag_pattern = r"<answer>(.*?)</answer>"
         match = re.search(tag_pattern, model_output, re.DOTALL)
         if not match:
@@ -32,7 +35,7 @@ class MathRewardFunction(RewardFunction):
                 if isinstance(result, bool):
                     correctness_score = 1.0 if result else 0.0
                 elif isinstance(result, float):
-                    correctness_score = 1.0 if result > 0.5 else 0.0
+                    correctness_score = result
                 else:
                     correctness_score = 0.0
                 return RewardFunctionScore(
@@ -53,8 +56,9 @@ class MathRewardFunction(RewardFunction):
                 else:
                     # Partial credit based on closeness
                     diff = abs(pred_int - expected_output)
-                    similarity = max(0.0, 1.0 - (diff / max(expected_output, pred_int)))
-                    correctness_score = 1.0 if similarity > 0.5 else 0.0
+                    correctness_score = max(
+                        0.0, 1.0 - (diff / max(expected_output, pred_int))
+                    )
                 return RewardFunctionScore(
                     format_score=format_score, correctness_score=correctness_score
                 )

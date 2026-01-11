@@ -1,6 +1,6 @@
 import argparse
 import os
-from src.generator import generate_dataset
+from infinite_rl.generator import generate_dataset
 
 
 def main():

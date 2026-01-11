@@ -1,5 +1,6 @@
-include infinite_rl/examples/*.md
+recursive-include infinite_rl/examples *.md
 recursive-include infinite_rl/reward_functions *.py
 include infinite_rl/*.py
+include infinite_rl/examples/__init__.py
 include README.md
 include requirements.txt

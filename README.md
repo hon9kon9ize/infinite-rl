@@ -45,6 +45,12 @@ Arguments:
 - `--save_every`: Save progress to CSV every N samples (default: 1)
 - `--max_retries`: Maximum consecutive failed attempts per task type before stopping (default: 5)
 - `--timeout`: Timeout (in seconds) for reward function execution (default: 5)
+- `--task_dist`: Task distribution as comma-separated floats [coding, html, math, summarization] (default: `0.5,0.1,0.3,0.1`)
+
+**Example for generating only HTML tasks:**
+```bash
+python scripts/generate.py --num_samples 10 --task_dist 0,1,0,0 --out_dir ./html_only
+```
 
 ## Supported Tasks
 

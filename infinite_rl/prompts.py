@@ -39,3 +39,12 @@ TYPE_PROMPTS = {
     "summarization": "Generate a text summarization task with a long, detailed document (500+ words). Provide a concise summary in <summary> tags.",
     "coding": "Generate a complex Python algorithm or utility problem. Use an automated test block instead of user input.",
 }
+
+RECTIFY_PROMPT = """
+The previous output had quality issues ({error_info}).
+Please FIX the issues and regenerate the FULL sample (Prompt, Answer, and Response).
+Ensure the solution is correct and follows the required format exactly.
+
+Previous output was:
+{current_raw}
+"""

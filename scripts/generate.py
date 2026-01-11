@@ -42,6 +42,12 @@ def main():
         default=5,
         help="Timeout (in seconds) for reward function execution (default: 5)",
     )
+    parser.add_argument(
+        "--task_dist",
+        type=str,
+        default="0.5,0.1,0.3,0.1",
+        help="Task distribution [code, html, math, summarization] (default: 0.5,0.1,0.3,0.1)",
+    )
 
     args = parser.parse_args()
 
@@ -58,6 +64,7 @@ def main():
             save_every=args.save_every,
             max_retries=args.max_retries,
             timeout=args.timeout,
+            task_dist=args.task_dist,
         )
     except Exception as e:
         print(f"Error during generation: {e}")

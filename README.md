@@ -30,6 +30,21 @@ pip install git+https://github.com/hon9kon9ize/infinite-rl.git
    GOOGLE_API_KEY=your_api_key_here
    ```
 
+## Usage
+
+You can generate a synthetic dataset using the provided script:
+
+```bash
+python scripts/generate.py --num_samples 50 --out_dir ./my_dataset --save_every 10 --max_retries 5
+```
+
+Arguments:
+- `--num_samples`: Total number of samples to generate (default: 10)
+- `--model_name`: Gemini model to use (default: `gemini-2.0-flash-exp`)
+- `--out_dir`: Directory to save the `dataset.csv` (default: `data`)
+- `--save_every`: Save progress to CSV every N samples (default: 1)
+- `--max_retries`: Maximum consecutive failed attempts per task type before stopping (default: 5)
+
 ## Supported Tasks
 
 ### 1. Coding Task

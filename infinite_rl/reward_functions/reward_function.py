@@ -6,6 +6,7 @@ from dataclasses import dataclass
 class RewardFunctionScore:
     format_score: float
     correctness_score: float
+    error_msg: str = ""
 
 
 class RewardFunction:
@@ -17,6 +18,6 @@ class RewardFunction:
         raise NotImplementedError("This method should be overridden by subclasses.")
 
     def compute_reward(
-        self, model_output: str, reference_answer: Union[str, int, Callable]
+        self, model_output: str, expected_output: Union[str, int, Callable]
     ) -> RewardFunctionScore:
         raise NotImplementedError("This method should be overridden by subclasses.")

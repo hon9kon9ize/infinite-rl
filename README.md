@@ -105,7 +105,7 @@ coding_fn.set_language("python")
 
 # Evaluate with expected output
 result = coding_fn.compute_reward(
-    model_output="```python\nprint(2 + 2)\n```",
+    model_output="<answer>\n```python\nprint(2 + 2)\n```\n</answer>",
     expected_output="4"
 )
 print(f"Score: {result.correctness_score}")
@@ -141,7 +141,7 @@ summ_fn = reward_fns["summarization"]
 summ_fn.initialize()
 
 result = summ_fn.compute_reward(
-    model_output="<summary>The quick brown fox jumps over the lazy dog.</summary>",
+    model_output="<answer>The quick brown fox jumps over the lazy dog.</answer>",
     expected_output="A fast fox leaps over a sleepy canine.",
     original_document="The quick brown fox jumps over the lazy dog. This is a longer text."
 )
@@ -166,15 +166,15 @@ html_fn = reward_fns["html"]
 
 # Example 1: Single CSS selector
 result = html_fn.compute_reward(
-    model_output="<div class='container'><h1>Hello</h1></div>",
-    reference_answer="div.container h1"
+    model_output="<answer>\n<div class='container'><h1>Hello</h1></div>\n</answer>",
+    expected_output="div.container h1"
 )
 print(f"Correctness: {result.correctness_score}")
 
 # Example 2: Multiple selectors
 result = html_fn.compute_reward(
-    model_output="<html><body><p id='intro'>Welcome</p></body></html>",
-    reference_answer={
+    model_output="<answer>\n<html><body><p id='intro'>Welcome</p></body></html>\n</answer>",
+    expected_output={
         "selectors": ["html", "body", "p#intro"]
     }
 )
@@ -186,8 +186,8 @@ def validate_structure(soup):
     return has_body and len(has_main) > 0
 
 result = html_fn.compute_reward(
-    model_output="<html><body><main>Content</main></body></html>",
-    reference_answer=validate_structure
+    model_output="<answer>\n<html><body><main>Content</main></body></html>\n</answer>",
+    expected_output=validate_structure
 )
 ```
 
@@ -268,7 +268,7 @@ coding_fn = reward_fns["coding"]
 coding_fn.set_language("python")
 
 result = coding_fn.compute_reward(
-    model_output="```python\nprint(2 + 2)\n```",
+    model_output="<answer>\n```python\nprint(2 + 2)\n```\n</answer>",
     expected_output="4"
 )
 print(f"Reward Result: {result}")

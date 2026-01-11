@@ -73,7 +73,7 @@ coding_fn.set_language("python")
 
 # Evaluate with expected output
 result = coding_fn.compute_reward(
-    model_output="print(2 + 2)",
+    model_output="```python\nprint(2 + 2)\n```",
     expected_output="4"
 )
 print(f"Score: {result.correctness_score}")
@@ -236,7 +236,7 @@ coding_fn = reward_fns["coding"]
 coding_fn.set_language("python")
 
 result = coding_fn.compute_reward(
-    model_output="print(2 + 2)",
+    model_output="```python\nprint(2 + 2)\n```",
     expected_output="4"
 )
 print(f"Reward Result: {result}")

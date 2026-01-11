@@ -60,14 +60,23 @@ class CodingRewardFunction(RewardFunction):
             match = re.search(r"```(?:\w+)?\s*(.*?)```", model_output, re.DOTALL)
 
         if not match:
-            return RewardFunctionScore(
-                format_score=0.0,
-                correctness_score=0.0,
-                error_msg="No markdown code block found in response.",
-            )
-
-        code_content = match.group(1).strip()
-        format_score = 0.5  # Code block successfully found
+            # Fallback C: If no triple backticks are present at all, treat the entire output as code.
+            # This is useful for simple programmatic testing or when the model skips markdown tags.
+            if "```" not in model_output:
+                code_content = model_output.strip()
+                format_penalty = 0.5  # Penalty for not using markdown blocks
+                # If no markdown blocks, format starts at 0.0 unless it executes
+                format_score = 0.0
+            else:
+                return RewardFunctionScore(
+                    format_score=0.0,
+                    correctness_score=0.0,
+                    error_msg="No markdown code block found in response.",
+                )
+        else:
+            code_content = match.group(1).strip()
+            format_penalty = 1.0
+            format_score = 0.5  # Code block successfully found
 
         # 2. Execution Objective: Try to execute the code
         try:
@@ -82,7 +91,7 @@ class CodingRewardFunction(RewardFunction):
                 )
 
             # Execution was successful (no stderr)
-            format_score = 1.0
+            format_score = 1.0 * format_penalty
 
             # 3. Correctness Objective: Match stdout with expected_output
 

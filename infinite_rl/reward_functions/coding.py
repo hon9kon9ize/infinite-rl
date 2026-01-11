@@ -275,7 +275,6 @@ class CodingRewardFunction(RewardFunction):
 
         o1 = output1.strip()
         o2 = output2.strip()
-        print(f"DEBUG: SIM comparing '{o1}' with '{o2}'")
 
         if not o1 or not o2:
             return 1.0 if not o1 and not o2 else 0.0

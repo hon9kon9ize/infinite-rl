@@ -284,8 +284,8 @@ print("  hello      world\\n\\n  ")
 </answer>"""
         expected_output = "hello world"
         score = self.reward_fn.compute_reward(model_output, expected_output)
-        # Normalized whitespace comparison should return 0.9 similarity
-        self.assertEqual(score.correctness_score, 0.9)
+        # Normalized whitespace comparison should return 0.95 similarity
+        self.assertEqual(score.correctness_score, 0.95)
 
     def test_multiple_code_blocks(self):
         """Test that the reward function correctly extracts code from multiple blocks."""

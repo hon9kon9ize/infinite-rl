@@ -54,6 +54,28 @@ Arguments:
 python scripts/generate.py --num_samples 10 --task_dist 0,1,0,0 --out_dir ./html_only
 ```
 
+## Testing & Verification
+
+Infinite RL includes a comprehensive testing suite and verification tools to ensure the generator and reward functions are working correctly.
+
+### Run Unit Tests
+Use `pytest` to run the unit tests for reward functions and the parser:
+
+```bash
+# Run all tests
+python -m pytest tests -v
+
+# Run specific reward function tests
+python -m pytest tests/test_reward_functions.py -v
+```
+
+### Run Example Suite
+You can also run the built-in examples to verify that all task types are correctly parsed and evaluated:
+
+```bash
+python -m infinite_rl.run_examples
+```
+
 ## Supported Tasks
 
 ### 1. Coding Task

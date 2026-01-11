@@ -63,7 +63,9 @@ class HtmlRewardFunction(RewardFunction):
         try:
             # Clean if it contains markdown code blocks inside <answer>
             code_block_match = re.search(
-                r"```html\s*(.*?)\s*```", html_to_parse, re.DOTALL | re.IGNORECASE
+                r"```(?:html|json)?\s*(.*?)\s*```",
+                html_to_parse,
+                re.DOTALL | re.IGNORECASE,
             )
             if code_block_match:
                 html_to_parse = code_block_match.group(1)
@@ -75,13 +77,24 @@ class HtmlRewardFunction(RewardFunction):
                 if any_code_match:
                     html_to_parse = any_code_match.group(1)
 
+            # If the content looks like JSON, try to extract 'html' field
+            # This handles cases where the model outputs a JSON object containing the HTML
+            trimmed = html_to_parse.strip()
+            if trimmed.startswith("{") and trimmed.endswith("}"):
+                try:
+                    data = json.loads(trimmed)
+                    if isinstance(data, dict) and "html" in data:
+                        html_to_parse = data["html"]
+                except Exception:
+                    pass
+
             soup = BeautifulSoup(html_to_parse, "html.parser")
 
             # Check for presence of any tags
             tags = soup.find_all()
             if not tags:
                 return RewardFunctionScore(
-                    format_score=0.0,
+                    format_score=1.0 if trimmed.startswith("{") else 0.0,
                     correctness_score=0.0,
                     error_msg="No HTML tags found in output",
                 )
@@ -135,11 +148,26 @@ class HtmlRewardFunction(RewardFunction):
                 missing_selectors = []
                 for selector in selectors:
                     try:
+                        # Standard BeautifulSoup selection
                         elements = soup.select(selector)
-                        if not elements:
+                        if elements:
+                            continue
+
+                        # If not found via select, check special cases
+                        is_found = False
+                        # 1. Check if it's an at-rule (like @media)
+                        if selector.startswith("@"):
+                            if selector in html_to_parse:
+                                is_found = True
+
+                        if not is_found:
                             all_matched = False
                             missing_selectors.append(selector)
+
                     except Exception:
+                        # If selector is invalid for soup.select (like @media), try string match as fallback
+                        if selector in html_to_parse:
+                            continue
                         all_matched = False
                         missing_selectors.append(selector)
 

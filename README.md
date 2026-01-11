@@ -276,6 +276,11 @@ print(f"Format Score: {result.format_score}")
 print(f"Correctness Score: {result.correctness_score}")
 ```
 
+> **Tip for TypeScript in Colab**: If you encounter TypeScript execution errors, ensure `ts-node` is available:
+> ```bash
+> !npm install -g ts-node typescript
+> ```
+
 ## Project Structure
 
 ```

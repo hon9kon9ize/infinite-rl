@@ -71,9 +71,8 @@ class RewardExecutor:
         with open(fpath, "w") as f:
             f.write(code)
 
-        # Try ts-node first
+        # 1. Try ts-node directly
         try:
-            # Add --compiler-options to force CommonJS which is more reliable for simple scripts
             result = subprocess.run(
                 [
                     "ts-node",
@@ -86,12 +85,14 @@ class RewardExecutor:
                 text=True,
                 timeout=self.timeout,
             )
-            if result.returncode == 0:
+            if result.returncode == 0 or "SyntaxError" in result.stderr:
+                # If it failed with a real typescript error, return it.
+                # If command not found, the FileNotFoundError will be caught.
                 return result
         except FileNotFoundError:
             pass
 
-        # Try tsx
+        # 2. Try tsx
         try:
             result = subprocess.run(
                 ["tsx", fpath],
@@ -99,14 +100,27 @@ class RewardExecutor:
                 text=True,
                 timeout=self.timeout,
             )
-            if result.returncode == 0:
+            if result.returncode == 0 or "SyntaxError" in result.stderr:
                 return result
         except FileNotFoundError:
             pass
 
-        # Try tsc compilation
+        # 3. Try npx as a fallback (common in Colab)
+        for runner in ["ts-node", "tsx"]:
+            try:
+                result = subprocess.run(
+                    ["npx", "-y", runner, fpath],
+                    capture_output=True,
+                    text=True,
+                    timeout=self.timeout,
+                )
+                if result.returncode == 0:
+                    return result
+            except Exception:
+                pass
+
+        # 4. Try tsc compilation
         try:
-            # Individual files without outFile is often more reliable
             compile_result = subprocess.run(
                 [
                     "tsc",
@@ -131,12 +145,13 @@ class RewardExecutor:
         except FileNotFoundError:
             pass
 
-        # Last resort: TypeScript is valid JavaScript, run with node directly
-        return subprocess.run(
-            ["node", fpath],
-            capture_output=True,
-            text=True,
-            timeout=self.timeout,
+        # If all else fails, return a custom error about missing environment
+        error_msg = (
+            "No TypeScript environment found (ts-node, tsx, npx, or tsc). "
+            "Please install ts-node or tsx: 'npm install -g ts-node'"
+        )
+        return subprocess.CompletedProcess(
+            args=["ts-run"], returncode=1, stdout="", stderr=error_msg
         )
 
     def run_single(self, code, lang):

@@ -56,7 +56,7 @@ class CustomInstall(install):
         try:
             subprocess.run(["apt-get", "update"], check=True)
             subprocess.run(
-                ["apt-get", "install", "-y", "nodejs", "openjdk-17-jdk", "g++"],
+                ["apt-get", "install", "-y", "nodejs", "npm", "openjdk-17-jdk", "g++"],
                 check=True,
             )
         except Exception as e:
@@ -102,7 +102,7 @@ class CustomInstall(install):
 
 setup(
     name="infinite_rl",
-    version="0.1.1",
+    version="0.1.2",
     packages=["infinite_rl", "infinite_rl.reward_functions", "infinite_rl.examples"],
     include_package_data=True,
     package_data={

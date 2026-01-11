@@ -135,7 +135,7 @@ class CustomInstall(install):
 
 setup(
     name="infinite_rl",
-    version="0.1.7",
+    version="0.1.8",
     packages=["infinite_rl", "infinite_rl.reward_functions", "infinite_rl.examples"],
     include_package_data=True,
     package_data={

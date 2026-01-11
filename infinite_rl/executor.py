@@ -71,6 +71,17 @@ class RewardExecutor:
         with open(fpath, "w") as f:
             f.write(code)
 
+        # Helper to check for common "Node too old" errors
+        def check_node_version_error(stderr):
+            if "SyntaxError: Unexpected token '?'" in stderr:
+                return (
+                    "\n\nERROR: Your Node.js version is too old to run modern TypeScript tools.\n"
+                    "Please upgrade Node.js in Colab/Linux by running:\n"
+                    "!curl -fsSL https://deb.nodesource.com/setup_20.x | bash -\n"
+                    "!apt-get install -y nodejs\n"
+                )
+            return ""
+
         # 1. Try ts-node directly
         try:
             result = subprocess.run(
@@ -85,9 +96,11 @@ class RewardExecutor:
                 text=True,
                 timeout=self.timeout,
             )
+            v_err = check_node_version_error(result.stderr)
+            if v_err:
+                result.stderr += v_err
+                return result
             if result.returncode == 0 or "SyntaxError" in result.stderr:
-                # If it failed with a real typescript error, return it.
-                # If command not found, the FileNotFoundError will be caught.
                 return result
         except FileNotFoundError:
             pass
@@ -100,6 +113,10 @@ class RewardExecutor:
                 text=True,
                 timeout=self.timeout,
             )
+            v_err = check_node_version_error(result.stderr)
+            if v_err:
+                result.stderr += v_err
+                return result
             if result.returncode == 0 or "SyntaxError" in result.stderr:
                 return result
         except FileNotFoundError:
@@ -114,6 +131,10 @@ class RewardExecutor:
                     text=True,
                     timeout=self.timeout,
                 )
+                v_err = check_node_version_error(result.stderr)
+                if v_err:
+                    result.stderr += v_err
+                    return result
                 if result.returncode == 0:
                     return result
             except Exception:

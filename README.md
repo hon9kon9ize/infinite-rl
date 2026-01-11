@@ -276,8 +276,10 @@ print(f"Format Score: {result.format_score}")
 print(f"Correctness Score: {result.correctness_score}")
 ```
 
-> **Tip for TypeScript in Colab**: If you encounter TypeScript execution errors, ensure `ts-node` is available:
+> **Tip for TypeScript in Colab**: If you encounter `SyntaxError: Unexpected token '?'`, it means your Node.js version is too old. Run this cell to upgrade Node.js and then **Restart your session**:
 > ```bash
+> !curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+> !sudo apt-get install -y nodejs
 > !npm install -g ts-node typescript
 > ```
 

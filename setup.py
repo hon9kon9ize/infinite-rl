@@ -54,19 +54,39 @@ class CustomInstall(install):
         """Install dependencies on Linux using apt-get and NodeSource"""
         print("Installing dependencies on Linux...")
         try:
-            # Install NodeSource for a modern Node.js version (Node 20+)
-            # Colab's default nodejs is often too old (v12) which causes SyntaxErrors with modern TS
-            print("Configuring NodeSource for Node.js 20...")
-            subprocess.run(
-                "curl -fsSL https://deb.nodesource.com/setup_20.x | bash -",
-                shell=True,
-                check=False,
-            )
-            subprocess.run(["apt-get", "update"], check=True)
-            subprocess.run(
-                ["apt-get", "install", "-y", "nodejs", "openjdk-17-jdk", "g++"],
-                check=True,
-            )
+            # Check current node version
+            try:
+                node_v_proc = subprocess.run(
+                    ["node", "-v"], capture_output=True, text=True
+                )
+                node_v = node_v_proc.stdout.strip().replace("v", "")
+                major_v = int(node_v.split(".")[0]) if node_v else 0
+                if major_v >= 18:
+                    print(f"Node.js version {node_v} is already modern enough.")
+                else:
+                    raise ValueError("Node too old")
+            except (
+                subprocess.CalledProcessError,
+                FileNotFoundError,
+                ValueError,
+                IndexError,
+            ):
+                # Install NodeSource for a modern Node.js version (Node 20+)
+                print("Configuring NodeSource for Node.js 20...")
+                subprocess.run(
+                    "curl -fsSL https://deb.nodesource.com/setup_20.x | bash -",
+                    shell=True,
+                    check=False,
+                )
+                subprocess.run(["apt-get", "update"], check=True)
+                # Purge old versions first to be safe
+                subprocess.run(
+                    ["apt-get", "remove", "-y", "nodejs", "npm"], check=False
+                )
+                subprocess.run(
+                    ["apt-get", "install", "-y", "nodejs", "openjdk-17-jdk", "g++"],
+                    check=True,
+                )
         except Exception as e:
             print(f"Warning: Failed to install via apt-get or NodeSource: {e}")
             # Fallback to standard apt-get if NodeSource fails
@@ -88,6 +108,10 @@ class CustomInstall(install):
 
         # Install Rust
         try:
+            # Check if rustc is available
+            subprocess.run(["rustc", "--version"], check=True, capture_output=True)
+            print("Rust is already installed.")
+        except (subprocess.CalledProcessError, FileNotFoundError):
             print("Installing Rust...")
             subprocess.run(
                 "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y",
@@ -98,8 +122,11 @@ class CustomInstall(install):
 
         # Install ts-node for TypeScript execution
         try:
-            print("Installing ts-node...")
-            subprocess.run(["npm", "install", "-g", "ts-node"], check=False)
+            print("Installing ts-node and typescript...")
+            # We install both to avoid peer dependency issues
+            subprocess.run(
+                ["npm", "install", "-g", "ts-node", "typescript"], check=False
+            )
         except Exception as e:
             print(f"Warning: Failed to install ts-node: {e}")
 
@@ -126,7 +153,7 @@ class CustomInstall(install):
 
 setup(
     name="infinite_rl",
-    version="0.1.3",
+    version="0.1.4",
     packages=["infinite_rl", "infinite_rl.reward_functions", "infinite_rl.examples"],
     include_package_data=True,
     package_data={

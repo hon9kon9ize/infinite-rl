@@ -20,7 +20,11 @@ class TestExamples(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.examples_dir = Path(__file__).parent.parent / "examples"
+        # The examples directory is now inside the package
+        cls.examples_dir = Path(__file__).parent.parent / "infinite_rl" / "examples"
+        if not cls.examples_dir.exists():
+            # Fallback for localized testing
+            cls.examples_dir = Path(__file__).parent.parent / "examples"
         cls.examples = ExampleParser.get_all_examples(cls.examples_dir)
 
     def test_python_example(self):

@@ -283,6 +283,16 @@ print(f"Correctness Score: {result.correctness_score}")
 > !npm install -g ts-node typescript
 > ```
 
+## Development
+
+### Running Unit Tests
+To run all unit tests, install development dependencies and use `pytest`:
+
+```bash
+pip install -r requirements_dev.txt
+pytest
+```
+
 ## Project Structure
 
 ```

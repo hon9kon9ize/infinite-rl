@@ -71,10 +71,17 @@ class RewardExecutor:
         with open(fpath, "w") as f:
             f.write(code)
 
-        # Try ts-node first with transpile-only mode
+        # Try ts-node first
         try:
+            # Add --compiler-options to force CommonJS which is more reliable for simple scripts
             result = subprocess.run(
-                ["ts-node", "--transpile-only", fpath],
+                [
+                    "ts-node",
+                    "--transpile-only",
+                    "--compiler-options",
+                    '{"module":"commonjs","target":"es2020"}',
+                    fpath,
+                ],
                 capture_output=True,
                 text=True,
                 timeout=self.timeout,
@@ -99,8 +106,18 @@ class RewardExecutor:
 
         # Try tsc compilation
         try:
+            # Individual files without outFile is often more reliable
             compile_result = subprocess.run(
-                ["tsc", fpath, "--outFile", js_path, "--lib", "es2020"],
+                [
+                    "tsc",
+                    fpath,
+                    "--target",
+                    "es2020",
+                    "--module",
+                    "commonjs",
+                    "--esModuleInterop",
+                    "--skipLibCheck",
+                ],
                 capture_output=True,
                 timeout=self.timeout,
             )

@@ -1,9 +1,13 @@
 import os
 import re
+import json
+import threading
 from pathlib import Path
 from typing import Union, Callable
-from sentence_transformers import SentenceTransformer
 from .reward_function import RewardFunction, RewardFunctionScore
+
+# Defer heavy import to initialize() to speed up testing and avoid hangs during collection
+SentenceTransformer = None
 
 
 def _ensure_gguf_downloaded():
@@ -32,12 +36,18 @@ def _ensure_gguf_downloaded():
 
 
 class SummarizationRewardFunction(RewardFunction):
-    model: SentenceTransformer
-
     def __init__(self, task_name: str = "summarization", timeout: int = 5):
         super().__init__(task_name, timeout=timeout)
+        self._lock = threading.Lock()
+        self.model = None
 
     def initialize(self):
+        global SentenceTransformer
+        if SentenceTransformer is None:
+            from sentence_transformers import SentenceTransformer as ST
+
+            SentenceTransformer = ST
+
         # Try to use GGUF model, fall back to default if not available
         gguf_file = _ensure_gguf_downloaded()
 
@@ -47,11 +57,6 @@ class SummarizationRewardFunction(RewardFunction):
             model_kwargs["gguf_file"] = gguf_file
 
         try:
-            # self.model = SentenceTransformer(
-            #     "Qwen/Qwen3-Embedding-0.6B",
-            #     device="cpu",
-            #     model_kwargs=model_kwargs,
-            # )
             self.model = SentenceTransformer(
                 "jinaai/jina-embeddings-v3", device="cpu", trust_remote_code=True
             )
@@ -68,15 +73,54 @@ class SummarizationRewardFunction(RewardFunction):
         expected_output: Union[str, int, Callable],
         original_document: str = None,
     ) -> RewardFunctionScore:
-        # 1. Format Objective: Check for <summary> tags
-        tag_pattern = r"<summary>(.*?)</summary>"
-        match = re.search(tag_pattern, model_output, re.DOTALL)
+        from ..parser import ExampleParser
 
-        if not match:
-            return RewardFunctionScore(format_score=0.0, correctness_score=0.0)
+        # Handle expected_output being a JSON string (unwrap if necessary)
+        if isinstance(expected_output, str):
+            exp_matches = ExampleParser.extract_answer_tags(expected_output)
+            if exp_matches:
+                expected_output = exp_matches[0]
 
-        predicted_summary = match.group(1).strip()
+            trimmed = expected_output.strip()
+            if trimmed.startswith("{") and trimmed.endswith("}"):
+                try:
+                    data = json.loads(trimmed)
+                    for key in ["summary", "answer", "result", "text"]:
+                        if key in data:
+                            expected_output = data[key]
+                            break
+                except Exception:
+                    pass
+
+        # 1. Format Objective: Check for <answer> tags
+        matches = ExampleParser.extract_answer_tags(model_output)
+
+        if not matches:
+            # Check if they used markdown code blocks instead
+            if (
+                "```summary" in model_output.lower()
+                or "```text" in model_output.lower()
+                or "```markdown" in model_output.lower()
+            ):
+                return RewardFunctionScore(
+                    format_score=0.0,
+                    correctness_score=0.0,
+                    error_msg="Caught markdown code block (```summary) instead of required <answer> tags. Please use <answer>...</answer>.",
+                )
+            return RewardFunctionScore(
+                format_score=0.0,
+                correctness_score=0.0,
+                error_msg="Missing <answer> tags in response. Ensure the final summary is wrapped in <answer> and </answer>.",
+            )
+
+        predicted_summary = matches[0] if matches else ""
         format_score = 1.0
+        # If the tag was malformed but we extracted it, maybe give a slight penalty?
+        # But for now, let's just accept it if it's there.
+        if "<answer>" not in model_output.lower():
+            format_score = 0.8  # Slight penalty for malformed tags
+
+        error_msg = ""
 
         # Feature: Penalize length in format_score if original_document is provided
         # best score (1.0): < 50% of document length
@@ -128,27 +172,47 @@ class SummarizationRewardFunction(RewardFunction):
                 pred_length = len(predicted_summary.split())
                 if pred_length >= expected_output:
                     correctness_score = 1.0
+                    error_msg = ""
                 else:
                     correctness_score = pred_length / expected_output
+                    error_msg = f"Summary too short ({pred_length} words). Minimum expected: {expected_output} words."
                 return RewardFunctionScore(
-                    format_score=format_score, correctness_score=correctness_score
+                    format_score=format_score,
+                    correctness_score=correctness_score,
+                    error_msg=error_msg if correctness_score < 0.8 else "",
                 )
-            except Exception:
+            except Exception as e:
                 return RewardFunctionScore(
-                    format_score=format_score, correctness_score=0.0
+                    format_score=format_score,
+                    correctness_score=0.0,
+                    error_msg=f"Error evaluating length: {e}",
                 )
 
         else:
             # String: use semantic similarity
             try:
-                summary_embed = self.model.encode(predicted_summary.strip())
-                doc_embed = self.model.encode(expected_output.strip())
-                similarity = self.model.similarity(summary_embed, doc_embed).item()
-                correctness_score = similarity
+                with self._lock:
+                    summary_embed = self.model.encode(predicted_summary.strip())
+                    doc_embed = self.model.encode(expected_output.strip())
+                    sim_result = self.model.similarity(summary_embed, doc_embed)
+
+                    # Extract scalar value from similarity result (often a tensor or matrix)
+                    if hasattr(sim_result, "item"):
+                        similarity = sim_result.item()
+                    else:
+                        try:
+                            similarity = float(sim_result[0][0])
+                        except (IndexError, TypeError, KeyError):
+                            similarity = float(sim_result)
+
+                correctness_score = float(similarity)
             except Exception as e:
                 print(f"Error computing embeddings: {e}")
                 correctness_score = 0.0
+                error_msg = f"Semantic similarity calculation failed: {e}"
 
             return RewardFunctionScore(
-                format_score=format_score, correctness_score=correctness_score
+                format_score=format_score,
+                correctness_score=correctness_score,
+                error_msg=error_msg if correctness_score < 0.8 else "",
             )

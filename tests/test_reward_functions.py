@@ -116,6 +116,42 @@ class TestExamples(unittest.TestCase):
         self.assertEqual(score.format_score, 1.0)
         self.assertEqual(score.correctness_score, 1.0)
 
+    def test_java_example(self):
+        example = self.examples.get("JAVA")
+        self.assertIsNotNone(example)
+
+        reward_fn = CodingRewardFunction(task_name="java")
+        reward_fn.set_language("java")
+        reward_fn.initialize()
+
+        score = reward_fn.compute_reward(example["response"], example["answer"])
+        self.assertEqual(score.format_score, 1.0)
+        self.assertEqual(score.correctness_score, 1.0)
+
+    def test_cpp_example(self):
+        example = self.examples.get("CPP")
+        self.assertIsNotNone(example)
+
+        reward_fn = CodingRewardFunction(task_name="cpp")
+        reward_fn.set_language("cpp")
+        reward_fn.initialize()
+
+        score = reward_fn.compute_reward(example["response"], example["answer"])
+        self.assertEqual(score.format_score, 1.0)
+        self.assertEqual(score.correctness_score, 1.0)
+
+    def test_typescript_example(self):
+        example = self.examples.get("TYPESCRIPT")
+        self.assertIsNotNone(example)
+
+        reward_fn = CodingRewardFunction(task_name="typescript")
+        reward_fn.set_language("typescript")
+        reward_fn.initialize()
+
+        score = reward_fn.compute_reward(example["response"], example["answer"])
+        self.assertEqual(score.format_score, 1.0)
+        self.assertEqual(score.correctness_score, 1.0)
+
 
 class TestCodingRewardFunction(unittest.TestCase):
     """Test coding reward function with Python example."""
@@ -126,14 +162,16 @@ class TestCodingRewardFunction(unittest.TestCase):
 
     def test_valid_python_code_with_json_output(self):
         """Test valid Python code with correct JSON output."""
-        model_output = """```python
+        model_output = """<answer>
+```python
 import json
 def filter_even(numbers):
     return [n for n in numbers if n % 2 == 0]
 
 result = filter_even([1, 2, 3, 4, 5, 6, 7, 8])
 print(json.dumps({"result": result}))
-```"""
+```
+</answer>"""
         expected_output = '{"result": [2, 4, 6, 8]}'
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
@@ -146,20 +184,22 @@ print(json.dumps({"result": result}))
 
     def test_missing_code_block(self):
         """Test when code block is missing."""
-        model_output = "This is just plain text, no code block."
+        model_output = "<answer>This is just plain text, no code block.</answer>"
         expected_output = '{"result": [2, 4, 6, 8]}'
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
 
-        self.assertEqual(score.format_score, 0.0)
+        self.assertEqual(score.format_score, 0.5)
         self.assertEqual(score.correctness_score, 0.0)
 
     def test_syntax_error_in_code(self):
         """Test code with syntax errors."""
-        model_output = """```python
+        model_output = """<answer>
+```python
 def filter_even(numbers)  # Missing colon
     return [n for n in numbers if n % 2 == 0]
-```"""
+```
+</answer>"""
         expected_output = '{"result": [2, 4, 6, 8]}'
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
@@ -172,9 +212,11 @@ def filter_even(numbers)  # Missing colon
     def test_order_sensitivity_in_string_matching(self):
         """Test that wrong order in string output results in 0.0 correctness."""
         # Task: Reverse the words
-        model_output = """```python
+        model_output = """<answer>
+```python
 print("hello world")
-```"""
+```
+</answer>"""
         expected_output = "world hello"
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
@@ -189,17 +231,21 @@ print("hello world")
     def test_json_robustness(self):
         """Test JSON output with different formatting and key order."""
         # Scenario 1: Key order independence
-        model_output1 = """```python
+        model_output1 = """<answer>
+```python
 print('{"a": 1, "b": 2}')
-```"""
+```
+</answer>"""
         expected_output1 = '{"b": 2, "a": 1}'
         score1 = self.reward_fn.compute_reward(model_output1, expected_output1)
         self.assertEqual(score1.correctness_score, 1.0)
 
         # Scenario 2: Whitespace independence
-        model_output2 = """```python
+        model_output2 = """<answer>
+```python
 print('{"result"  :   [1, 2, 3]}')
-```"""
+```
+</answer>"""
         expected_output2 = '{"result":[1,2,3]}'
         score2 = self.reward_fn.compute_reward(model_output2, expected_output2)
         self.assertEqual(score2.correctness_score, 1.0)
@@ -207,18 +253,22 @@ print('{"result"  :   [1, 2, 3]}')
     def test_numeric_tolerance(self):
         """Test numeric output with floating point tolerance."""
         # Scenario 1: Small difference within 1e-9
-        model_output1 = """```python
+        model_output1 = """<answer>
+```python
 print(3.141592653589)
-```"""
+```
+</answer>"""
         expected_output1 = 3.141592653590
         score1 = self.reward_fn.compute_reward(model_output1, expected_output1)
         # Similarity should be 0.99 for small numeric differences
         self.assertEqual(score1.correctness_score, 0.99)
 
         # Scenario 2: Larger difference outside tolerance
-        model_output2 = """```python
+        model_output2 = """<answer>
+```python
 print(3.14)
-```"""
+```
+</answer>"""
         expected_output2 = 3.14159
         score2 = self.reward_fn.compute_reward(model_output2, expected_output2)
         # Ratio will be partial but higher than 0.0
@@ -227,9 +277,11 @@ print(3.14)
 
     def test_whitespace_normalization(self):
         """Test string matching with extreme whitespace differences."""
-        model_output = """```python
+        model_output = """<answer>
+```python
 print("  hello      world\\n\\n  ")
-```"""
+```
+</answer>"""
         expected_output = "hello world"
         score = self.reward_fn.compute_reward(model_output, expected_output)
         # Normalized whitespace comparison should return 0.9 similarity
@@ -238,7 +290,7 @@ print("  hello      world\\n\\n  ")
     def test_multiple_code_blocks(self):
         """Test that the reward function correctly extracts code from multiple blocks."""
         # 1. First block is picked if no language specified or first matches
-        model_output = """
+        model_output = """<answer>
 Some initial thoughts.
 ```python
 print("first")
@@ -247,7 +299,7 @@ Some other code.
 ```python
 print("second")
 ```
-"""
+</answer>"""
         # The current implementation uses re.search, which finds the FIRST match.
         score = self.reward_fn.compute_reward(model_output, "first")
         self.assertEqual(score.correctness_score, 1.0)
@@ -255,23 +307,25 @@ print("second")
     def test_language_specific_extraction(self):
         """Test picking the correct language block when multiple languages are present."""
         self.reward_fn.set_language("python")
-        model_output = """
+        model_output = """<answer>
 ```javascript
 console.log("js");
 ```
 ```python
 print("py");
 ```
-"""
+</answer>"""
         # It should prefer the python block
         score = self.reward_fn.compute_reward(model_output, "py")
         self.assertEqual(score.correctness_score, 1.0)
 
     def test_empty_output_matching(self):
         """Test cases where the code produces empty output."""
-        model_output = """```python
+        model_output = """<answer>
+```python
 pass
-```"""
+```
+</answer>"""
         # Scenario 1: Expected is also empty
         score1 = self.reward_fn.compute_reward(model_output, "")
         self.assertEqual(score1.correctness_score, 1.0)
@@ -283,10 +337,12 @@ pass
     def test_nested_json_robustness(self):
         """Test deeply nested JSON structure comparison."""
         nested_data = {"a": [1, {"b": 2}], "c": {"d": [3, 4], "e": "f"}}
-        model_output = f"""```python
+        model_output = f"""<answer>
+```python
 import json
 print(json.dumps({nested_data}))
-```"""
+```
+</answer>"""
         expected_output = json.dumps({"c": {"e": "f", "d": [3, 4]}, "a": [1, {"b": 2}]})
         score = self.reward_fn.compute_reward(model_output, expected_output)
         self.assertEqual(score.correctness_score, 1.0)
@@ -369,7 +425,7 @@ class TestHTMLRewardFunction(unittest.TestCase):
     def test_valid_html_with_all_selectors(self):
         """Test valid HTML containing all required selectors."""
         # Note: HTML reward function expects dict, not JSON string
-        model_output = """<html>
+        model_output = """<answer><html>
 <body>
     <nav>
         <a href="/">Home</a>
@@ -384,7 +440,7 @@ class TestHTMLRewardFunction(unittest.TestCase):
         <p>&copy; 2024 My Site. All rights reserved.</p>
     </footer>
 </body>
-</html>"""
+</html></answer>"""
         expected_output = {"selectors": ["nav", "a", "main", "h1", "footer"]}
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
@@ -394,7 +450,7 @@ class TestHTMLRewardFunction(unittest.TestCase):
 
     def test_missing_html_code_block(self):
         """Test when HTML code block is missing (but still valid HTML)."""
-        model_output = "<html><body>Content</body></html>"
+        model_output = "<answer><html><body>Content</body></html></answer>"
         expected_output = {"selectors": ["body"]}
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
@@ -406,7 +462,7 @@ class TestHTMLRewardFunction(unittest.TestCase):
 
     def test_missing_required_selectors(self):
         """Test HTML missing some required selectors."""
-        model_output = """<html>
+        model_output = """<answer><html>
 <body>
     <nav>
         <a href="/">Home</a>
@@ -415,7 +471,7 @@ class TestHTMLRewardFunction(unittest.TestCase):
         <h1>Welcome</h1>
     </main>
 </body>
-</html>"""
+</html></answer>"""
         expected_output = {"selectors": ["nav", "a", "main", "h1", "footer"]}
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
@@ -447,9 +503,9 @@ class TestSummarizationRewardFunction(unittest.TestCase):
         reward_fn = SummarizationRewardFunction(task_name="summarization")
         reward_fn.initialize()
 
-        model_output = """<summary>
+        model_output = """<answer>
 Remote work is shifting economic activity from city centers to suburbs, forcing changes to zoning.
-</summary>"""
+</answer>"""
         expected_output = json.dumps(
             {"summary": "Remote work shifts economic activity from suburbs."}
         )
@@ -478,7 +534,7 @@ Remote work is shifting economic activity from city centers to suburbs, forcing 
         reward_fn = SummarizationRewardFunction(task_name="summarization")
         reward_fn.initialize()
 
-        model_output = "<summary>The weather is nice today.</summary>"
+        model_output = "<answer>The weather is nice today.</answer>"
         expected_output = json.dumps(
             {"summary": "Remote work is shifting economic activity."}
         )
@@ -525,7 +581,7 @@ Remote work is shifting economic activity from city centers to suburbs, forcing 
         expected_output = "Summary"
 
         # 1. Best case: < 50% length (e.g. 40 chars)
-        short_summary = "<summary>" + ("B" * 40) + "</summary>"
+        short_summary = "<answer>" + ("B" * 40) + "</answer>"
         score1 = reward_fn.compute_reward(
             short_summary, expected_output, original_document=original_doc
         )
@@ -535,7 +591,7 @@ Remote work is shifting economic activity from city centers to suburbs, forcing 
         # 2. Mid case: 75% length (e.g. 75 chars)
         # ratio 0.75 -> length_score = 1.0 - (0.75 - 0.5)*2 = 0.5
         # format_score = (1.0 + 0.5) / 2 = 0.75
-        mid_summary = "<summary>" + ("B" * 75) + "</summary>"
+        mid_summary = "<answer>" + ("B" * 75) + "</answer>"
         score2 = reward_fn.compute_reward(
             mid_summary, expected_output, original_document=original_doc
         )
@@ -544,7 +600,7 @@ Remote work is shifting economic activity from city centers to suburbs, forcing 
         # 3. Worst case: >= 100% length (e.g. 100 chars)
         # length_score = 0.0
         # format_score = (1.0 + 0.0) / 2 = 0.5
-        long_summary = "<summary>" + ("B" * 100) + "</summary>"
+        long_summary = "<answer>" + ("B" * 100) + "</answer>"
         score3 = reward_fn.compute_reward(
             long_summary, expected_output, original_document=original_doc
         )
@@ -563,7 +619,7 @@ Remote work is shifting economic activity from city centers to suburbs, forcing 
             # Check if summary is long enough
             return len(summary_text.split()) >= 10
 
-        model_output = "<summary>Remote work is shifting economic activity from city centers to suburbs.</summary>"
+        model_output = "<answer>Remote work is shifting economic activity from city centers to suburbs.</answer>"
         # 12 words, should pass
 
         score = reward_fn.compute_reward(model_output, custom_validator)

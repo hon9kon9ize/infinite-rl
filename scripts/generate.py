@@ -1,6 +1,11 @@
+#!/usr/bin/env python3
 import argparse
 import os
 import sys
+
+# Suppress gRPC fork warnings (optional, uncomment if needed)
+# os.environ["GRPC_ENABLE_FORK_SUPPORT"] = "false"
+os.environ["GRPC_VERBOSITY"] = "ERROR"
 
 # Ensure the root directory is in the python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -48,6 +53,17 @@ def main():
         default="0.5,0.1,0.3,0.1",
         help="Task distribution [code, html, math, summarization] (default: 0.5,0.1,0.3,0.1)",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug mode (saves generated prompts to debug_prompts/)",
+    )
+    parser.add_argument(
+        "--threads",
+        type=int,
+        default=1,
+        help="Number of threads for parallel generation (default: 1)",
+    )
 
     args = parser.parse_args()
 
@@ -65,6 +81,8 @@ def main():
             max_retries=args.max_retries,
             timeout=args.timeout,
             task_dist=args.task_dist,
+            debug=args.debug,
+            num_threads=args.threads,
         )
     except Exception as e:
         print(f"Error during generation: {e}")

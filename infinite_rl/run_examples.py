@@ -12,16 +12,16 @@ def run_examples():
     """
     # Find examples directory relative to the package installation
     package_dir = os.path.dirname(os.path.abspath(__file__))
-    # Try package root (where setup.py was) or one level up if installed
-    examples_dir = os.path.abspath(os.path.join(package_dir, "..", "examples"))
+    examples_dir = os.path.join(package_dir, "examples")
 
     if not os.path.exists(examples_dir):
-        # Fallback for some installation structures
-        examples_dir = os.path.abspath(os.path.join(package_dir, "examples"))
-
-    if not os.path.exists(examples_dir):
-        print(f"Error: Examples directory not found at {examples_dir}")
-        return
+        # Fallback check for current working directory if not found in package
+        cwd_examples = os.path.join(os.getcwd(), "examples")
+        if os.path.exists(cwd_examples):
+            examples_dir = cwd_examples
+        else:
+            print(f"Error: Examples directory not found at {examples_dir}")
+            return
 
     print(f"Loading examples from: {examples_dir}")
     examples = ExampleParser.get_all_examples(examples_dir)

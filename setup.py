@@ -103,10 +103,10 @@ class CustomInstall(install):
 setup(
     name="infinite_rl",
     version="0.1",
-    packages=["infinite_rl", "infinite_rl.reward_functions"],
+    packages=["infinite_rl", "infinite_rl.reward_functions", "infinite_rl.examples"],
     include_package_data=True,
     package_data={
-        "infinite_rl": ["*.py"],
+        "infinite_rl": ["*.py", "examples/*.md", "data/*.csv"],
         "infinite_rl.reward_functions": ["*.py"],
     },
     cmdclass={"install": CustomInstall},

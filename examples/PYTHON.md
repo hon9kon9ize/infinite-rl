@@ -27,4 +27,3 @@ import json
 print(json.dumps({"result": result}))
 ```
 </answer>
-

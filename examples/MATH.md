@@ -18,4 +18,3 @@ Using the power rule (∫x^n dx = x^(n+1)/(n+1) + C):
 = (1/2)x^4 - 2x^2 + x + C
 
 <answer>(1/2)x^4 - 2x^2 + x + C</answer>
-

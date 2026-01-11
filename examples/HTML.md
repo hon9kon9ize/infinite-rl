@@ -35,4 +35,3 @@ Create an HTML page with a navigation bar at the top containing links for "Home"
 </html>
 ```
 </answer>
-

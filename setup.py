@@ -104,6 +104,7 @@ setup(
     name="infinite_rl",
     version="0.1",
     packages=["infinite_rl", "infinite_rl.reward_functions"],
+    include_package_data=True,
     package_data={
         "infinite_rl": ["*.py"],
         "infinite_rl.reward_functions": ["*.py"],

@@ -10,6 +10,9 @@ from .reward_function import RewardFunction, RewardFunctionScore
 
 
 class MathRewardFunction(RewardFunction):
+    def __init__(self, task_name: str = "math", timeout: int = 5):
+        super().__init__(task_name, timeout=timeout)
+
     def initialize(self):
         self.initialized = True
 

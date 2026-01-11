@@ -14,10 +14,10 @@ from .reward_functions.html import HtmlRewardFunction
 load_dotenv()
 
 
-def get_reward_function(task_type):
+def get_reward_function(task_type, timeout=5):
     """Retrieve the appropriate reward function for a task type."""
     if task_type in ["python", "javascript", "rust", "cpp", "java", "coding"]:
-        fn = CodingRewardFunction(task_name=task_type)
+        fn = CodingRewardFunction(task_name=task_type, timeout=timeout)
         if task_type in ["javascript", "js"]:
             fn.set_language("javascript")
         elif task_type in ["rust"]:
@@ -28,15 +28,17 @@ def get_reward_function(task_type):
             fn.set_language("java")
         return fn
     elif task_type == "math":
-        return MathRewardFunction(task_name="math")
+        return MathRewardFunction(task_name="math", timeout=timeout)
     elif task_type == "summarization":
-        return SummarizationRewardFunction(task_name="summarization")
+        return SummarizationRewardFunction(task_name="summarization", timeout=timeout)
     elif task_type == "html":
-        return HtmlRewardFunction(task_name="html")
+        return HtmlRewardFunction(task_name="html", timeout=timeout)
     return None
 
 
-def generate_dataset(model_name, num_samples, out_dir, save_every=10, max_retries=5):
+def generate_dataset(
+    model_name, num_samples, out_dir, save_every=10, max_retries=5, timeout=5
+):
     # Enforce specified distribution: 80% coding, 10% html, 10% summarization
     distribution = {"coding": 0.8, "html": 0.1, "summarization": 0.1}
 
@@ -80,7 +82,7 @@ def generate_dataset(model_name, num_samples, out_dir, save_every=10, max_retrie
         print(f"Generating {count} samples for type: {t}")
 
         type_prompt_base = TYPE_PROMPTS.get(t, f"Generate a sample for {t}")
-        reward_fn = get_reward_function(t)
+        reward_fn = get_reward_function(t, timeout=timeout)
         if reward_fn:
             reward_fn.initialize()
 

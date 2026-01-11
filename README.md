@@ -35,7 +35,7 @@ pip install git+https://github.com/hon9kon9ize/infinite-rl.git
 You can generate a synthetic dataset using the provided script:
 
 ```bash
-python scripts/generate.py --num_samples 50 --out_dir ./my_dataset --save_every 10 --max_retries 5
+python scripts/generate.py --num_samples 50 --out_dir ./my_dataset --save_every 10 --max_retries 5 --timeout 5
 ```
 
 Arguments:
@@ -44,6 +44,7 @@ Arguments:
 - `--out_dir`: Directory to save the `dataset.csv` (default: `data`)
 - `--save_every`: Save progress to CSV every N samples (default: 1)
 - `--max_retries`: Maximum consecutive failed attempts per task type before stopping (default: 5)
+- `--timeout`: Timeout (in seconds) for reward function execution (default: 5)
 
 ## Supported Tasks
 
@@ -67,7 +68,8 @@ Evaluates LLM-generated code across multiple programming languages with test cas
 ```python
 from infinite_rl import get_reward_functions
 
-reward_fns = get_reward_functions()
+# Initialize with custom timeout
+reward_fns = get_reward_functions(timeout=10)
 coding_fn = reward_fns["coding"]
 coding_fn.set_language("python")
 
@@ -93,7 +95,7 @@ result = math_fn.compute_reward(
     model_output="<answer>x^2 + 2x + 1</answer>",
     expected_output="(x+1)^2"
 )
-print(f"Correctness: {result.correctness_score}") # Output: 1.0
+print(f"Correctness: {result.correctness_score}") 
 ```
 
 ### 3. Summarization Task
@@ -231,7 +233,7 @@ stdout, stderr = executor.run_single("print(2 + 2)", "python")
 print(f"Executor test - Output: {stdout}, Error: {stderr}")
 
 # Test coding reward function
-reward_fns = get_reward_functions()
+reward_fns = get_reward_functions(timeout=5)
 coding_fn = reward_fns["coding"]
 coding_fn.set_language("python")
 

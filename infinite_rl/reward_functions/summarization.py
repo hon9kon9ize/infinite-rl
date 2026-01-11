@@ -34,6 +34,9 @@ def _ensure_gguf_downloaded():
 class SummarizationRewardFunction(RewardFunction):
     model: SentenceTransformer
 
+    def __init__(self, task_name: str = "summarization", timeout: int = 5):
+        super().__init__(task_name, timeout=timeout)
+
     def initialize(self):
         # Try to use GGUF model, fall back to default if not available
         gguf_file = _ensure_gguf_downloaded()

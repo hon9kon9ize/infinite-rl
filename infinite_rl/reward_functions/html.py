@@ -6,8 +6,8 @@ from bs4 import BeautifulSoup
 class HtmlRewardFunction(RewardFunction):
     """Reward function for evaluating LLM-generated HTML solutions."""
 
-    def __init__(self, task_name: str = "html"):
-        super().__init__(task_name)
+    def __init__(self, task_name: str = "html", timeout: int = 5):
+        super().__init__(task_name, timeout=timeout)
 
     def initialize(self):
         """Initialize the HTML reward function."""

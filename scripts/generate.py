@@ -36,6 +36,12 @@ def main():
         default=5,
         help="Maximum consecutive retries before stopping (default: 5)",
     )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=5,
+        help="Timeout (in seconds) for reward function execution (default: 5)",
+    )
 
     args = parser.parse_args()
 
@@ -51,6 +57,7 @@ def main():
             out_dir=args.out_dir,
             save_every=args.save_every,
             max_retries=args.max_retries,
+            timeout=args.timeout,
         )
     except Exception as e:
         print(f"Error during generation: {e}")

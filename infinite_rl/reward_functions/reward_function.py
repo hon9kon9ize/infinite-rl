@@ -10,8 +10,9 @@ class RewardFunctionScore:
 
 
 class RewardFunction:
-    def __init__(self, task_name: str):
+    def __init__(self, task_name: str, timeout: int = 5):
         self.task_name = task_name
+        self.timeout = timeout
         self.initialized = False
 
     def initialize(self):

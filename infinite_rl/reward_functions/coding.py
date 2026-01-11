@@ -8,14 +8,14 @@ import re
 class CodingRewardFunction(RewardFunction):
     """Reward function for evaluating LLM-generated code solutions."""
 
-    def __init__(self, task_name: str = "coding"):
-        super().__init__(task_name)
+    def __init__(self, task_name: str = "coding", timeout: int = 5):
+        super().__init__(task_name, timeout=timeout)
         self.executor = None
         self.language = "python"  # default language
 
     def initialize(self):
         """Initialize the executor for running code."""
-        self.executor = RewardExecutor(timeout=5)
+        self.executor = RewardExecutor(timeout=self.timeout)
         self.initialized = True
 
     def set_language(self, language: str):

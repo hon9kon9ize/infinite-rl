@@ -129,11 +129,13 @@ class CodingRewardFunction(RewardFunction):
                     r"Debugger attached.*",
                     r"Waiting for the debugger to disconnect.*",
                     r"\(node:\d+\) [^:]+: .*",  # Node warnings
+                    r"npm notice.*",  # npm noise
                 ]
                 filtered = text
+                # Multi-line match for noise patterns
                 for pattern in noise_patterns:
                     filtered = re.sub(
-                        pattern, "", filtered, flags=re.IGNORECASE
+                        pattern, "", filtered, flags=re.IGNORECASE | re.MULTILINE
                     ).strip()
                 return filtered
 

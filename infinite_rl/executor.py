@@ -8,10 +8,37 @@ from concurrent.futures import ThreadPoolExecutor
 class RewardExecutor:
     def __init__(self, timeout=5):
         self.timeout = timeout
-        # Add Rust to path if not present
-        rust_path = os.path.expanduser("~/.cargo/bin")
-        if rust_path not in os.environ["PATH"]:
-            os.environ["PATH"] += f":{rust_path}"
+        # Add common binary locations and Rust to path
+        extra_paths = [
+            os.path.expanduser("~/.cargo/bin"),
+            "/usr/local/bin",
+            "/usr/bin",
+        ]
+        for p in extra_paths:
+            if os.path.exists(p) and p not in os.environ["PATH"]:
+                os.environ["PATH"] += f":{p}"
+
+        # Determine the best node binary
+        self.node_bin = "node"
+        try:
+            # Check if default node is too old (e.g., v12 on some TPU VMs)
+            v_proc = subprocess.run(["node", "-v"], capture_output=True, text=True)
+            v_str = v_proc.stdout.strip().replace("v", "")
+            major_v = int(v_str.split(".")[0]) if v_str else 0
+            if major_v < 18:
+                # If default is old, look for system node which we likely upgraded
+                if os.path.exists("/usr/bin/node"):
+                    v_proc_sys = subprocess.run(
+                        ["/usr/bin/node", "-v"], capture_output=True, text=True
+                    )
+                    if (
+                        v_proc_sys.stdout.startswith("v20")
+                        or v_proc_sys.stdout.startswith("v18")
+                        or v_proc_sys.stdout.startswith("v22")
+                    ):
+                        self.node_bin = "/usr/bin/node"
+        except Exception:
+            pass
 
     def _execute_python(self, code, cwd):
         fpath = os.path.join(cwd, "script.py")
@@ -26,7 +53,7 @@ class RewardExecutor:
         with open(fpath, "w") as f:
             f.write(code)
         return subprocess.run(
-            ["node", fpath], capture_output=True, text=True, timeout=self.timeout
+            [self.node_bin, fpath], capture_output=True, text=True, timeout=self.timeout
         )
 
     def _execute_cpp(self, code, cwd):
@@ -140,7 +167,7 @@ class RewardExecutor:
             if compile_result.returncode == 0:
                 js_path = os.path.join(cwd, "script.js")
                 return subprocess.run(
-                    ["node", js_path],
+                    [self.node_bin, js_path],
                     capture_output=True,
                     text=True,
                     timeout=self.timeout,

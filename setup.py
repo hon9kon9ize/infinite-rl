@@ -63,7 +63,8 @@ class CustomInstall(install):
             # Try with sudo first if it's linux and not root
             if os.geteuid() != 0:
                 if shell:
-                    cmd = f"sudo {cmd}"
+                    # Use sudo bash -c to ensure the whole pipeline runs as root
+                    cmd = f"sudo bash -c '{cmd}'"
                 else:
                     cmd = ["sudo"] + cmd
 
@@ -87,7 +88,8 @@ class CustomInstall(install):
             # Install NodeSource for a modern Node.js version (Node 20+)
             print("Configuring NodeSource for Node.js 20...")
             run_cmd(
-                "curl -fsSL https://deb.nodesource.com/setup_20.x | bash -", shell=True
+                "curl -fsSL https://deb.nodesource.com/setup_20.x | bash -",
+                shell=True,
             )
             run_cmd(["apt-get", "update"])
             # Purge old versions first to be safe

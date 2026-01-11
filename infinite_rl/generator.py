@@ -1,8 +1,6 @@
 import os
 import time
 import pandas as pd
-from google import genai
-from google.genai import types
 import random
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -90,6 +88,10 @@ def generate_dataset(
     debug=False,
     num_threads=1,
 ):
+    # Lazy import genai to avoid import errors when using as library
+    from google import genai
+    from google.genai import types
+
     # Create debug directory if it doesn't exist and debug is enabled
     debug_dir = os.path.join(out_dir, "debug_prompts")
     if debug and not os.path.exists(debug_dir):

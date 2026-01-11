@@ -25,9 +25,9 @@ pip install git+https://github.com/hon9kon9ize/infinite-rl.git
    - **Linux**: Uses apt-get to install Node.js, OpenJDK 17, g++, Rust, and ts-node
    - **Windows**: Provides links for manual installation, ts-node installation via npm if available
 
-2. Set up your Gemini API key in a `.env` file:
-   ```
-   GOOGLE_API_KEY=your_api_key_here
+2. Set up your Gemini API key:
+   ```shell
+   export GEMINI_API_KEY=your_api_key_here
    ```
 
 ## Usage

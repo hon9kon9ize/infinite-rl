@@ -1,4 +1,5 @@
 import os
+import time
 import pandas as pd
 from google import genai
 from google.genai import types
@@ -6,15 +7,12 @@ import random
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
-from dotenv import load_dotenv
 from .prompts import SYSTEM_PROMPT, TYPE_PROMPTS, RECTIFY_PROMPT, TASK_SYSTEM_PROMPTS
 from .parser import ExampleParser
 from .reward_functions.coding import CodingRewardFunction
 from .reward_functions.math import MathRewardFunction
 from .reward_functions.summarization import SummarizationRewardFunction
 from .reward_functions.html import HtmlRewardFunction
-
-load_dotenv()
 
 
 def get_reward_function(task_type, timeout=5):
@@ -227,10 +225,6 @@ def generate_dataset(
                 type_successful_prompts[t].append(p)
 
     # Configure Gemini
-    api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        raise ValueError("GOOGLE_API_KEY not found in environment variables")
-
     client = genai.Client()
 
     # Threading support
@@ -256,6 +250,13 @@ def generate_dataset(
         attempt = 0
         while attempt < max_retries:
             attempt += 1
+            if attempt > 1:
+                wait_time = min(60, 2**attempt)
+                print(
+                    f"  [DEBUG] Retrying task {t} (attempt {attempt}/{max_retries}) in {wait_time}s..."
+                )
+                time.sleep(wait_time)
+
             try:
                 # Diversity: Pick a random seed prompt
                 seed_context = ""

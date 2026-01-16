@@ -36,10 +36,15 @@ fi
 
 JAVY_OS=$([ "$OS_TYPE" = "darwin" ] && echo "macos" || echo "linux")
 
-if [ ! -f "$LOCAL_JAVY" ]; then
-    JAVY_ASSET="javy-$JAVY_ARCH-$JAVY_OS-$JAVY_VERSION"
-    JAVY_URL="https://github.com/bytecodealliance/javy/releases/download/$JAVY_VERSION/$JAVY_ASSET.gz"
+echo "Detected platform: $JAVY_OS / $JAVY_ARCH"
+echo "Javy version to download: $JAVY_VERSION"
 
+JAVY_ASSET="javy-$JAVY_ARCH-$JAVY_OS-$JAVY_VERSION"
+JAVY_URL="https://github.com/bytecodealliance/javy/releases/download/$JAVY_VERSION/$JAVY_ASSET.gz"
+
+echo "Javy download URL: $JAVY_URL"
+
+if [ ! -f "$LOCAL_JAVY" ]; then
     echo "Attempting to download Javy asset: $JAVY_ASSET"
 
     # Helper: try downloading and ensuring the binary matches expected format

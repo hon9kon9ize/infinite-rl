@@ -31,14 +31,48 @@ jobs:
       - name: Run runtime build
         run: ./build_src/build_wasm.sh
 
+      - name: Determine package version
+        id: get_version
+        shell: bash
+        run: |
+          set -e
+          VERSION=$(python - <<'PY'
+import importlib.util, sys, re
+version = ''
+# Try to read __version__ from package
+try:
+    spec = importlib.util.spec_from_file_location('pkg','infinite_rl/__init__.py')
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    version = getattr(mod, '__version__', '')
+except Exception:
+    version = ''
+# Fallback: parse setup.py
+if not version:
+    try:
+        s = open('setup.py').read()
+        m = re.search(r"version\s*=\s*[\"']([^\"']+)[\"']", s)
+        if m:
+            version = m.group(1)
+    except Exception:
+        version = ''
+print(version)
+PY
+)
+          if [ -z "$VERSION" ]; then
+            echo "Could not determine version from package; falling back to run number ${GITHUB_RUN_NUMBER}"
+            VERSION="${GITHUB_RUN_NUMBER}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Create release
         id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: runtimes-${{ github.run_number }}
-          release_name: "Runtimes ${{ github.run_number }}"
+          tag_name: runtimes-${{ steps.get_version.outputs.version }}
+          release_name: "Runtimes ${{ steps.get_version.outputs.version }}"
           body: "Automated WASM runtime build"
           draft: false
           prerelease: false

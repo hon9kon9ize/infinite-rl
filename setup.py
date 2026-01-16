@@ -61,6 +61,6 @@ setup(
         "infinite_rl.reward_functions": ["*.py"],
         "infinite_rl.runtimes": ["*.wasm"],
     },
-    install_requires=["wasmtime"],
+    install_requires=["wasmtime", "sympy", "antlr4-python3-runtime==4.11.1"],
     cmdclass={"install": install},
 )

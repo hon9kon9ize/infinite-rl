@@ -36,8 +36,6 @@ def run_examples():
         task_type = name.lower()
         if task_type in ["js"]:
             task_type = "javascript"
-        if task_type in ["ts"]:
-            task_type = "typescript"
 
         reward_fn = get_reward_function(task_type)
         if not reward_fn:

@@ -5,7 +5,7 @@ This document describes the unit tests for the reward functions in the `infinite
 ## Overview
 
 A comprehensive test suite for current reward function types:
-- **Coding** - Multi-language code execution and output validation (Python, JavaScript, TypeScript)
+- **Coding** - Multi-language code execution and output validation (Python, JavaScript)
 - **Math** - Symbolic mathematics with SymPy
 
 ## Test Coverage

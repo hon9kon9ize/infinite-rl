@@ -146,7 +146,7 @@ class ExampleParser:
         else:
             # 2. Try finding code blocks in the Answer section
             match = re.search(
-                r"```(?:json|python|javascript|rust|cpp|java|js|ts|typescript|summary|text)?\s*(.*?)```",
+                r"```(?:json|python|javascript|rust|cpp|java|js|summary|text)?\s*(.*?)```",
                 answer_raw,
                 re.DOTALL | re.IGNORECASE,
             )

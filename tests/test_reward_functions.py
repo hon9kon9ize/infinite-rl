@@ -5,9 +5,7 @@ Tests cover all reward function types with mocked dependencies.
 
 import unittest
 import json
-import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 from infinite_rl.reward_functions.coding import CodingRewardFunction
 from infinite_rl.reward_functions.math import MathRewardFunction
 from infinite_rl.parser import ExampleParser
@@ -68,18 +66,6 @@ class TestExamples(unittest.TestCase):
         self.assertEqual(score.format_score, 1.0)
         self.assertEqual(score.correctness_score, 1.0)
 
-    def test_typescript_example(self):
-        example = self.examples.get("TYPESCRIPT")
-        self.assertIsNotNone(example)
-
-        reward_fn = CodingRewardFunction(task_name="typescript")
-        reward_fn.set_language("typescript")
-        reward_fn.initialize()
-
-        score = reward_fn.compute_reward(example["response"], example["answer"])
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 1.0)
-
 
 class TestCodingRewardFunction(unittest.TestCase):
     """Test coding reward function with Python example."""
@@ -125,7 +111,9 @@ print(json.dumps({"result": result}))
         model_output = "<final>```python\nprint(2+2)\n```</final>"
         expected_output = "4"
 
-        score = self.reward_fn.compute_reward(model_output, expected_output, answer_tag="final")
+        score = self.reward_fn.compute_reward(
+            model_output, expected_output, answer_tag="final"
+        )
 
         self.assertEqual(score.format_score, 1.0)
         self.assertEqual(score.correctness_score, 1.0)
@@ -397,7 +385,9 @@ Using the power rule:
         model_output = "<result>100</result>"
         expected_output = 100
 
-        score = self.reward_fn.compute_reward(model_output, expected_output, answer_tag="result")
+        score = self.reward_fn.compute_reward(
+            model_output, expected_output, answer_tag="result"
+        )
 
         self.assertEqual(score.format_score, 1.0)
         self.assertEqual(score.correctness_score, 1.0)

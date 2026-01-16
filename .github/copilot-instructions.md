@@ -20,10 +20,15 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 - Concurrency uses `ThreadPoolExecutor` with explicit locks (`dataset_lock`, `failed_dataset_lock`, `save_lock`)—be precise when adding shared state.
 
 ## Developer workflows & commands
-- Activate virtualenv prior to running CLI commands (recommended):
+- Always activate the project's virtual environment before running CLI commands (required for consistent environments):
   ```bash
-  source .ven/bin/activate
+  # Create the venv (if not created)
+  python3 -m venv .venv
+
+  # Activate it in your shell
+  source .venv/bin/activate
   ```
+- NOTE FOR AGENTS: Every time you run shell commands or tests, ensure `.venv/bin/activate` is applied in the session first.
 
 - Generate dataset locally:
   ```bash

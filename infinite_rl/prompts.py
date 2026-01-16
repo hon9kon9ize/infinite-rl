@@ -109,14 +109,12 @@ TASK_SYSTEM_PROMPTS = {
     "coding": PYTHON_SYSTEM_PROMPT,
     "python": PYTHON_SYSTEM_PROMPT,
     "javascript": CODE_SYSTEM_PROMPT,
-    "typescript": CODE_SYSTEM_PROMPT,
     "math": MATH_SYSTEM_PROMPT,
 }
 
 TYPE_PROMPTS = {
     "python": "Generate a complex Python problem. Wrap the final code block in <answer> tags.",
     "javascript": "Generate a complex JavaScript/Node.js problem. Wrap the final code block in <answer> tags.",
-    "typescript": "Generate a complex TypeScript problem. Wrap the final code block in <answer> tags.",
     "math": "Generate a complex multi-step mathematical word problem. Wrap the final result in <answer> tags.",
     "coding": "Generate a complex Python algorithm or utility problem. Wrap the final code block in <answer> tags.",
 }

@@ -71,5 +71,7 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 - `infinite_rl/executor.py` — how code is run securely (WASM path)
 - `tests/test_reward_functions.py` and `tests/README.md` — canonical examples and unit test expectations
 
+Note: Several example files (HTML/CPP/JAVA/RUST/SUMMARIZATION) were archived to `archive_examples/` to keep `infinite_rl/examples/` focused on the active task types.
+
 ---
 If something here is unclear or you'd like a different focus (e.g., more examples, a checklist for adding a new task type), tell me what to add and I'll iterate. 👍

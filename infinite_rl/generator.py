@@ -1,6 +1,5 @@
 import os
 import time
-import pandas as pd
 import random
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -53,6 +52,8 @@ def log_failed_sample(
     # Save to CSV immediately
     save_path = os.path.join(out_dir, "failed_dataset.csv")
     try:
+        import pandas as pd
+
         # Check if file exists to decide on header
         file_exists = os.path.isfile(save_path)
         # We append just the new entry to the file for efficiency and to avoid overwriting previous runs

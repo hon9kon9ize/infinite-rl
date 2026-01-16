@@ -54,14 +54,11 @@ def run_examples():
 
         try:
             reward_fn.initialize()
-        
 
             # Expected output is taken directly from the example; any JSON parsing should be handled by the reward function itself.
             expected_output = data["answer"]
 
-            score = reward_fn.compute_reward(
-                data["response"], expected_output
-            )
+            score = reward_fn.compute_reward(data["response"], expected_output)
             total_score = (score.format_score + score.correctness_score) / 2.0
 
             status = "PASS" if total_score > 0.8 else "FAIL"

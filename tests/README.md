@@ -41,18 +41,7 @@ python -m pytest tests/test_reward_functions.py --cov=infinite_rl.reward_functio
 
 ## Key Design Patterns
 
-### 1. Mocking SentenceTransformer
-The summarization tests use `@patch()` to mock the expensive `SentenceTransformer` import:
-
-```python
-@patch("infinite_rl.reward_functions.summarization.SentenceTransformer")
-def test_valid_summary_with_high_similarity(self, mock_transformer_class):
-    mock_model_instance = MagicMock()
-    mock_transformer_class.return_value = mock_model_instance
-    # ... set up embeddings and similarity mocks
-```
-
-### 2. Reward Function Interface
+### 1. Reward Function Interface
 All reward functions follow the same interface:
 ```python
 def compute_reward(
@@ -64,11 +53,10 @@ def compute_reward(
 
 Returns `RewardFunctionScore(format_score: float, correctness_score: float)`
 
-### 3. Expected Output Types
+### 2. Expected Output Types
 Different reward functions support different input types:
 - **String**: Direct comparison or symbolic evaluation
 - **Integer**: Numeric comparison with threshold-based scoring
-- **Dict**: For HTML (selectors list), Summarization (JSON structure)
 - **Callable**: Custom validator function
 
 ### 4. Binary Correctness Scoring

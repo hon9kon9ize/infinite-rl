@@ -54,20 +54,13 @@ def run_examples():
 
         try:
             reward_fn.initialize()
+        
 
-            # Preparation for specific reward functions
-            kwargs = {}
-
-            # HTML and some coding tasks might need expected output to be parsed if it's JSON
+            # Expected output is taken directly from the example; any JSON parsing should be handled by the reward function itself.
             expected_output = data["answer"]
-            if task_type == "html":
-                try:
-                    expected_output = json.loads(data["answer"])
-                except:
-                    pass
 
             score = reward_fn.compute_reward(
-                data["response"], expected_output, **kwargs
+                data["response"], expected_output
             )
             total_score = (score.format_score + score.correctness_score) / 2.0
 

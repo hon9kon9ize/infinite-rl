@@ -36,33 +36,19 @@ jobs:
         shell: bash
         run: |
           set -e
-          VERSION=$(python - <<'PY'
-import importlib.util, sys, re
-version = ''
-# Try to read __version__ from package
-try:
-    spec = importlib.util.spec_from_file_location('pkg','infinite_rl/__init__.py')
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    version = getattr(mod, '__version__', '')
-except Exception:
-    version = ''
-# Fallback: parse setup.py
-if not version:
-    try:
-        s = open('setup.py').read()
-        m = re.search(r"version\s*=\s*[\"']([^\"']+)[\"']", s)
-        if m:
-            version = m.group(1)
-    except Exception:
-        version = ''
-print(version)
-PY
-)
-          if [ -z "$VERSION" ]; then
-            echo "Could not determine version from package; falling back to run number ${GITHUB_RUN_NUMBER}"
-            VERSION="${GITHUB_RUN_NUMBER}"
+          # Expect VERSION.txt in repo root. If missing, default to 0.0.0
+          if [ -f VERSION.txt ]; then
+            VERSION_RAW=$(cat VERSION.txt | tr -d "\n\r " )
+            if [[ "$VERSION_RAW" == v* ]]; then
+              VERSION="$VERSION_RAW"
+            else
+              VERSION="v$VERSION_RAW"
+            fi
+          else
+            echo "VERSION.txt missing; defaulting to v0.0.0"
+            VERSION="0.0.0"
           fi
+
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Create release

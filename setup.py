@@ -21,8 +21,20 @@ PACKAGE_VERSION = read_version()
 
 
 def download_runtimes_from_release(tag=None, dest_dir="infinite_rl/runtimes"):
+    """Download runtime assets for a specific GitHub release tag.
+
+    If `tag` is None, the function defaults to `PACKAGE_VERSION`.
+    Tag is normalized to include a leading 'v' (e.g., 'v0.1.13').
+    """
+    if not tag:
+        tag = PACKAGE_VERSION
+
+    # Normalize tag to start with 'v'
+    if not str(tag).startswith("v"):
+        tag = f"v{tag}"
+
     os.makedirs(dest_dir, exist_ok=True)
-    api_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/{'tags/' + tag if tag else 'latest'}"
+    api_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/tags/{tag}"
 
     try:
         with urllib.request.urlopen(api_url) as resp:
@@ -58,8 +70,13 @@ class install(_install):
 
     def run(self):
         _install.run(self)
-        # Try to download runtimes using optional environment override tag
+        # Use RUNTIME_RELEASE_TAG env var if present; otherwise default to package version
         tag = os.environ.get("RUNTIME_RELEASE_TAG")
+        if not tag:
+            tag = PACKAGE_VERSION
+        # Normalize to 'v' prefix
+        if not str(tag).startswith("v"):
+            tag = f"v{tag}"
         download_runtimes_from_release(tag=tag)
 
 

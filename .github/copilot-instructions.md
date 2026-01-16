@@ -55,6 +55,12 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 ## Integration points & dependencies
 - LLM: `google.genai` (Gemini). `GEMINI_API_KEY` must be set for generation to work.
 - Code execution: `wasmtime` + packaged WASM runtimes (`universal_js.wasm`, `micropython.wasm`) in `infinite_rl/runtimes`.
+  - Runtimes are built by the `build_src/build_wasm.sh` script and an automated GitHub Actions workflow (`.github/workflows/build_and_release_runtimes.yml`) uploads them to GitHub Releases.
+  - During `pip install`, `setup.py` will attempt to download these runtime assets from the latest GitHub release (or `RUNTIME_RELEASE_TAG` if set). Override the repo location with `RUNTIME_GITHUB_REPO` if needed. Example usage to pin a release during install:
+
+```bash
+RUNTIME_RELEASE_TAG=v1.2.3 RUNTIME_GITHUB_REPO=owner/repo python -m pip install .
+```
 - Math reward: `sympy` is used for symbolic checks.
 - CI installs some language toolchains (Node, Java, g++) even though project currently focuses on Python/JS/TypeScript and math; update CI if you remove language support.
 

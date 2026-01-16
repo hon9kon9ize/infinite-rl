@@ -35,6 +35,11 @@ pip install git+https://github.com/hon9kon9ize/infinite-rl.git
    source .ven/bin/activate
    ```
 
+4. Runtimes (WASM)
+   - The JS and MicroPython runtimes are built by `build_src/build_wasm.sh`.
+   - A GitHub Actions workflow (`.github/workflows/build_and_release_runtimes.yml`) runs the build and uploads `universal_js.wasm` and `micropython.wasm` to a GitHub Release.
+   - During installation, `setup.py` will try to download these runtimes automatically from the latest release (or use the `RUNTIME_RELEASE_TAG` environment variable to pin a release). If you prefer to build locally, run `./build_src/build_wasm.sh` and the generated files will be placed in `infinite_rl/runtimes/`.
+
 ## Usage
 
 You can generate a synthetic dataset using the provided script. The generator is designed to be **idempotent and resumable**—if a `dataset.csv` already exists in the output directory, the script will calculate the delta needed to reach your target `--num_samples` while maintaining the requested task distribution.

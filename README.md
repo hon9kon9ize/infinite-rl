@@ -30,6 +30,11 @@ pip install git+https://github.com/hon9kon9ize/infinite-rl.git
    export GEMINI_API_KEY=your_api_key_here
    ```
 
+3. (Optional) Activate the Python virtual environment before using the CLI:
+   ```bash
+   source .ven/bin/activate
+   ```
+
 ## Usage
 
 You can generate a synthetic dataset using the provided script. The generator is designed to be **idempotent and resumable**—if a `dataset.csv` already exists in the output directory, the script will calculate the delta needed to reach your target `--num_samples` while maintaining the requested task distribution.

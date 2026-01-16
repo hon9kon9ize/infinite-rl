@@ -30,6 +30,10 @@ jobs:
           pip install .
           if [ -f requirements_dev.txt ]; then pip install -r requirements_dev.txt; fi
 
+      - name: Download runtimes (for tests)
+        run: |
+          python scripts/download_runtimes.py || true
+
       - name: Run examples
         run: |
           python -c "from infinite_rl import run_examples; run_examples()"

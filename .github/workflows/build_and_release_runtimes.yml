@@ -64,8 +64,21 @@ jobs:
             echo "release_exists=true" >> "$GITHUB_OUTPUT"
             upload_url=$(echo "$resp" | jq -r '.upload_url' | sed 's/{?name,label}//')
             echo "upload_url=$upload_url" >> "$GITHUB_OUTPUT"
+            # Check whether assets already exist
+            if echo "$resp" | jq -e '.assets[] | select(.name=="universal_js.wasm")' >/dev/null 2>&1; then
+              echo "asset_universal_exists=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "asset_universal_exists=false" >> "$GITHUB_OUTPUT"
+            fi
+            if echo "$resp" | jq -e '.assets[] | select(.name=="micropython.wasm")' >/dev/null 2>&1; then
+              echo "asset_micropython_exists=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "asset_micropython_exists=false" >> "$GITHUB_OUTPUT"
+            fi
           else
             echo "release_exists=false" >> "$GITHUB_OUTPUT"
+            echo "asset_universal_exists=false" >> "$GITHUB_OUTPUT"
+            echo "asset_micropython_exists=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create release (if missing)
@@ -86,6 +99,7 @@ jobs:
         run: echo "upload_url=${{ steps.create_release.outputs.upload_url }}" >> "$GITHUB_OUTPUT"
 
       - name: Upload universal_js.wasm
+        if: steps.check_release.outputs.asset_universal_exists == 'false'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -96,6 +110,7 @@ jobs:
           asset_content_type: application/wasm
 
       - name: Upload micropython.wasm
+        if: steps.check_release.outputs.asset_micropython_exists == 'false'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

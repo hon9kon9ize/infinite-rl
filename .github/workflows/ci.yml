@@ -27,8 +27,6 @@ jobs:
       - name: Install Python package
         run: |
           python -m pip install --upgrade pip
-          # Ask setup.py to print runtime URLs for debugging
-          export SHOW_RUNTIME_URLS=1
           pip install .
 
       - name: Run examples

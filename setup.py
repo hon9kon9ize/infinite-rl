@@ -29,9 +29,9 @@ def download_runtimes_from_release(tag=None, dest_dir="infinite_rl/runtimes"):
     if not tag:
         tag = PACKAGE_VERSION
 
-        # Normalize tag to start with 'v'
-        if not str(tag).startswith("runtimes-v"):
-            tag = f"runtimes-{tag}"
+    # Normalize tag to start with 'v'
+    if not str(tag).startswith("runtimes-v"):
+        tag = f"runtimes-{tag}"
 
     os.makedirs(dest_dir, exist_ok=True)
     api_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/tags/{tag}"
@@ -88,14 +88,6 @@ class install(_install):
             tag = f"v{tag}"
         download_runtimes_from_release(tag=tag)
 
-
-# Optionally show runtime URLs during install/build (for debugging)
-if os.environ.get("SHOW_RUNTIME_URLS") == "1":
-    print("[debug] SHOW_RUNTIME_URLS=1 detected; resolving runtime download URLs")
-    try:
-        download_runtimes_from_release(tag=PACKAGE_VERSION, dest_dir="/tmp/ignore")
-    except Exception as e:
-        print(f"[debug] Failed to resolve runtime URLs: {e}")
 
 setup(
     name="infinite_rl",

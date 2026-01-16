@@ -8,6 +8,18 @@ RUNTIME_FILES = ["universal_js.wasm", "micropython.wasm"]
 GITHUB_REPO = os.environ.get("RUNTIME_GITHUB_REPO", "hon9kon9ize/infinite-rl")
 
 
+# Central version source
+def read_version():
+    try:
+        with open("VERSION.txt", "r") as f:
+            return f.read().strip()
+    except Exception:
+        return "0.0.0"
+
+
+PACKAGE_VERSION = read_version()
+
+
 def download_runtimes_from_release(tag=None, dest_dir="infinite_rl/runtimes"):
     os.makedirs(dest_dir, exist_ok=True)
     api_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/{'tags/' + tag if tag else 'latest'}"
@@ -53,10 +65,11 @@ class install(_install):
 
 setup(
     name="infinite_rl",
-    version="0.1.13",
+    version=PACKAGE_VERSION,
     packages=["infinite_rl", "infinite_rl.reward_functions", "infinite_rl.examples"],
     include_package_data=True,
     package_data={
+        "infinite_rl": ["VERSION.txt"],
         "infinite_rl.examples": ["*.md"],
         "infinite_rl.reward_functions": ["*.py"],
         "infinite_rl.runtimes": ["*.wasm"],

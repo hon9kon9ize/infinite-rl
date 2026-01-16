@@ -1,5 +1,5 @@
 datasets
 google-genai
 pandas
-python-dotenv
 argparse
+tqdm

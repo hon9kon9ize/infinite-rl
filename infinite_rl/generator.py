@@ -3,7 +3,6 @@ import time
 import random
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from tqdm import tqdm
 from .prompts import (
     SYNTHESIS_SYSTEM_PROMPT,
     TYPE_PROMPTS,

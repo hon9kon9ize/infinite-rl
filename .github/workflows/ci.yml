@@ -27,23 +27,9 @@ jobs:
       - name: Install Python package
         run: |
           python -m pip install --upgrade pip
+          # Ask setup.py to print runtime URLs for debugging
+          export SHOW_RUNTIME_URLS=1
           pip install .
-          if [ -f requirements_dev.txt ]; then pip install -r requirements_dev.txt; fi
-
-      - name: Ensure runtimes present (download or build)
-        run: |
-          set -e
-          echo "Attempting to download runtimes from release tag..."
-          python scripts/download_runtimes.py || DOWNLOAD_RC=$?
-          if [ "$DOWNLOAD_RC" = "0" ]; then
-            echo "Runtimes downloaded successfully."
-            ls -lh infinite_rl/runtimes || true
-          else
-            echo "Download failed (rc=$DOWNLOAD_RC). Attempting local build..."
-            chmod +x build_src/build_wasm.sh
-            ./build_src/build_wasm.sh
-            echo "After build, runtimes:" && ls -lh infinite_rl/runtimes || true
-          fi
 
       - name: Run examples
         run: |

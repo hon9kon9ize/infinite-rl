@@ -373,6 +373,8 @@ def generate_dataset(
             all_tasks.append(t)
     random.shuffle(all_tasks)
 
+    from tqdm import tqdm
+
     pbar = tqdm(
         total=max(num_samples, len(dataset)),
         initial=len(dataset),

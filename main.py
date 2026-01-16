@@ -17,7 +17,7 @@ def main():
         "--type",
         type=str,
         required=True,
-        help="Comma separated types (e.g., coding,math,summarization,creativity)",
+        help="Comma separated types (e.g., coding,math)",
     )
     parser.add_argument(
         "--num_samples",

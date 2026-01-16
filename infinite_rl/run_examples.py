@@ -57,8 +57,6 @@ def run_examples():
 
             # Preparation for specific reward functions
             kwargs = {}
-            if task_type == "summarization":
-                kwargs["original_document"] = data["prompt"]
 
             # HTML and some coding tasks might need expected output to be parsed if it's JSON
             expected_output = data["answer"]

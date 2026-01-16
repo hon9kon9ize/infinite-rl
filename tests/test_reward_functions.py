@@ -10,8 +10,6 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 from infinite_rl.reward_functions.coding import CodingRewardFunction
 from infinite_rl.reward_functions.math import MathRewardFunction
-from infinite_rl.reward_functions.summarization import SummarizationRewardFunction
-from infinite_rl.reward_functions.html import HtmlRewardFunction
 from infinite_rl.parser import ExampleParser
 
 
@@ -64,80 +62,6 @@ class TestExamples(unittest.TestCase):
         self.assertIsNotNone(example)
 
         reward_fn = MathRewardFunction(task_name="math")
-        reward_fn.initialize()
-
-        score = reward_fn.compute_reward(example["response"], example["answer"])
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 1.0)
-
-    @patch("infinite_rl.reward_functions.summarization.SentenceTransformer")
-    def test_summarization_example(self, mock_transformer_class):
-        example = self.examples.get("SUMMARIZATION")
-        self.assertIsNotNone(example)
-
-        # Mock high similarity for the perfect example
-        mock_model = MagicMock()
-        mock_transformer_class.return_value = mock_model
-        mock_sim = MagicMock()
-        mock_sim.item.return_value = 1.0
-        mock_model.similarity.return_value = mock_sim
-
-        reward_fn = SummarizationRewardFunction(task_name="summarization")
-        reward_fn.initialize()
-
-        # Extract the json field from expected_output if it's there
-        # For summarization, the parser gets the raw JSON string
-        score = reward_fn.compute_reward(
-            example["response"], example["answer"], original_document=example["prompt"]
-        )
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 1.0)
-
-    def test_html_example(self):
-        example = self.examples.get("HTML")
-        self.assertIsNotNone(example)
-
-        reward_fn = HtmlRewardFunction(task_name="html")
-        reward_fn.initialize()
-
-        # HTML reward function expects a dict with selectors
-        # The parser gets the raw string from Answer block
-        expected = json.loads(example["answer"])
-
-        score = reward_fn.compute_reward(example["response"], expected)
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 1.0)
-
-    def test_rust_example(self):
-        example = self.examples.get("RUST")
-        self.assertIsNotNone(example)
-
-        reward_fn = CodingRewardFunction(task_name="rust")
-        reward_fn.set_language("rust")
-        reward_fn.initialize()
-
-        score = reward_fn.compute_reward(example["response"], example["answer"])
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 1.0)
-
-    def test_java_example(self):
-        example = self.examples.get("JAVA")
-        self.assertIsNotNone(example)
-
-        reward_fn = CodingRewardFunction(task_name="java")
-        reward_fn.set_language("java")
-        reward_fn.initialize()
-
-        score = reward_fn.compute_reward(example["response"], example["answer"])
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 1.0)
-
-    def test_cpp_example(self):
-        example = self.examples.get("CPP")
-        self.assertIsNotNone(example)
-
-        reward_fn = CodingRewardFunction(task_name="cpp")
-        reward_fn.set_language("cpp")
         reward_fn.initialize()
 
         score = reward_fn.compute_reward(example["response"], example["answer"])

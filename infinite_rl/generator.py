@@ -5,12 +5,15 @@ import random
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
-from .prompts import SYSTEM_PROMPT, TYPE_PROMPTS, RECTIFY_PROMPT, TASK_SYSTEM_PROMPTS
+from .prompts import (
+    SYNTHESIS_SYSTEM_PROMPT,
+    TYPE_PROMPTS,
+    RECTIFY_PROMPT,
+    TASK_SYSTEM_PROMPTS,
+)
 from .parser import ExampleParser
 from .reward_functions.coding import CodingRewardFunction
 from .reward_functions.math import MathRewardFunction
-from .reward_functions.summarization import SummarizationRewardFunction
-from .reward_functions.html import HtmlRewardFunction
 
 
 def get_reward_function(task_type, timeout=5):
@@ -18,32 +21,15 @@ def get_reward_function(task_type, timeout=5):
     if task_type in [
         "python",
         "javascript",
-        "typescript",
-        "rust",
-        "cpp",
-        "java",
-        "coding",
-        "js",
-        "ts",
     ]:
         fn = CodingRewardFunction(task_name=task_type, timeout=timeout)
         if task_type in ["javascript", "js"]:
             fn.set_language("javascript")
-        elif task_type in ["typescript", "ts"]:
-            fn.set_language("typescript")
-        elif task_type in ["rust"]:
-            fn.set_language("rust")
-        elif task_type in ["cpp", "c++"]:
-            fn.set_language("cpp")
-        elif task_type in ["java"]:
-            fn.set_language("java")
+        elif task_type == "python":
+            fn.set_language("python")
         return fn
     elif task_type == "math":
         return MathRewardFunction(task_name="math", timeout=timeout)
-    elif task_type == "summarization":
-        return SummarizationRewardFunction(task_name="summarization", timeout=timeout)
-    elif task_type == "html":
-        return HtmlRewardFunction(task_name="html", timeout=timeout)
     return None
 
 
@@ -84,7 +70,7 @@ def generate_dataset(
     save_every=10,
     max_retries=5,
     timeout=5,
-    task_dist="0.5,0.1,0.3,0.1",
+    task_dist="0.5,0.5",
     debug=False,
     num_threads=1,
 ):
@@ -97,20 +83,18 @@ def generate_dataset(
     if debug and not os.path.exists(debug_dir):
         os.makedirs(debug_dir)
 
-    # Parse task distribution: [code, html, math, summarization]
+    # Parse task distribution: [code, math]
     try:
         dist_values = [float(v) for v in task_dist.split(",")]
-        if len(dist_values) != 4:
-            raise ValueError("task_dist must contain exactly 4 values")
+        if len(dist_values) != 2:
+            raise ValueError("task_dist must contain exactly 2 values")
     except Exception as e:
         print(f"Error parsing task_dist: {e}. Using default.")
-        dist_values = [0.5, 0.1, 0.3, 0.1]
+        dist_values = [0.5, 0.5]
 
     distribution = {
         "coding": dist_values[0],
-        "html": dist_values[1],
-        "math": dist_values[2],
-        "summarization": dist_values[3],
+        "math": dist_values[1],
     }
 
     # Resume Logic: Check for existing dataset
@@ -160,16 +144,9 @@ def generate_dataset(
     failed_dataset = []
     # Distribution includes sub-types for coding
     type_successful_prompts = {
-        "coding": [],
         "python": [],
         "javascript": [],
-        "typescript": [],
-        "cpp": [],
-        "rust": [],
-        "java": [],
         "math": [],
-        "summarization": [],
-        "html": [],
     }
 
     # Load initial seed prompts from examples directory for diversity
@@ -177,15 +154,9 @@ def generate_dataset(
     if os.path.exists(examples_dir):
         # We'll map filenames to task types
         file_to_type = {
-            "PYTHON": "coding",
+            "PYTHON": "python",
             "JAVASCRIPT": "javascript",
-            "TYPESCRIPT": "typescript",
-            "CPP": "cpp",
-            "RUST": "rust",
-            "JAVA": "java",
             "MATH": "math",
-            "SUMMARIZATION": "summarization",
-            "HTML": "html",
         }
         for filename in os.listdir(examples_dir):
             if filename.endswith(".md"):
@@ -198,20 +169,11 @@ def generate_dataset(
                         parsed = ExampleParser.parse_text(content)
                         if parsed.get("prompt"):
                             type_successful_prompts[task_t].append(parsed["prompt"])
-                            # also add to 'coding' if it's a specific language
-                            if (
-                                task_t
-                                in [
-                                    "python",
-                                    "javascript",
-                                    "typescript",
-                                    "cpp",
-                                    "rust",
-                                    "java",
-                                ]
-                                and "coding" in type_successful_prompts
-                            ):
-                                type_successful_prompts["coding"].append(
+                            if task_t in [
+                                "python",
+                                "javascript",
+                            ]:
+                                type_successful_prompts["python"].append(
                                     parsed["prompt"]
                                 )
                     except Exception as e:
@@ -246,7 +208,7 @@ def generate_dataset(
 
     def generate_single_sample(t, pbar):
         type_prompt_base = TYPE_PROMPTS.get(t, f"Generate a sample for {t}")
-        system_inst = TASK_SYSTEM_PROMPTS.get(t, SYSTEM_PROMPT)
+        system_inst = TASK_SYSTEM_PROMPTS.get(t, SYNTHESIS_SYSTEM_PROMPT)
         reward_fn = reward_functions.get(t)
 
         attempt = 0
@@ -294,12 +256,8 @@ def generate_dataset(
                 # Validation
                 quality_score = 1.0
                 if reward_fn:
-                    kwargs = {}
-                    if t == "summarization":
-                        kwargs["original_document"] = parsed["prompt"]
-
                     score = reward_fn.compute_reward(
-                        parsed["response"], parsed["answer"], **kwargs
+                        parsed["response"], parsed["answer"]
                     )
                     quality_score = (score.format_score + score.correctness_score) / 2.0
 
@@ -346,12 +304,10 @@ def generate_dataset(
                                 parsed = ExampleParser.parse_text(current_raw)
 
                                 # Re-evaluate
-                                kwargs = {}
-                                if t == "summarization":
-                                    kwargs["original_document"] = parsed["prompt"]
 
                                 current_score = reward_fn.compute_reward(
-                                    parsed["response"], parsed["answer"], **kwargs
+                                    parsed["response"],
+                                    parsed["answer"],
                                 )
                                 quality_score = (
                                     current_score.format_score

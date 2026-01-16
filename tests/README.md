@@ -4,11 +4,9 @@ This document describes the unit tests for the reward functions in the `infinite
 
 ## Overview
 
-A comprehensive test suite for all reward function types:
-- **Coding** - Multi-language code execution and output validation
+A comprehensive test suite for current reward function types:
+- **Coding** - Multi-language code execution and output validation (Python, JavaScript, TypeScript)
 - **Math** - Symbolic mathematics with SymPy
-- **HTML** - HTML syntax validation and CSS selector matching
-- **Summarization** - Semantic similarity with mocked embeddings
 
 ## Test Coverage
 
@@ -26,18 +24,7 @@ Tests symbolic math evaluation:
 - ✅ `test_integer_expected_output` - Supports integer comparison
 - ✅ `test_integer_with_wrong_value` - Similarity-based scoring for integers
 
-### 3. HtmlRewardFunction (3 tests)
-Tests HTML parsing and CSS selector validation:
-- ✅ `test_valid_html_with_all_selectors` - Validates all CSS selectors match
-- ✅ `test_missing_html_code_block` - Parses raw HTML without code blocks
-- ✅ `test_missing_required_selectors` - Detects missing selectors
 
-### 4. SummarizationRewardFunction (4 tests)
-Tests semantic similarity with mocked SentenceTransformer:
-- ✅ `test_valid_summary_with_high_similarity` - High similarity (0.95) = 1.0 score
-- ✅ `test_valid_summary_with_low_similarity` - Low similarity (0.3) = 0.0 score
-- ✅ `test_missing_summary_tag` - Handles missing summary tags
-- ✅ `test_summary_with_callable_validator` - Supports custom validator functions
 
 ## Running the Tests
 

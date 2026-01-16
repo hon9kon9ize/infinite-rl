@@ -1,6 +1,6 @@
 # Infinite RL
 
-This tool generates synthetic RL datasets for LLM preference optimization using the Gemini API. It supports multiple task types including coding, math, summarization, and more, with built-in reward functions for evaluating generated responses.
+This tool generates synthetic RL datasets for LLM preference optimization using the Gemini API. It supports coding (Python, JavaScript) and math tasks with built-in reward functions for evaluating generated responses.
 
 ## Installation
 
@@ -21,8 +21,8 @@ pip install git+https://github.com/hon9kon9ize/infinite-rl.git
 1. Install dependencies and language runtimes:
    
    The installation process will automatically attempt to install required language runtimes:
-   - **macOS**: Uses Homebrew to install Node.js, Java 17, g++, Rust, and ts-node
-   - **Linux**: Uses apt-get to install Node.js, OpenJDK 17, g++, Rust, and ts-node
+   - **macOS**: Uses Homebrew to install Node.js and ts-node
+   - **Linux**: Uses apt-get to install Node.js and ts-node
    - **Windows**: Provides links for manual installation, ts-node installation via npm if available
 
 2. Set up your Gemini API key:
@@ -46,12 +46,12 @@ Arguments:
 - `--threads`: Number of parallel generation threads (default: 1).
 - `--max_retries`: Maximum consecutive failed attempts per task type before stopping (default: 5).
 - `--timeout`: Timeout (in seconds) for reward function execution (default: 5).
-- `--task_dist`: Task distribution as comma-separated floats `[coding, html, math, summarization]` (default: `0.5,0.1,0.3,0.1`).
+- `--task_dist`: Task distribution as comma-separated floats `[coding, math]` (default: `0.5,0.5`).
 - `--debug`: Enable verbose logging and save raw LLM responses to `data/debug_prompts`.
 
-**Example for generating only HTML tasks:**
+**Example for generating only math tasks:**
 ```bash
-python scripts/generate.py --num_samples 10 --task_dist 0,1,0,0 --out_dir ./html_only
+python scripts/generate.py --num_samples 10 --task_dist 0,1 --out_dir ./math_only
 ```
 
 ## Testing & Verification
@@ -84,9 +84,6 @@ Evaluates LLM-generated code across multiple programming languages with test cas
 **Supported Languages:**
 - Python
 - JavaScript
-- C++
-- Rust
-- Java
 
 **Features:**
 - Code execution and validation
@@ -128,68 +125,9 @@ result = math_fn.compute_reward(
 print(f"Correctness: {result.correctness_score}") 
 ```
 
-### 3. Summarization Task
-Evaluates text summarization quality using semantic similarity.
 
-**Example:**
-```python
-from infinite_rl import get_reward_functions
 
-reward_fns = get_reward_functions()
-summ_fn = reward_fns["summarization"]
-# Optional: initialize to load embeddings model early
-summ_fn.initialize()
 
-result = summ_fn.compute_reward(
-    model_output="<answer>The quick brown fox jumps over the lazy dog.</answer>",
-    expected_output="A fast fox leaps over a sleepy canine.",
-    original_document="The quick brown fox jumps over the lazy dog. This is a longer text."
-)
-print(f"Semantic Similarity: {result.correctness_score}")
-```
-
-### 4. HTML Task
-Evaluates LLM-generated HTML code using syntax validation and CSS selector matching.
-
-**Features:**
-- HTML syntax validation using BeautifulSoup
-- CSS selector-based element matching
-- Support for multiple selectors validation
-- Custom validator functions
-
-**Example:**
-```python
-from infinite_rl import get_reward_functions
-
-reward_fns = get_reward_functions()
-html_fn = reward_fns["html"]
-
-# Example 1: Single CSS selector
-result = html_fn.compute_reward(
-    model_output="<answer>\n<div class='container'><h1>Hello</h1></div>\n</answer>",
-    expected_output="div.container h1"
-)
-print(f"Correctness: {result.correctness_score}")
-
-# Example 2: Multiple selectors
-result = html_fn.compute_reward(
-    model_output="<answer>\n<html><body><p id='intro'>Welcome</p></body></html>\n</answer>",
-    expected_output={
-        "selectors": ["html", "body", "p#intro"]
-    }
-)
-
-# Example 3: Custom validator
-def validate_structure(soup):
-    has_body = soup.body is not None
-    has_main = soup.select("main")
-    return has_body and len(has_main) > 0
-
-result = html_fn.compute_reward(
-    model_output="<answer>\n<html><body><main>Content</main></body></html>\n</answer>",
-    expected_output=validate_structure
-)
-```
 
 ## Testing
 
@@ -214,36 +152,7 @@ print(f"JavaScript: {stdout}")  # Output: Hello, World!
 stdout, stderr = executor.run_single("console.log('Hello, World!')", "typescript")
 print(f"TypeScript: {stdout}")  # Output: Hello, World!
 
-# Test C++
-code_cpp = """
-#include <iostream>
-int main() {
-    std::cout << "Hello, World!" << std::endl;
-    return 0;
-}
-"""
-stdout, stderr = executor.run_single(code_cpp, "cpp")
-print(f"C++: {stdout}")
 
-# Test Rust
-code_rust = """
-fn main() {
-    println!("Hello, World!");
-}
-"""
-stdout, stderr = executor.run_single(code_rust, "rust")
-print(f"Rust: {stdout}")
-
-# Test Java
-code_java = """
-public class Main {
-    public static void main(String[] args) {
-        System.out.println("Hello, World!");
-    }
-}
-"""
-stdout, stderr = executor.run_single(code_java, "java")
-print(f"Java: {stdout}")
 ```
 
 ### Testing in Google Colab
@@ -303,10 +212,8 @@ infinite_rl/
 ├── prompts.py               # Task-specific system instructions
 └── reward_functions/
     ├── reward_function.py   # Base reward function class
-    ├── coding.py            # Coding (Python, JS, C++, etc.) evaluator
-    ├── html.py              # HTML/CSS layout evaluator
-    ├── math.py              # Symbolic Math evaluator
-    └── summarization.py     # Semantic similarity evaluator (Jina-v3)
+    ├── coding.py            # Coding (Python, JS) evaluator
+    └── math.py              # Symbolic Math evaluator
 ```
 
 ## Output
@@ -331,7 +238,7 @@ Handles execution of code in multiple languages with timeout protection and erro
 
 ### Reward Functions
 Each task type has a specialized reward function that:
-1. Initializes necessary components (e.g., loading Jina-v3 for summarization)
+1. Initializes necessary components (e.g., loading embedding or ML models)
 2. Executes/evaluates generated content extracted from `<answer>` tags.
 3. Computes a reward score (0-1) combining format and correctness.
 4. Returns detailed evaluation metrics.

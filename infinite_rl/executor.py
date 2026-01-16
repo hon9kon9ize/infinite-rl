@@ -1,218 +1,96 @@
-import subprocess
 import os
+import wasmtime
 import tempfile
-import re
-from concurrent.futures import ThreadPoolExecutor
+from importlib import resources
 
 
-class RewardExecutor:
+class Executor:
     def __init__(self, timeout=5):
         self.timeout = timeout
-        # Add common binary locations and Rust to path
-        extra_paths = [
-            os.path.expanduser("~/.cargo/bin"),
-            "/usr/local/bin",
-            "/usr/bin",
-        ]
-        for p in extra_paths:
-            if os.path.exists(p) and p not in os.environ["PATH"]:
-                os.environ["PATH"] += f":{p}"
+        self.engine = wasmtime.Engine()
+        self.linker = wasmtime.Linker(self.engine)
+        self.linker.define_wasi()
 
-        # Determine the best node binary
-        self.node_bin = "node"
+        self._modules = {
+            "js": self._load_wasm_module("universal_js.wasm"),
+            "python": self._load_wasm_module("micropython.wasm"),
+        }
+
+    def _load_wasm_module(self, filename):
+        # Local development check first
+        local_path = os.path.join(os.path.dirname(__file__), "runtimes", filename)
+        if os.path.exists(local_path):
+            return wasmtime.Module.from_file(self.engine, local_path)
+
+        # Package-based check
         try:
-            # Check if default node is too old (e.g., v12 on some TPU VMs)
-            v_proc = subprocess.run(["node", "-v"], capture_output=True, text=True)
-            v_str = v_proc.stdout.strip().replace("v", "")
-            major_v = int(v_str.split(".")[0]) if v_str else 0
-            if major_v < 18:
-                # If default is old, look for system node which we likely upgraded
-                if os.path.exists("/usr/bin/node"):
-                    v_proc_sys = subprocess.run(
-                        ["/usr/bin/node", "-v"], capture_output=True, text=True
-                    )
-                    if (
-                        v_proc_sys.stdout.startswith("v20")
-                        or v_proc_sys.stdout.startswith("v18")
-                        or v_proc_sys.stdout.startswith("v22")
-                    ):
-                        self.node_bin = "/usr/bin/node"
+            path = resources.files("infinite_rl.runtimes").joinpath(filename)
+            return wasmtime.Module.from_file(self.engine, str(path))
         except Exception:
-            pass
+            raise FileNotFoundError(f"Could not find {filename}")
 
-    def _execute_python(self, code, cwd):
-        fpath = os.path.join(cwd, "script.py")
-        with open(fpath, "w") as f:
-            f.write(code)
-        return subprocess.run(
-            ["python3", fpath], capture_output=True, text=True, timeout=self.timeout
-        )
+    def _execute_wasm(self, lang, code):
+        module = self._modules.get(lang)
+        store = wasmtime.Store(self.engine)
+        wasi_config = wasmtime.WasiConfig()
 
-    def _execute_js(self, code, cwd):
-        fpath = os.path.join(cwd, "script.js")
-        with open(fpath, "w") as f:
-            f.write(code)
-        return subprocess.run(
-            [self.node_bin, fpath], capture_output=True, text=True, timeout=self.timeout
-        )
+        # Create temp files for Input, Output, and Error
+        with tempfile.NamedTemporaryFile(
+            mode="wb", delete=False
+        ) as in_f, tempfile.NamedTemporaryFile(
+            mode="w+", delete=False
+        ) as out_f, tempfile.NamedTemporaryFile(
+            mode="w+", delete=False
+        ) as err_f:
 
-    def _execute_cpp(self, code, cwd):
-        fpath = os.path.join(cwd, "main.cpp")
-        out = os.path.join(cwd, "cpp_bin")
-        with open(fpath, "w") as f:
-            f.write(code)
-        subprocess.run(["g++", fpath, "-o", out], check=True, capture_output=True)
-        return subprocess.run(
-            [out], capture_output=True, text=True, timeout=self.timeout
-        )
+            # Write code to stdin file and close handle so Wasm can read it
+            in_f.write(code.encode("utf-8"))
+            in_f.close()
 
-    def _execute_rust(self, code, cwd):
-        fpath = os.path.join(cwd, "main.rs")
-        out = os.path.join(cwd, "rs_bin")
-        with open(fpath, "w") as f:
-            f.write(code)
-        subprocess.run(["rustc", fpath, "-o", out], check=True, capture_output=True)
-        return subprocess.run(
-            [out], capture_output=True, text=True, timeout=self.timeout
-        )
+            wasi_config.stdin_file = in_f.name
+            wasi_config.stdout_file = out_f.name
+            wasi_config.stderr_file = err_f.name
 
-    def _execute_java(self, code, cwd):
-        # Java requires the filename to match the public class name
-        class_match = re.search(r"public\s+class\s+(\w+)", code)
-        class_name = class_match.group(1) if class_match else "Main"
-        fpath = os.path.join(cwd, f"{class_name}.java")
-        with open(fpath, "w") as f:
-            f.write(code)
-        subprocess.run(["javac", fpath], check=True, capture_output=True)
-        return subprocess.run(
-            ["java", "-cp", cwd, class_name],
-            capture_output=True,
-            text=True,
-            timeout=self.timeout,
-        )
+            if lang == "python":
+                wasi_config.argv = ["micropython", "-c", code]
+            else:
+                wasi_config.argv = ["javy"]
 
-    def _execute_typescript(self, code, cwd):
-        fpath = os.path.join(cwd, "script.ts")
-        with open(fpath, "w") as f:
-            f.write(code)
+            store.set_wasi(wasi_config)
 
-        # Helper to check for common "Node too old" errors
-        def check_node_version_error(stderr):
-            if "SyntaxError: Unexpected token '?'" in stderr:
-                return (
-                    "\n\nERROR: Your Node.js version is too old to run modern TypeScript tools.\n"
-                    "Please upgrade Node.js in Colab/Linux by running:\n"
-                    "!curl -fsSL https://deb.nodesource.com/setup_20.x | bash -\n"
-                    "!apt-get install -y nodejs\n"
-                )
-            return ""
-
-        # Runners in order of preference
-        runners = [
-            ["tsx", fpath],
-            ["ts-node", "--transpile-only", fpath],
-            ["npx", "-y", "tsx", fpath],
-            ["npx", "-y", "ts-node", "--transpile-only", fpath],
-        ]
-
-        last_result = None
-        for cmd in runners:
             try:
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=self.timeout,
-                )
-
-                # Check for Node version error in any runner result
-                v_err = check_node_version_error(result.stderr)
-                if v_err:
-                    result.stderr += v_err
-                    return result
-
-                # If it pass or has a legitimate SyntaxError in the code itself, return it
-                if result.returncode == 0:
-                    return result
-
-                # If we have a non-zero return but it's clearly a code error, keep it
-                if "SyntaxError" in result.stderr or "ReferenceError" in result.stderr:
-                    last_result = result
-
-            except FileNotFoundError:
-                continue
+                instance = self.linker.instantiate(store, module)
+                start = instance.exports(store)["_start"]
+                start(store)
             except Exception:
-                continue
+                pass
 
-        if last_result:
-            return last_result
+            # Read the outputs
+            with open(out_f.name, "r") as f:
+                stdout = f.read()
+            with open(err_f.name, "r") as f:
+                stderr = f.read()
 
-        # Final fallback: tsc compilation
-        try:
-            compile_result = subprocess.run(
-                [
-                    "tsc",
-                    fpath,
-                    "--target",
-                    "es2020",
-                    "--module",
-                    "commonjs",
-                    "--outDir",
-                    cwd,
-                ],
-                capture_output=True,
-                text=True,
-                timeout=self.timeout,
-            )
-            if compile_result.returncode == 0:
-                js_path = os.path.join(cwd, "script.js")
-                return subprocess.run(
-                    [self.node_bin, js_path],
-                    capture_output=True,
-                    text=True,
-                    timeout=self.timeout,
-                )
-            return compile_result
-        except FileNotFoundError:
-            pass
+            # Clean up all temp files
+            for path in [in_f.name, out_f.name, err_f.name]:
+                if os.path.exists(path):
+                    os.remove(path)
 
-        return subprocess.CompletedProcess(
-            args=[],
-            returncode=1,
-            stdout="",
-            stderr="No TypeScript environment found (tsx, ts-node, or tsc). Please install: 'npm install -g ts-node'",
-        )
+            return stdout, stderr
 
     def run_single(self, code, lang):
         lang = lang.lower()
-        with tempfile.TemporaryDirectory() as tmpdir:
-            try:
-                if lang == "python":
-                    res = self._execute_python(code, tmpdir)
-                elif lang in ["js", "javascript"]:
-                    res = self._execute_js(code, tmpdir)
-                elif lang in ["ts", "typescript"]:
-                    res = self._execute_typescript(code, tmpdir)
-                elif lang in ["c++", "cpp"]:
-                    res = self._execute_cpp(code, tmpdir)
-                elif lang == "rust":
-                    res = self._execute_rust(code, tmpdir)
-                elif lang == "java":
-                    res = self._execute_java(code, tmpdir)
-                else:
-                    return None, "Unsupported Language"
+        if lang in ["js", "javascript"]:
+            lang = "js"
 
-                return res.stdout.strip(), res.stderr.strip()
-            except subprocess.TimeoutExpired:
-                return None, "Timeout"
-            except subprocess.CalledProcessError as e:
-                return None, (
-                    e.stderr.decode() if isinstance(e.stderr, bytes) else str(e)
-                )
-            except Exception as e:
-                return None, str(e)
+        try:
+            stdout, stderr = self._execute_wasm(lang, code)
+            return stdout.strip(), stderr.strip()
+        except Exception as e:
+            return None, f"Executor Error: {str(e)}"
 
     def batch_run(self, completions, lang):
-        """Runs a group of completions in parallel for GRPO efficiency."""
+        from concurrent.futures import ThreadPoolExecutor
+
         with ThreadPoolExecutor() as executor:
             return list(executor.map(lambda c: self.run_single(c, lang), completions))

@@ -50,8 +50,8 @@ def main():
     parser.add_argument(
         "--task_dist",
         type=str,
-        default="0.5,0.1,0.3,0.1",
-        help="Task distribution [code, html, math, summarization] (default: 0.5,0.1,0.3,0.1)",
+        default="0.5,0.5",
+        help="Task distribution [coding,math] (default: 0.5,0.5)",
     )
     parser.add_argument(
         "--debug",

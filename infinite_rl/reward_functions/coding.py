@@ -2,7 +2,7 @@ import json
 import re
 from typing import Union, Callable
 from .reward_function import RewardFunction, RewardFunctionScore
-from ..executor import RewardExecutor
+from ..executor import Executor
 
 
 class CodingRewardFunction(RewardFunction):
@@ -15,7 +15,7 @@ class CodingRewardFunction(RewardFunction):
 
     def initialize(self):
         """Initialize the executor for running code."""
-        self.executor = RewardExecutor(timeout=self.timeout)
+        self.executor = Executor(timeout=self.timeout)
         self.initialized = True
 
     def set_language(self, language: str):
@@ -285,6 +285,10 @@ class CodingRewardFunction(RewardFunction):
 
         # 2. Advanced line-by-line normalization (handles different line endings, trailing spaces)
         def normalize_text(text):
+            # Strip ANSI escape sequences (like colors)
+            ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+            text = ansi_escape.sub("", text)
+
             lines = text.replace("\r\n", "\n").split("\n")
             # Strip trailing space from each line and remove empty lines at end
             stripped_lines = [line.rstrip() for line in lines]

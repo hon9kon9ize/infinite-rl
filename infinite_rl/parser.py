@@ -7,49 +7,56 @@ class ExampleParser:
     """Parses markdown example files or Gemini-generated text with Prompt, Answer, and Response sections."""
 
     @staticmethod
-    def extract_answer_tags(text):
-        """Robustly extract content from <answer> or <summary> tags, handling common LLM malformations."""
+    def extract_answer_tags(text, tags=None):
+        """Robustly extract content from tags (default: <answer> or <summary>), handling common LLM malformations.
+
+        tags: str or list[str] - tag name(s) to search for (case-insensitive). If None, defaults to ['answer','summary'].
+        """
         if not text:
             return []
 
-        # 1. Standard tags: <answer>...</answer> or <summary>...</summary>
+        if tags is None:
+            tag_list = ["answer", "summary"]
+        elif isinstance(tags, str):
+            tag_list = [tags]
+        else:
+            tag_list = list(tags)
+
+        # Build alternation for regex
+        tag_alt = "|".join(re.escape(t) for t in tag_list)
+
+        # 1. Standard tags: <tag>...</tag>
         matches = re.findall(
-            r"<(?:answer|summary)>(.*?)</(?:answer|summary)>",
+            rf"<(?:{tag_alt})>(.*?)</(?:{tag_alt})>",
             text,
             re.DOTALL | re.IGNORECASE,
         )
         if matches:
             return [m.strip() for m in matches]
 
-        # 2. Heuristic: Look for anything that looks like an opening answer/summary tag and a closing one
-        # Handles: ```answer>, [answer], <answer (missing >), etc.
-        pattern = r"(?:(?:```+|\[|<)\s*(?:answer|summary)\s*(?:>|\]|```+)?)(.*?)(?:(?:```+|\[|<)\s*/\s*(?:answer|summary)\s*(?:>|\]|```+)?)"
+        # 2. Heuristic: Look for anything that looks like an opening tag and a closing one
+        pattern = rf"(?:(?:```+|\[|<)\s*(?:{tag_alt})\s*(?:>|\]|```+)?)(.*?)(?:(?:```+|\[|<)\s*/\s*(?:{tag_alt})\s*(?:>|\]|```+)?)"
         matches = re.findall(pattern, text, re.DOTALL | re.IGNORECASE)
         if matches:
             return [m.strip() for m in matches]
 
         # 3. Only opening tag? Take everything after it
-        opening_pattern = r"(?:(?:```+|\[|<)\s*(?:answer|summary)\s*(?:>|\]|```+)?)"
+        opening_pattern = rf"(?:(?:```+|\[|<)\s*(?:{tag_alt})\s*(?:>|\]|```+)?)"
         match = re.search(opening_pattern, text, re.IGNORECASE)
         if match:
-            # Only if it's not followed by a closing tag later in the text (which Case 2 would have caught)
-            # Actually, just take everything after it.
             content = text[match.end() :].strip()
-            # If there is a trailing triple backtick followed by NOTHING, it might be the end
             content = re.sub(r"```\s*$", "", content).strip()
             return [content]
 
-        # 4. Last resort: If only closing tag exists, take everything before it (limited to a reasonable window)
-        if "</answer>" in text.lower() or "</summary>" in text.lower():
-            # Find the last occurrence of </answer> or </summary> (case insensitive)
+        # 4. Last resort: If only closing tag exists, take everything before it
+        closing_alt = "|".join(f"</{re.escape(t)}>" for t in tag_list)
+        if any(f"</{t}>" in text.lower() for t in tag_list):
             match = re.search(
-                r"(.*?)</(?:answer|summary)>", text, re.DOTALL | re.IGNORECASE
+                rf"(.*?)(?:</(?:{tag_alt})>)", text, re.DOTALL | re.IGNORECASE
             )
             if match:
                 content = match.group(1).strip()
-                # If there's a lot of text, try to find a natural break like a header
                 if len(content) > 5000:
-                    # Look for the last header before the closing tag as a better starting point
                     header_match = list(
                         re.finditer(r"^#+\s+.*$", content, re.MULTILINE)
                     )

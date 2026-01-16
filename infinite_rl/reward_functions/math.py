@@ -20,33 +20,22 @@ class MathRewardFunction(RewardFunction):
     def _check_equality(
         self, predicted_str: str, expected_str: str, allow_partial: bool = False
     ) -> float:
-        """Helper to check equality between two strings using exact, numeric, and symbolic methods."""
+        """Simplified equality: extract first numeric value from strings and compare as floats.
+
+        Behavior:
+        - If both sides contain a parsable number, compare numerically (absolute tolerance 1e-9).
+        - If parsing fails on either side, return 0.0 (no credit).
+        - This intentionally ignores textual annotations/units: numbers only.
+        """
         pred = predicted_str.strip()
         exp = expected_str.strip()
 
-        # 1. Exact match
+        # Try exact string match first (cheap)
         if pred.lower() == exp.lower():
-            return 1.0
-
-        # 2. Numeric match
-        try:
-            p_clean = pred.replace("$", "").replace(",", "")
-            e_clean = exp.replace("$", "").replace(",", "")
-            p_val = float(p_clean)
-            e_val = float(e_clean)
-            if abs(p_val - e_val) < 1e-6:
-                return 1.0
-
-            if allow_partial:
-                # Partial credit based on closeness
-                diff = abs(p_val - e_val)
-                denominator = max(abs(e_val), abs(p_val))
-                if denominator > 0:
-                    return max(0.0, 1.0 - (diff / denominator))
-        except (ValueError, TypeError):
+            # If both strings are numeric-like, we'll check numerically below.
             pass
 
-        # 3. Symbolic match
+        # First: attempt symbolic equivalence using SymPy (handles expressions like (1/2)x^4 etc.)
         try:
 
             def to_sympy(text):
@@ -65,12 +54,45 @@ class MathRewardFunction(RewardFunction):
             if simplify(pred_expr - ref_expr) == 0:
                 return 1.0
         except Exception:
+            # If symbolic parsing fails, fall back to numeric-only comparison
             pass
 
-        return 0.0
+        # Fallback: numeric-only comparison (extract numbers including fractions)
+        def _extract_number(s: str):
+            s_clean = s.replace("$", "").replace(",", "")
+            s_clean = re.sub(r"\\text\{([^}]*)\}", r"\1", s_clean)
+            s_clean = s_clean.replace("{", "").replace("}", "")
+
+            # Fraction like 1/2
+            m = re.search(r"([-+]?[0-9]*\.?[0-9]+)\s*/\s*([0-9]*\.?[0-9]+)", s_clean)
+            if m:
+                try:
+                    num = float(m.group(1)) / float(m.group(2))
+                    return num
+                except Exception:
+                    pass
+
+            m2 = re.search(r"[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?", s_clean)
+            if not m2:
+                return None
+            try:
+                return float(m2.group(0))
+            except Exception:
+                return None
+
+        p_num = _extract_number(pred)
+        e_num = _extract_number(exp)
+
+        if p_num is None or e_num is None:
+            return 0.0
+
+        return 1.0 if abs(p_num - e_num) <= 1e-9 else 0.0
 
     def compute_reward(
-        self, model_output: str, expected_output: Union[str, int, Callable]
+        self,
+        model_output: str,
+        expected_output: Union[str, int, Callable],
+        answer_tag: str = "answer",
     ) -> RewardFunctionScore:
         from ..parser import ExampleParser
 
@@ -95,7 +117,7 @@ class MathRewardFunction(RewardFunction):
                 except Exception:
                     pass
 
-        matches = ExampleParser.extract_answer_tags(model_output)
+        matches = ExampleParser.extract_answer_tags(model_output, tags=answer_tag)
         if not matches:
             return RewardFunctionScore(
                 format_score=0.0,

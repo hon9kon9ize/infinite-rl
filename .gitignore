@@ -6,3 +6,4 @@ test_data
 .env*
 data
 *.sh
+infinite_rl/runtimes

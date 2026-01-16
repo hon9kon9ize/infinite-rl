@@ -39,6 +39,7 @@ class CodingRewardFunction(RewardFunction):
         self,
         model_output: str,
         expected_output: Union[str, int, Callable],
+        answer_tag: str = "answer",
     ) -> RewardFunctionScore:
         from ..parser import ExampleParser
 
@@ -59,8 +60,8 @@ class CodingRewardFunction(RewardFunction):
                 except Exception:
                     pass
 
-        # 1. Format Objective: Check for <answer> tags
-        matches = ExampleParser.extract_answer_tags(model_output)
+        # 1. Format Objective: Check for tags (default: <answer>)
+        matches = ExampleParser.extract_answer_tags(model_output, tags=answer_tag)
 
         if not matches:
             return RewardFunctionScore(

@@ -10,9 +10,7 @@ GITHUB_REPO = os.environ.get("RUNTIME_GITHUB_REPO", "hon9kon9ize/infinite-rl")
 
 def download_runtimes_from_release(tag=None, dest_dir="infinite_rl/runtimes"):
     os.makedirs(dest_dir, exist_ok=True)
-    api_url = (
-        f"https://api.github.com/repos/{GITHUB_REPO}/releases/{'tags/' + tag if tag else 'latest'}"
-    )
+    api_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/{'tags/' + tag if tag else 'latest'}"
 
     try:
         with urllib.request.urlopen(api_url) as resp:
@@ -21,7 +19,10 @@ def download_runtimes_from_release(tag=None, dest_dir="infinite_rl/runtimes"):
         print(f"[warning] Could not fetch release info from {api_url}: {e}")
         return
 
-    assets = {a.get("name"): a.get("browser_download_url") for a in release_info.get("assets", [])}
+    assets = {
+        a.get("name"): a.get("browser_download_url")
+        for a in release_info.get("assets", [])
+    }
 
     for fname in RUNTIME_FILES:
         target = os.path.join(dest_dir, fname)

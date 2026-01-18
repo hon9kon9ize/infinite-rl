@@ -104,7 +104,7 @@ jobs:
           TAG="runtimes-${{ steps.get_version.outputs.version }}"
           # Use GH CLI for cleaner multi-file uploads
           gh release upload $TAG qwen3_local_cache.zip --clobber
-          gh release upload $TAG target/wasm32-wasip1/release/qwen3_embed.wasm --clobber
+          gh release upload $TAG build_src/qwen3_embed/target/wasm32-wasip1/release/qwen3_embed.wasm --clobber
 
       - name: Upload Runtimes (Legacy)
         uses: actions/upload-release-asset@v1

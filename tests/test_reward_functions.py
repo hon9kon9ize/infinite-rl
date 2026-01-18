@@ -198,13 +198,15 @@ class TestLanguageRewardFunction(unittest.TestCase):
             package_dir = Path(__file__).parent.parent / "examples"
         self.examples = ExampleParser.get_all_examples(package_dir)
 
-        from infinite_rl.reward_functions.language import LanguageRewardFunction
+        from infinite_rl.reward_functions.lang_consistency import (
+            LangConsistencyRewardFunction,
+        )
 
-        self.reward_fn = LanguageRewardFunction(task_name="language")
+        self.reward_fn = LangConsistencyRewardFunction(task_name="lang_consistency")
         self.reward_fn.initialize()
 
     def test_language_example_pass(self):
-        example = self.examples.get("LANGUAGE")
+        example = self.examples.get("LANG_CONSISTENCY")
         self.assertIsNotNone(example)
 
         score = self.reward_fn.compute_reward(example["response"], example["answer"])

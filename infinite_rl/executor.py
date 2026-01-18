@@ -2,6 +2,7 @@ import os
 import wasmtime
 import tempfile
 from importlib import resources
+from typing import Union
 
 
 class Executor:
@@ -38,7 +39,7 @@ class Executor:
         except Exception:
             raise FileNotFoundError(f"Could not find {filename}")
 
-    def _execute_wasm(self, lang, code):
+    def _execute_wasm(self, lang: str, input: Union[str, tuple]):
         module = self._modules.get(lang)
         if module is None:
             raise FileNotFoundError(f"No wasm module registered for language '{lang}'")
@@ -46,29 +47,30 @@ class Executor:
         store = wasmtime.Store(self.engine)
         wasi_config = wasmtime.WasiConfig()
 
-        # Support multiple input shapes. For most runtimes we write the code to stdin;
-        # for the qwen3 embedding CLI we accept either (document, query) tuples or
-        # strings separated by a delimiter and translate them into CLI args.
+        # Support multiple input shapes. For most runtimes we write the input to stdin;
+        # for the qwen3 embedding CLI we accept only (document, query) tuples and
+        # translate them into CLI args.
         stdin_content = ""
         qwen3_document = None
         qwen3_query = None
 
         if lang == "qwen3_embed":
-            # Accept list/tuple or string formats for document/query pairs.
-            if isinstance(code, (list, tuple)) and len(code) >= 2:
-                qwen3_document, qwen3_query = str(code[0]), str(code[1])
-            elif isinstance(code, str):
-                # Try a few common separators
-                if "\n---\n" in code:
-                    parts = code.split("\n---\n", 1)
-                elif "|||" in code:
-                    parts = code.split("|||", 1)
-                else:
-                    parts = [code, ""]
-                qwen3_document = parts[0]
-                qwen3_query = parts[1] if len(parts) > 1 else ""
+            # Accept only list/tuple (document, query) pairs to avoid ambiguous string parsing.
+            if isinstance(input, (list, tuple)) and len(input) >= 2:
+                qwen3_document, qwen3_query = str(input[0]), str(input[1])
+                # Sanity check: document should usually be longer than query. This helps catch
+                # accidental tuple swaps which can cause the qwen3 wasm to error in unclear ways.
+                if len(qwen3_document.strip()) < len(qwen3_query.strip()):
+                    raise ValueError(
+                        "For 'qwen3_embed', the first element should be the document and the second the query.\n"
+                        "Detected document shorter than query — did you swap the tuple?"
+                    )
+            else:
+                raise TypeError(
+                    "For 'qwen3_embed', 'input' must be a (document, query) tuple or list with at least 2 elements."
+                )
         else:
-            stdin_content = code if isinstance(code, str) else ""
+            stdin_content = input if isinstance(input, str) else ""
 
         # Create temp files for Input, Output, and Error
         with tempfile.NamedTemporaryFile(
@@ -173,14 +175,14 @@ class Executor:
 
             return stdout, stderr
 
-    def run_single(self, code, lang):
+    def run_single(self, input: Union[str, tuple], lang: str):
         import json
 
         lang = lang.lower()
 
-        # For qwen3 text embedding we allow passing (document, query) tuples/lists directly
+        # For qwen3 text embedding we require passing (document, query) tuples/lists directly
         try:
-            stdout, stderr = self._execute_wasm(lang, code)
+            stdout, stderr = self._execute_wasm(lang, input)
 
             # If this was a qwen3 run, ensure we have meaningful output and parse it
             if lang == "qwen3_embed":

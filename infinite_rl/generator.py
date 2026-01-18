@@ -12,6 +12,8 @@ from .prompts import (
 from .parser import ExampleParser
 from .reward_functions.coding import CodingRewardFunction
 from .reward_functions.math import MathRewardFunction
+from .reward_functions.lang_consistency import LangConsistencyRewardFunction
+from .reward_functions.summarization import SummarizationRewardFunction
 
 
 def get_reward_function(task_type, timeout=5):
@@ -28,6 +30,12 @@ def get_reward_function(task_type, timeout=5):
         return fn
     elif task_type == "math":
         return MathRewardFunction(task_name="math", timeout=timeout)
+    elif task_type == "lang_consistency":
+        return LangConsistencyRewardFunction(
+            task_name="lang_consistency", timeout=timeout
+        )
+    elif task_type == "summarization":
+        return SummarizationRewardFunction(task_name="summarization", timeout=timeout)
     return None
 
 
@@ -157,6 +165,7 @@ def generate_dataset(
             "PYTHON": "python",
             "JAVASCRIPT": "javascript",
             "MATH": "math",
+            "LANG_CONSISTENCY": "lang_consistency",
         }
         for filename in os.listdir(examples_dir):
             if filename.endswith(".md"):

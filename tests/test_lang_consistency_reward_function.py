@@ -1,11 +1,11 @@
 import unittest
 from pathlib import Path
 from infinite_rl.parser import ExampleParser
-from infinite_rl.reward_functions.language import LanguageRewardFunction
+from infinite_rl.reward_functions.lang_consistency import LangConsistencyRewardFunction
 
 
-class TestLanguageRewardFunction(unittest.TestCase):
-    """Test language/dialect reward function."""
+class TestLangConsistencyRewardFunction(unittest.TestCase):
+    """Test language/dialect reward function renamed to lang_consistency."""
 
     def setUp(self):
         package_dir = Path(__file__).parent.parent / "infinite_rl" / "examples"
@@ -13,11 +13,11 @@ class TestLanguageRewardFunction(unittest.TestCase):
             package_dir = Path(__file__).parent.parent / "examples"
         self.examples = ExampleParser.get_all_examples(package_dir)
 
-        self.reward_fn = LanguageRewardFunction(task_name="language")
+        self.reward_fn = LangConsistencyRewardFunction(task_name="lang_consistency")
         self.reward_fn.initialize()
 
     def test_language_example_pass(self):
-        example = self.examples.get("LANGUAGE")
+        example = self.examples.get("LANG_CONSISTENCY")
         self.assertIsNotNone(example)
 
         score = self.reward_fn.compute_reward(example["response"], example["answer"])

@@ -7,6 +7,9 @@ on:
     branches: [main]
   workflow_dispatch: # Manual trigger only
 
+permissions:
+  actions: write
+
 jobs:
   version-check:
     runs-on: ubuntu-latest

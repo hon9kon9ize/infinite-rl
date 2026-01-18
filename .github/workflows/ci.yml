@@ -19,12 +19,23 @@ jobs:
         shell: bash
         run: |
           set -e
-          if [ -f VERSION.txt ]; then
+          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+          echo "PWD=$(pwd)"
+          echo "Listing repository root:"
+          ls -la "$GITHUB_WORKSPACE" || true
+
+          # Prefer explicit workspace path to avoid issues when working-directory changes
+          if [ -f "$GITHUB_WORKSPACE/VERSION.txt" ]; then
+            VERSION_RAW=$(cat "$GITHUB_WORKSPACE/VERSION.txt" | tr -d "\n\r " )
+          elif [ -f VERSION.txt ]; then
             VERSION_RAW=$(cat VERSION.txt | tr -d "\n\r " )
-            [[ "$VERSION_RAW" == v* ]] && VERSION="$VERSION_RAW" || VERSION="v$VERSION_RAW"
           else
-            VERSION="v0.0.0"
+            echo "ERROR: VERSION.txt not found in repository root (checked $GITHUB_WORKSPACE and PWD)."
+            exit 1
           fi
+
+          [[ "$VERSION_RAW" == v* ]] && VERSION="$VERSION_RAW" || VERSION="v$VERSION_RAW"
+          echo "Found version: $VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Check for existing release

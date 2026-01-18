@@ -40,6 +40,16 @@ class TestQwen3InputValidation(unittest.TestCase):
             # Should not be a ValueError stemming from validation
             self.assertNotIsInstance(e, ValueError)
 
+    def test_single_role_tuple_does_not_raise(self):
+        # Single-role usage where document is empty and query is provided should NOT trigger swap detection
+        single = ("", "How does X work?")
+        try:
+            # This calls _execute_wasm; since we've stubbed linker.instantiate, it shouldn't raise a ValueError
+            self.executor._execute_wasm("qwen3_embed", single)
+        except Exception as e:
+            # If an exception occurs, it should not be ValueError from swap detection
+            self.assertNotIsInstance(e, ValueError)
+
 
 if __name__ == "__main__":
     unittest.main()

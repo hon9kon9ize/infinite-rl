@@ -2,7 +2,7 @@ import os
 import wasmtime
 import tempfile
 from importlib import resources
-from typing import Union
+from typing import Union, List, Tuple
 
 
 class Executor:
@@ -16,15 +16,8 @@ class Executor:
         self._modules = {
             "javascript": self._load_wasm_module("universal_js.wasm"),
             "python": self._load_wasm_module("micropython.wasm"),
-            "qwen3_embed": None,
+            "qwen3_embed": self._load_wasm_module("qwen3_embed.wasm"),
         }
-
-        # qwen3 is optional: don't fail initialization if it's missing
-        try:
-            self._modules["qwen3_embed"] = self._load_wasm_module("qwen3_embed.wasm")
-        except FileNotFoundError:
-            # Qwen3 runtime not available in this installation; feature is optional
-            pass
 
     def _load_wasm_module(self, filename):
         # Local development check first
@@ -58,13 +51,15 @@ class Executor:
             # Accept only list/tuple (document, query) pairs to avoid ambiguous string parsing.
             if isinstance(input, (list, tuple)) and len(input) >= 2:
                 qwen3_document, qwen3_query = str(input[0]), str(input[1])
-                # Sanity check: document should usually be longer than query. This helps catch
-                # accidental tuple swaps which can cause the qwen3 wasm to error in unclear ways.
-                if len(qwen3_document.strip()) < len(qwen3_query.strip()):
-                    raise ValueError(
-                        "For 'qwen3_embed', the first element should be the document and the second the query.\n"
-                        "Detected document shorter than query — did you swap the tuple?"
-                    )
+                # Sanity check: only trigger the swap-detection when both fields are non-empty.
+                # This avoids false positives when requesting a single-role embedding like
+                # ("", "query") or ("document", "").
+                if qwen3_document.strip() and qwen3_query.strip():
+                    if len(qwen3_document.strip()) < len(qwen3_query.strip()):
+                        raise ValueError(
+                            "For 'qwen3_embed', the first element should be the document and the second the query.\n"
+                            "Detected document shorter than query — did you swap the tuple?"
+                        )
             else:
                 raise TypeError(
                     "For 'qwen3_embed', 'input' must be a (document, query) tuple or list with at least 2 elements."
@@ -133,17 +128,19 @@ class Executor:
 
             # Set argv appropriately per runtime
             if lang == "python":
-                wasi_config.argv = ["micropython", "-c", code]
+                wasi_config.argv = [
+                    "micropython",
+                    "-c",
+                    input if isinstance(input, str) else "",
+                ]
             elif lang == "qwen3_embed":
                 # Map to the same CLI as in main.rs
-                # Document and query may contain spaces; pass them as two separate args
-                argv = [
-                    "qwen3_embed",
-                    "--document",
-                    qwen3_document or "",
-                    "--query",
-                    qwen3_query or "",
-                ]
+                # Only include non-empty flags to avoid accidental similarity requests
+                argv = ["qwen3_embed"]
+                if qwen3_document and qwen3_document.strip():
+                    argv.extend(["--document", qwen3_document])
+                if qwen3_query and qwen3_query.strip():
+                    argv.extend(["--query", qwen3_query])
                 # If we discovered a cache directory, pass it explicitly via --cache-dir
                 if cache_dir_arg:
                     argv.extend(["--cache-dir", cache_dir_arg])
@@ -174,6 +171,98 @@ class Executor:
                     os.remove(path)
 
             return stdout, stderr
+
+    def get_embedding(
+        self, text: str, role: str = "document"
+    ) -> Tuple[List[float], str]:
+        """Request a raw embedding vector from the qwen3_embed runtime.
+
+        Role must be 'document' or 'query'. Returns (embedding, stderr).
+        """
+        if role not in ("document", "query"):
+            raise ValueError("role must be 'document' or 'query'")
+        if not isinstance(text, str):
+            raise TypeError("text must be a string")
+
+        if role == "document":
+            inp = (text, "")
+        else:
+            inp = ("", text)
+
+        stdout, stderr = self._execute_wasm("qwen3_embed", inp)
+        if not stdout or not stdout.strip():
+            return (
+                None,
+                stderr.strip() or "Executor Error: qwen3 runtime produced no output",
+            )
+
+        import json
+
+        try:
+            parsed = json.loads(stdout)
+            if isinstance(parsed, dict):
+                # Detect accidental similarity output (when both flags are passed)
+                if "cosine_similarity" in parsed:
+                    raise ValueError(
+                        "qwen3 runtime returned 'cosine_similarity' instead of an embedding. "
+                        "This usually means both --document and --query were provided (possibly an empty string). "
+                        f"Raw output: {stdout.strip()}"
+                    )
+
+                if "embedding" in parsed:
+                    return list(parsed["embedding"]), stderr.strip()
+                for key in (
+                    "document_embedding",
+                    "query_embedding",
+                    "embeddings",
+                    "vector",
+                ):
+                    if key in parsed:
+                        return list(parsed[key]), stderr.strip()
+            if isinstance(parsed, list):
+                return list(parsed), stderr.strip()
+        except Exception:
+            pass
+
+        # Try parsing whitespace-separated floats
+        try:
+            parts = stdout.strip().split()
+            vec = [float(p) for p in parts]
+            return vec, stderr.strip()
+        except Exception:
+            raise ValueError(
+                "Could not parse embedding from qwen3 output: " + repr(stdout)
+            )
+
+    def cosine_similarity(self, a: List[float], b: List[float]) -> float:
+        """Compute cosine similarity between two vectors."""
+        import math
+
+        if not a or not b:
+            return 0.0
+        if len(a) != len(b):
+            raise ValueError("Embedding vectors must have same length")
+        dot = sum(x * y for x, y in zip(a, b))
+        na = math.sqrt(sum(x * x for x in a))
+        nb = math.sqrt(sum(y * y for y in b))
+        if na == 0 or nb == 0:
+            return 0.0
+        return dot / (na * nb)
+
+    def embedding_similarity(self, text1: str, text2: str) -> Tuple[float, str]:
+        """Get embeddings for both texts and compute cosine similarity locally.
+
+        Returns (similarity, combined_stderr)
+        """
+        e1, err1 = self.get_embedding(text1, role="document")
+        if e1 is None:
+            return None, err1
+        e2, err2 = self.get_embedding(text2, role="query")
+        if e2 is None:
+            return None, err2
+        sim = self.cosine_similarity(e1, e2)
+        combined_err = "; ".join([e for e in (err1, err2) if e])
+        return sim, combined_err
 
     def run_single(self, input: Union[str, tuple], lang: str):
         import json

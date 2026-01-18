@@ -19,32 +19,36 @@ class TestSummarizationRewardFunction(unittest.TestCase):
         reward_fn = SummarizationRewardFunction(task_name="summarization")
         reward_fn.initialize()
 
-        # Monkeypatch the executor.run_single to return a high similarity
-        original_run = reward_fn.executor.run_single
+        # Monkeypatch the executor.get_embedding to return deterministic embeddings
+        original_get = reward_fn.executor.get_embedding
 
-        def fake_run_single(code, lang):
-            # Expect (document, query) tuple and lang 'qwen3_embed'
-            self.assertEqual(lang, "qwen3_embed")
-            # Return high similarity as string
-            return "0.95", ""
+        def fake_get_embedding(text, role="document"):
+            # If called for document return vector [1,0,0], for query [0.95, 0.1, 0]
+            if role == "document":
+                return [1.0, 0.0, 0.0], ""
+            return [0.95, 0.1, 0.0], ""
 
-        reward_fn.executor.run_single = fake_run_single
+        reward_fn.executor.get_embedding = fake_get_embedding
 
         score = reward_fn.compute_reward(example["response"], example["answer"])
         self.assertEqual(score.format_score, 1.0)
-        self.assertAlmostEqual(score.correctness_score, 0.95, places=3)
+        self.assertAlmostEqual(
+            score.correctness_score,
+            reward_fn.executor.cosine_similarity([1.0, 0.0, 0.0], [0.95, 0.1, 0.0]),
+            places=6,
+        )
 
         # Restore
-        reward_fn.executor.run_single = original_run
+        reward_fn.executor.get_embedding = original_get
 
     def test_executor_error_propagation(self):
         reward_fn = SummarizationRewardFunction(task_name="summarization")
         reward_fn.initialize()
 
-        def error_run_single(code, lang):
+        def error_get_embedding(text, role="document"):
             return None, "Executor Error: no qwen3"
 
-        reward_fn.executor.run_single = error_run_single
+        reward_fn.executor.get_embedding = error_get_embedding
 
         score = reward_fn.compute_reward("<answer>summary</answer>", "ref summary")
         self.assertEqual(score.format_score, 1.0)

@@ -128,40 +128,65 @@ async fn real_main() -> anyhow::Result<()> {
     
     let model_ms = t_model.elapsed().as_millis() as u64;
 
-    // 3. Prepare Inputs
-    let document = args
-        .document
-        .as_deref()
-        .ok_or_else(|| anyhow!("--document is required"))?;
-    let query = args
-        .query
-        .as_deref()
-        .ok_or_else(|| anyhow!("--query is required"))?;
+    // 3. Prepare Inputs (support single-role embedding or both)
+    let document = args.document.as_deref();
+    let query = args.query.as_deref();
 
-    let inputs = vec![format!("query: {}", query), format!("passage: {}", document)];
+    if document.is_none() && query.is_none() {
+        return Err(anyhow!("Either --document or --query (or both) must be provided"));
+    }
+
+    // Build inputs vector according to what was provided.
+    let inputs: Vec<String> = if document.is_some() && query.is_some() {
+        vec![format!("query: {}", query.unwrap()), format!("passage: {}", document.unwrap())]
+    } else if document.is_some() {
+        vec![format!("passage: {}", document.unwrap())]
+    } else {
+        vec![format!("query: {}", query.unwrap())]
+    };
 
     // 4. Embed (Timed)
     let t_embed = Instant::now();
     let embeddings = model.embed(&inputs).map_err(|e| anyhow!(e.to_string()))?;
     let embed_ms = t_embed.elapsed().as_millis() as u64;
 
-    // 5. Compute Similarity (Timed)
-    let t_sim = Instant::now();
-    let sim = cosine_sim(&embeddings[0], &embeddings[1]);
-    let sim_ms = t_sim.elapsed().as_millis() as u64;
+    // 5. Compute Similarity (Timed) -- only if both inputs provided
+    let (sim_opt, sim_ms) = if embeddings.len() >= 2 {
+        let t_sim = Instant::now();
+        let sim = cosine_sim(&embeddings[0], &embeddings[1]);
+        let sim_ms = t_sim.elapsed().as_millis() as u64;
+        (Some(sim), sim_ms)
+    } else {
+        (None, 0u64)
+    };
 
     let total_ms = t0.elapsed().as_millis() as u64;
 
     // 6. Output Results
-    let out = serde_json::json!({
-        "cosine_similarity": sim,
-        "timings_ms": {
-            "model_load": model_ms,
-            "embed": embed_ms,
-            "similarity": sim_ms,
-            "total": total_ms
-        }
-    });
+    let out = if let Some(sim) = sim_opt {
+        serde_json::json!({
+            "cosine_similarity": sim,
+            "timings_ms": {
+                "model_load": model_ms,
+                "embed": embed_ms,
+                "similarity": sim_ms,
+                "total": total_ms
+            }
+        })
+    } else {
+        // Single embedding result. Return the embedding vector and role.
+        let role = if document.is_some() { "document" } else { "query" };
+        serde_json::json!({
+            "embedding": embeddings[0],
+            "role": role,
+            "timings_ms": {
+                "model_load": model_ms,
+                "embed": embed_ms,
+                "similarity": sim_ms,
+                "total": total_ms
+            }
+        })
+    };
 
     eprintln!(
         "timings (ms): model={} embed={} sim={} total={}",

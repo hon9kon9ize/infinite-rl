@@ -62,40 +62,39 @@ class SummarizationRewardFunction(RewardFunction):
                 error_msg="No reference summary provided to compute similarity.",
             )
 
-        # Use the executor with qwen3_embed to compute similarity: (document=reference, query=candidate)
+        # Use the executor to get embeddings for document and query separately
         try:
-            stdout, stderr = self.executor.run_single(
-                (reference, candidate), "qwen3_embed"
-            )
-
-            # stdout may be None on error (Executor returns None, "Executor Error: ...")
-            if stdout is None:
+            # Document embedding
+            doc_emb, doc_err = self.executor.get_embedding(reference, role="document")
+            if doc_emb is None:
                 return RewardFunctionScore(
                     format_score=format_score,
                     correctness_score=0.0,
-                    error_msg=stderr or "Executor Error",
+                    error_msg=doc_err or "Executor Error",
                 )
 
-            # stdout can be JSON or raw numeric string; try to parse to float
+            # Query embedding
+            qry_emb, qry_err = self.executor.get_embedding(candidate, role="query")
+            if qry_emb is None:
+                return RewardFunctionScore(
+                    format_score=format_score,
+                    correctness_score=0.0,
+                    error_msg=qry_err or "Executor Error",
+                )
+
+            # Compute local cosine similarity
             try:
-                sim = float(str(stdout).strip())
+                sim = float(self.executor.cosine_similarity(doc_emb, qry_emb))
                 sim = max(0.0, min(1.0, sim))
-            except Exception:
-                # If not parseable, but JSON may be present; try to extract numbers
-                import re
-
-                m = re.search(r"([0-9]*\.?[0-9]+)", str(stdout))
-                if m:
-                    sim = float(m.group(1))
-                    sim = max(0.0, min(1.0, sim))
-                else:
-                    return RewardFunctionScore(
-                        format_score=format_score,
-                        correctness_score=0.0,
-                        error_msg=f"Could not parse similarity from qwen3 output: {stdout}",
-                    )
-
-            return RewardFunctionScore(format_score=format_score, correctness_score=sim)
+                return RewardFunctionScore(
+                    format_score=format_score, correctness_score=sim
+                )
+            except Exception as e:
+                return RewardFunctionScore(
+                    format_score=format_score,
+                    correctness_score=0.0,
+                    error_msg=f"Cosine computation failed: {e}",
+                )
         except Exception as e:
             return RewardFunctionScore(
                 format_score=format_score,

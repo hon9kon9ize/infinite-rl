@@ -23,11 +23,6 @@ class CodingRewardFunction(RewardFunction):
         supported_langs = [
             "python",
             "javascript",
-            "js",
-            "cpp",
-            "c++",
-            "rust",
-            "java",
         ]
         if language.lower() not in supported_langs:
             raise ValueError(f"Unsupported language: {language}")

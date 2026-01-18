@@ -1,6 +1,6 @@
-# Infinite RL
+# Infinite-RL
 
-This tool generates synthetic RL datasets for LLM preference optimization using the Gemini API. It supports coding (Python, JavaScript) and math tasks with built-in reward functions for evaluating generated responses.
+Infinite-RL is a reward functions toolbox for LLM Reinforcement Learning. It provides modular reward functions (coding, math, language detection, length and repetition penalties), utilities for evaluating model responses, and optional dataset generation for synthetic RLHF samples via the Gemini API.
 
 ## Installation
 
@@ -158,7 +158,10 @@ print(f"Python: {stdout}")  # Output: Hello, World!
 stdout, stderr = executor.run_single("console.log('Hello, World!')", "javascript")
 print(f"JavaScript: {stdout}")  # Output: Hello, World!
 
-
+# Test Qwen3 Embed (similarity)
+# Provide either a (document, query) tuple or a string with a separator (e.g. 'document|||query')
+stdout, stderr = executor.run_single(("This is a passage", "query text"), "qwen3")
+print(f"Qwen3 similarity: {stdout}")  # Output: a float string like '0.8234' (if runtime present)
 
 ```
 
@@ -245,3 +248,50 @@ Each task type has a specialized reward function that:
 4. Returns detailed evaluation metrics.
 
 All reward functions inherit from `RewardFunction` base class and are accessible via `get_reward_functions()`.
+
+#### Cosine Length Reward (length-based regularizer) ✅
+A utility to discourage *verbosity* when the answer is correct and to discourage *laziness* (encourage effort) when the answer is incorrect. Instead of a linear penalty, it uses a cosine curve to create a "sweet spot" for response length.
+
+- Purpose: Prevent overly long correct answers and encourage longer attempts for incorrect answers.
+- Math (short): For a normalized x in [0,1], the functions used are:
+  - Correct answers (decay after target): R = (cos(pi * x) + 1) / 2  (maps 1 -> 0 over range)
+  - Incorrect answers (encourage effort): R = (1 - cos(pi * x)) / 2 (maps 0 -> 1 over range)
+- Implementation: See `infinite_rl/reward_functions/length.py` — function `cosine_length_reward(length, min_len=1, max_len=1000, target_len=None, correct=True)`.
+
+Usage example:
+```python
+from infinite_rl.reward_functions.length import cosine_length_reward
+
+length = 350
+len_reward = cosine_length_reward(
+    length=length,
+    min_len=1,
+    max_len=1000,
+    target_len=200,  # for correct answers, lengths <= 200 get full credit
+    correct=True,
+)
+# Combine with a base correctness score (example):
+final_score = base_correctness_score * len_reward
+```
+
+Notes:
+- For `correct=True`, lengths <= `target_len` receive full reward (1.0); beyond that the reward decays smoothly to 0 at `max_len`.
+- For `correct=False`, the reward increases smoothly with length to encourage longer reasoning attempts.
+- The function clamps `length` to `[min_len, max_len]` and validates bounds.
+
+#### N-gram Repetition Penalty (anti-repetition) ⚠️
+We penalize repeated n-grams to discourage degenerate or looping responses. The penalty is a normalized negative value computed as:
+
+```python
+from infinite_rl.reward_functions.repetition import ngram_repetition_reward
+penalty = ngram_repetition_reward(text, n=3, weight=-0.1)
+```
+
+Behavior:
+- Uses simple tokenization (lowercasing and punctuation removal) and counts duplicated n-grams.
+- Returns a negative penalty (<= 0) proportional to the fraction of duplicated n-grams in the response; 0 if no duplicates.
+- `weight` controls the maximum magnitude (default -0.1).
+
+Notes:
+- Combine this penalty with the base correctness score (e.g., final_score = max(0.0, base_correctness + penalty)).
+

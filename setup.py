@@ -98,8 +98,14 @@ setup(
         "infinite_rl": ["VERSION.txt"],
         "infinite_rl.examples": ["*.md"],
         "infinite_rl.reward_functions": ["*.py"],
-        "infinite_rl.runtimes": ["*.wasm"],
+        "infinite_rl.runtimes": ["*.wasm", "qwen3_local_cache/*"],
     },
-    install_requires=["wasmtime", "sympy", "antlr4-python3-runtime==4.11.1"],
+    install_requires=[
+        "wasmtime",
+        "sympy",
+        "antlr4-python3-runtime==4.11.1",
+        "pycld2",
+        "cantonesedetect",
+    ],
     cmdclass={"install": install},
 )

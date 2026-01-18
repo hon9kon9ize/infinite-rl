@@ -6,6 +6,7 @@ This document describes the unit tests for the reward functions in the `infinite
 
 A comprehensive test suite for current reward function types:
 - **Coding** - Multi-language code execution and output validation (Python, JavaScript)
+- **Language** - Language/dialect consistency checks (e.g., Cantonese/Yue, Chinese Simplified/Traditional, English)
 - **Math** - Symbolic mathematics with SymPy
 
 ## Test Coverage
@@ -33,7 +34,7 @@ Tests symbolic math evaluation:
 python -m pytest tests/test_reward_functions.py -v
 
 # Run specific test class
-python -m pytest tests/test_reward_functions.py::TestCodingRewardFunction -v
+python -m pytest tests/test_coding_reward_function.py -v
 
 # Run with coverage
 python -m pytest tests/test_reward_functions.py --cov=infinite_rl.reward_functions

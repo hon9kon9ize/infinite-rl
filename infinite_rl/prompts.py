@@ -115,6 +115,7 @@ TASK_SYSTEM_PROMPTS = {
 TYPE_PROMPTS = {
     "python": "Generate a complex Python problem. Wrap the final code block in <answer> tags.",
     "javascript": "Generate a complex JavaScript/Node.js problem. Wrap the final code block in <answer> tags.",
+    "language": "Generate a language-consistency task. Provide an example sentence in a specific language or dialect and ask the model to respond in the same language/dialect. In [ANSWER], provide the expected language code (e.g., 'en', 'yue', 'zh-Hant'). Wrap the final answer in <answer> tags.",
     "math": "Generate a complex multi-step mathematical word problem. Wrap the final result in <answer> tags.",
     "coding": "Generate a complex Python algorithm or utility problem. Wrap the final code block in <answer> tags.",
 }

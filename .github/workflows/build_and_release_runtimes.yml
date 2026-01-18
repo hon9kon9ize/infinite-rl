@@ -12,43 +12,55 @@ permissions:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: write
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 1. Setup Rust for both Native (Export) and WASM (Build)
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
       - name: Prepare system
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl gzip jq
+          sudo apt-get install -y curl gzip jq zip
 
+      # 2. Export Model Weights (Native Build)
+      # This runs the native code to pull weights into ./qwen3_local_cache
+      - name: Export Qwen3 Model Weights
+        run: |
+          cargo run --release --features "hf-hub, candle" -- --document "hello" --query "world"
+          zip -r qwen3_local_cache.zip qwen3_local_cache
+
+      # 3. Build WASM Runtimes
       - name: Make build script executable
         run: chmod +x build_src/build_wasm.sh
 
       - name: Run runtime build
-        run: ./build_src/build_wasm.sh
+        run: |
+          # Inject SIMD optimization into the environment for the build script
+          export RUSTFLAGS="-C target-feature=+simd128"
+          ./build_src/build_wasm.sh
+          # Ensure the specific Qwen3 WASM is also built if not in your script
+          cargo build --release --target wasm32-wasip1 --no-default-features --features candle
 
+      # 4. Versioning and Release Logic (Existing)
       - name: Determine package version
         id: get_version
         shell: bash
         run: |
           set -e
-          # Expect VERSION.txt in repo root. If missing, default to 0.0.0
           if [ -f VERSION.txt ]; then
             VERSION_RAW=$(cat VERSION.txt | tr -d "\n\r " )
-            if [[ "$VERSION_RAW" == v* ]]; then
-              VERSION="$VERSION_RAW"
-            else
-              VERSION="v$VERSION_RAW"
-            fi
+            [[ "$VERSION_RAW" == v* ]] && VERSION="$VERSION_RAW" || VERSION="v$VERSION_RAW"
           else
-            echo "VERSION.txt missing; defaulting to v0.0.0"
-            VERSION="0.0.0"
+            VERSION="v0.0.0"
           fi
-
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Check for existing release
@@ -58,27 +70,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="runtimes-${{ steps.get_version.outputs.version }}"
-          echo "Checking for release $TAG"
           resp=$(curl -sS -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG" || true)
           if echo "$resp" | jq -e '.id' >/dev/null 2>&1; then
             echo "release_exists=true" >> "$GITHUB_OUTPUT"
-            upload_url=$(echo "$resp" | jq -r '.upload_url' | sed 's/{?name,label}//')
-            echo "upload_url=$upload_url" >> "$GITHUB_OUTPUT"
-            # Check whether assets already exist
-            if echo "$resp" | jq -e '.assets[] | select(.name=="universal_js.wasm")' >/dev/null 2>&1; then
-              echo "asset_universal_exists=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "asset_universal_exists=false" >> "$GITHUB_OUTPUT"
-            fi
-            if echo "$resp" | jq -e '.assets[] | select(.name=="micropython.wasm")' >/dev/null 2>&1; then
-              echo "asset_micropython_exists=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "asset_micropython_exists=false" >> "$GITHUB_OUTPUT"
-            fi
+            echo "upload_url=$(echo "$resp" | jq -r '.upload_url' | sed 's/{?name,label}//')" >> "$GITHUB_OUTPUT"
           else
             echo "release_exists=false" >> "$GITHUB_OUTPUT"
-            echo "asset_universal_exists=false" >> "$GITHUB_OUTPUT"
-            echo "asset_micropython_exists=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create release (if missing)
@@ -90,16 +87,19 @@ jobs:
         with:
           tag_name: runtimes-${{ steps.get_version.outputs.version }}
           release_name: "Runtimes ${{ steps.get_version.outputs.version }}"
-          body: "Automated WASM runtime build"
-          draft: false
-          prerelease: false
+          body: "Automated Build: Includes Qwen3 Embeddings and WASM Runtimes."
 
-      - name: Set upload_url (if created)
-        if: steps.check_release.outputs.release_exists == 'false'
-        run: echo "upload_url=${{ steps.create_release.outputs.upload_url }}" >> "$GITHUB_OUTPUT"
+      # 5. Asset Uploads (Updated to include Qwen3 files)
+      - name: Upload Qwen3 Assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="runtimes-${{ steps.get_version.outputs.version }}"
+          # Use GH CLI for cleaner multi-file uploads
+          gh release upload $TAG qwen3_local_cache.zip --clobber
+          gh release upload $TAG target/wasm32-wasip1/release/qwen3_embed.wasm --clobber
 
-      - name: Upload universal_js.wasm
-        if: steps.check_release.outputs.asset_universal_exists == 'false'
+      - name: Upload Runtimes (Legacy)
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -107,15 +107,4 @@ jobs:
           upload_url: ${{ steps.check_release.outputs.upload_url || steps.create_release.outputs.upload_url }}
           asset_path: infinite_rl/runtimes/universal_js.wasm
           asset_name: universal_js.wasm
-          asset_content_type: application/wasm
-
-      - name: Upload micropython.wasm
-        if: steps.check_release.outputs.asset_micropython_exists == 'false'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.check_release.outputs.upload_url || steps.create_release.outputs.upload_url }}
-          asset_path: infinite_rl/runtimes/micropython.wasm
-          asset_name: micropython.wasm
           asset_content_type: application/wasm

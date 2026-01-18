@@ -8,3 +8,7 @@ data
 *.sh
 infinite_rl/runtimes
 *.pyc
+third_party
+.pytest_cache
+.venv
+*.gguf

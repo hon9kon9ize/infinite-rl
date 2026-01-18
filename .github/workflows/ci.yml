@@ -3,46 +3,109 @@ name: CI
 on:
   pull_request:
     branches: [main]
-  # Run after the Build and Release Runtimes workflow completes (successful runs only)
-  workflow_run:
-    workflows:
-      - "Build and Release Runtimes"
-    types:
-      - completed
+  push:
+    branches: [main]
+  workflow_dispatch: # Manual trigger only
 
 jobs:
+  version-check:
+    runs-on: ubuntu-latest
+    outputs:
+      release_exists: ${{ steps.check_release.outputs.release_exists }}
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Determine package version
+        id: get_version
+        shell: bash
+        run: |
+          set -e
+          if [ -f VERSION.txt ]; then
+            VERSION_RAW=$(cat VERSION.txt | tr -d "\n\r " )
+            [[ "$VERSION_RAW" == v* ]] && VERSION="$VERSION_RAW" || VERSION="v$VERSION_RAW"
+          else
+            VERSION="v0.0.0"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check for existing release
+        id: check_release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="runtimes-${{ steps.get_version.outputs.version }}"
+          resp=$(curl -sS -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG" || true)
+          if echo "$resp" | jq -e '.id' >/dev/null 2>&1; then
+            echo "release_exists=true" >> "$GITHUB_OUTPUT"
+            echo "upload_url=$(echo "$resp" | jq -r '.upload_url' | sed 's/{?name,label}//')" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
   test:
+    needs: version-check
     # Only run when this is not a workflow_run event OR when the triggering workflow succeeded
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Exit if release missing
+        if: ${{ needs.version-check.outputs.release_exists == 'false' }}
+        run: |
+          echo "Release runtimes-${{ needs.version-check.outputs.version }} not found. Exiting CI run."
+          exit 0
+
+      - name: Continue when release present
+        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
+        uses: actions/checkout@v4
 
       - name: Set up Python
+        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
           cache: "pip"
 
       - name: Install system dependencies
+        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y nodejs openjdk-17-jdk g++
 
       - name: Install Python package
+        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         run: |
           python -m pip install --upgrade pip
           pip install .
 
       - name: Install test dependencies
+        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         run: |
           pip install -r requirements_dev.txt
 
       - name: Run examples
+        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         run: |
           python -c "from infinite_rl import run_examples; run_examples()"
 
       - name: Run unit tests
+        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         run: |
           python -m unittest discover tests
+
+  schedule_retry:
+    needs: version-check
+    if: ${{ needs.version-check.outputs.release_exists == 'false' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait 10 minutes
+        run: sleep 600
+
+      - name: Trigger CI workflow after delay
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Triggering CI workflow dispatch for main branch"
+          curl -X POST -H "Accept: application/vnd.github.v3+json" -H "Authorization: token $GITHUB_TOKEN" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/ci.yml/dispatches \
+            -d '{"ref":"main"}'

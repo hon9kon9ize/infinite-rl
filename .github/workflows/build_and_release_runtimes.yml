@@ -33,9 +33,14 @@ jobs:
       # 2. Export Model Weights (Native Build)
       # This runs the native code to pull weights into ./qwen3_local_cache
       - name: Export Qwen3 Model Weights
+        # Run the export from the qwen3_embed crate directory so the executable and
+        # generated `qwen3_local_cache` are created in the expected location.
+        working-directory: build_src/qwen3_embed
         run: |
           cargo run --release --features "hf-hub, candle" -- --document "hello" --query "world"
           zip -r qwen3_local_cache.zip qwen3_local_cache
+          # Move the zip back to the repository root so subsequent steps can find it
+          mv qwen3_local_cache.zip "$GITHUB_WORKSPACE/"
 
       # 3. Build WASM Runtimes
       - name: Make build script executable

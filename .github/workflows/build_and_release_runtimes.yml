@@ -44,16 +44,17 @@ jobs:
 
       # 3. Build WASM Runtimes
       - name: Make build script executable
-        run: chmod +x build_src/qwen3_embed/build_wasm.sh
+        run: chmod +x build_src/build_wasm.sh
 
-      - name: Run runtime build
-        working-directory: build_src/qwen3_embed
+      - name: Run runtime build (JS + MicroPython)
         run: |
           # Inject SIMD optimization into the environment for the build script
           export RUSTFLAGS="-C target-feature=+simd128"
-          ./build_wasm.sh
-          # Ensure the specific Qwen3 WASM is also built if not in your script
-          cargo build --release --target wasm32-wasip1 --no-default-features --features candle
+          ./build_src/build_wasm.sh
+
+      - name: Build Qwen3 WASM
+        working-directory: build_src/qwen3_embed
+        run: cargo build --release --target wasm32-wasip1 --no-default-features --features candle
 
       # 4. Versioning and Release Logic (Existing)
       - name: Determine package version

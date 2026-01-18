@@ -4,7 +4,12 @@ import urllib.request
 from setuptools import setup
 from setuptools.command.install import install as _install
 
-RUNTIME_FILES = ["universal_js.wasm", "micropython.wasm"]
+RUNTIME_FILES = [
+    "universal_js.wasm",
+    "micropython.wasm",
+    "qwen3_embed.wasm",
+    "qwen3_local_cache.zip",
+]
 GITHUB_REPO = os.environ.get("RUNTIME_GITHUB_REPO", "hon9kon9ize/infinite-rl")
 
 

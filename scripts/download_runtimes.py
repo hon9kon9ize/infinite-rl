@@ -14,7 +14,12 @@ import os
 import sys
 from urllib.request import urlopen, urlretrieve
 
-RUNTIME_FILES = ["universal_js.wasm", "micropython.wasm"]
+RUNTIME_FILES = [
+    "universal_js.wasm",
+    "micropython.wasm",
+    "qwen3_embed.wasm",
+    "qwen3_local_cache.zip",
+]
 DEFAULT_REPO = os.environ.get("RUNTIME_GITHUB_REPO", "hon9kon9ize/infinite-rl")
 
 

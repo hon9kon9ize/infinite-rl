@@ -44,14 +44,14 @@ jobs:
 
       # 3. Build WASM Runtimes
       - name: Make build script executable
-        run: chmod +x build_src/build_wasm.sh
+        run: chmod +x build_src/qwen3_embed/build_wasm.sh
 
       - name: Run runtime build
         working-directory: build_src/qwen3_embed
         run: |
           # Inject SIMD optimization into the environment for the build script
           export RUSTFLAGS="-C target-feature=+simd128"
-          ./build_src/build_wasm.sh
+          ./build_wasm.sh
           # Ensure the specific Qwen3 WASM is also built if not in your script
           cargo build --release --target wasm32-wasip1 --no-default-features --features candle
 

@@ -135,6 +135,46 @@ result = math_fn.compute_reward(
 print(f"Correctness: {result.correctness_score}") 
 ```
 
+### 3. Summarization Task
+Uses semantic similarity (qwen3 embeddings) to score model summaries against a reference. The reward function now fetches embeddings for the reference document and the candidate summary independently (via `qwen3_embed` runtime) and computes a local cosine similarity using the project's `Executor.cosine_similarity` helper. This improves robustness and makes it easier to inspect or cache raw embeddings.
+
+**Notes:**
+- Requires `qwen3_embed.wasm` and (optionally) a `qwen3_local_cache` for model weights. Use `scripts/download_runtimes.py` or the pip install process to fetch the runtime assets.
+
+**Example:**
+```python
+from infinite_rl import get_reward_functions
+
+reward_fns = get_reward_functions()
+summ_fn = reward_fns["summarization"]
+
+score = summ_fn.compute_reward(
+    model_output="<answer>Remote work is shifting activity from cities to suburbs.</answer>",
+    expected_output="Remote work is shifting economic activity from city centers to suburbs, potentially forcing permanent changes to urban zoning and land use."
+)
+print(f"Similarity: {score.correctness_score}")
+```
+
+### 4. Reasoning Steps (encouragement bonus)
+A small encouragement reward that detects explicit chain-of-thought style reasoning placed inside a `<think>...</think>` block. The `ReasoningStepsRewardFunction` looks for common reasoning indicators (e.g., "first", "second", "finally", "therefore") and awards a modest bonus when multiple indicators are present.
+
+**Behavior:**
+- If no `<think>` block is found, no bonus is awarded.
+- If 1–2 unique indicators appear in the `<think>` block, a small bonus (0.1) is returned.
+- If 3+ unique indicators appear, a larger encouragement bonus (0.2) is returned.
+
+**Example:**
+```python
+from infinite_rl import get_reward_functions
+
+reward_fns = get_reward_functions()
+reason_fn = reward_fns["reasoning_steps"]
+
+model_out = "<think>First, we compute the sum. Second, we verify the result. Finally, we present it.</think>"
+score = reason_fn.compute_reward(model_out, expected_output=None)
+print(f"Reasoning bonus: {score.correctness_score}")
+```
+
 
 
 

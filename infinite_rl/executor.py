@@ -8,7 +8,11 @@ from typing import Union, List, Tuple
 class Executor:
     def __init__(self, timeout=5):
         self.timeout = timeout
-        self.engine = wasmtime.Engine()
+        config = wasmtime.Config()
+        config.wasm_simd = True  # enable SIMD extension
+        config.wasm_threads = True  # enable threads/atomics
+        config.cranelift_opt_level = "speed"  # optional: favor speed
+        self.engine = wasmtime.Engine(config)
         self.linker = wasmtime.Linker(self.engine)
         self.linker.define_wasi()
 
@@ -97,6 +101,9 @@ class Executor:
                 if os.path.exists(runtime_dir):
                     # Map the package runtimes directory into the WASI root so that
                     # 'qwen3_local_cache' inside it can be referenced as a relative path.
+                    # Defer applying the WasiConfig to the store until we've finished
+                    # setting up argv and any additional preopens to avoid invalid-
+                    # state / 'already closed' errors in the wasmtime bindings.
                     wasi_config.preopen_dir(runtime_dir, ".")
                     preopened_runtime = True
 

@@ -34,8 +34,6 @@ def run_examples():
     for name, data in examples.items():
         # Map filename to task type
         task_type = name.lower()
-        if task_type in ["js"]:
-            task_type = "javascript"
 
         reward_fn = get_reward_function(task_type)
         if not reward_fn:

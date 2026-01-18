@@ -23,7 +23,7 @@ def get_reward_function(task_type, timeout=5):
         "javascript",
     ]:
         fn = CodingRewardFunction(task_name=task_type, timeout=timeout)
-        if task_type in ["javascript", "js"]:
+        if task_type == "javascript":
             fn.set_language("javascript")
         elif task_type == "python":
             fn.set_language("python")

@@ -47,6 +47,7 @@ jobs:
         run: chmod +x build_src/build_wasm.sh
 
       - name: Run runtime build
+        working-directory: build_src/qwen3_embed
         run: |
           # Inject SIMD optimization into the environment for the build script
           export RUSTFLAGS="-C target-feature=+simd128"

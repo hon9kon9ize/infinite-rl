@@ -58,6 +58,39 @@ def download_runtimes_from_release(tag=None, dest_dir="infinite_rl/runtimes"):
             print(f"[warn] {fname} not found in release {tag}")
 
     for fname in RUNTIME_FILES:
+        # Special handling for zipped cache archives (e.g., qwen3_local_cache.zip)
+        if fname.endswith(".zip"):
+            # We expect the zip to extract into a folder (e.g., qwen3_local_cache)
+            cache_folder = os.path.splitext(fname)[0]
+            cache_target_dir = os.path.join(dest_dir, cache_folder)
+            if os.path.isdir(cache_target_dir):
+                print(
+                    f"[info] {cache_folder} already present, skipping download/extract"
+                )
+                continue
+            url = assets.get(fname)
+            if not url:
+                print(f"[warning] {fname} not found in release assets for {api_url}")
+                continue
+            zip_target = os.path.join(dest_dir, fname)
+            try:
+                print(f"[info] Downloading {fname} from {url} -> {zip_target}")
+                urllib.request.urlretrieve(url, zip_target)
+                print(f"[info] Extracting {fname} to {dest_dir}")
+                import zipfile
+
+                with zipfile.ZipFile(zip_target, "r") as zf:
+                    zf.extractall(dest_dir)
+                # Optional: remove the zip after extracting
+                try:
+                    os.remove(zip_target)
+                except Exception:
+                    pass
+            except Exception as e:
+                print(f"[warning] Failed to download or extract {fname}: {e}")
+            continue
+
+        # Normal file (e.g., wasm)
         target = os.path.join(dest_dir, fname)
         if os.path.exists(target):
             print(f"[info] {fname} already present, skipping download")

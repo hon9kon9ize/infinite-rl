@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Also run (or be re-run) after the Build and Release Runtimes workflow completes
+  workflow_run:
+    workflows:
+      - "Build and Release Runtimes"
+    types:
+      - completed
 
 jobs:
   test:

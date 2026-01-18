@@ -1,16 +1,20 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
-  # Also run (or be re-run) after the Build and Release Runtimes workflow completes
+  # Run after the Build and Release Runtimes workflow completes (successful runs only)
   workflow_run:
     workflows:
       - "Build and Release Runtimes"
     types:
       - completed
+
+jobs:
+  test:
+    # Only run when this is not a workflow_run event OR when the triggering workflow succeeded
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
 
 jobs:
   test:
@@ -34,6 +38,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install .
+
+      - name: Install test dependencies
+        run: |
+          pip install -r requirements_dev.txt
 
       - name: Run examples
         run: |

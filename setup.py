@@ -8,6 +8,8 @@ from setuptools.command.build_py import build_py as _build_py
 # Configuration
 RUNTIME_FILES = ["universal_js.wasm", "micropython.wasm"]
 GITHUB_REPO = os.environ.get("RUNTIME_GITHUB_REPO", "hon9kon9ize/infinite-rl")
+# Use a known-good tag if the version-specific one fails
+FALLBACK_TAG = "runtimes-v0.1.16"
 
 
 def get_version():
@@ -22,47 +24,48 @@ PACKAGE_VERSION = get_version()
 
 
 def download_assets(target_dir):
-    """Core download logic."""
-    tag = f"runtimes-v{PACKAGE_VERSION}"
-    api_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/tags/{tag}"
-
-    print(f"--> [Action] Downloading runtimes to: {target_dir}")
+    """Downloads files directly without relying on the GitHub API JSON."""
     os.makedirs(target_dir, exist_ok=True)
 
-    try:
-        req = urllib.request.Request(api_url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req) as resp:
-            assets = {
-                a["name"]: a["browser_download_url"]
-                for a in json.load(resp).get("assets", [])
-            }
+    # We try the current version tag first, then fallback
+    tags_to_try = [f"runtimes-v{PACKAGE_VERSION}", FALLBACK_TAG]
+
+    for tag in tags_to_try:
+        success = True
+        print(f"--> [Action] Attempting to download runtimes from tag: {tag}")
 
         for fname in RUNTIME_FILES:
-            if fname in assets:
-                dest = os.path.join(target_dir, fname)
+            # Direct Download URL format (doesn't require API/tokens)
+            url = f"https://github.com/{GITHUB_REPO}/releases/download/{tag}/{fname}"
+            dest = os.path.join(target_dir, fname)
+
+            try:
                 print(f"    Downloading {fname}...")
-                urllib.request.urlretrieve(assets[fname], dest)
-            else:
-                print(f"    [!] Missing asset in release: {fname}")
-    except Exception as e:
-        print(f"    [!] Download failed: {e}")
-        # If runtimes are mandatory, raise an error to stop installation
-        raise RuntimeError(
-            f"Could not download runtimes. Package will be incomplete. Error: {e}"
-        )
+                # Add a user agent to avoid being blocked
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req) as response, open(
+                    dest, "wb"
+                ) as out_file:
+                    out_file.write(response.read())
+            except Exception as e:
+                print(f"    [!] Failed to download {fname} from {tag}: {e}")
+                success = False
+                break
+
+        if success:
+            print(f"--> [Success] All runtimes downloaded from {tag}")
+            return
+
+    raise RuntimeError(
+        "Could not download runtimes from any known tags. Check your release tag names."
+    )
 
 
 class build_py(_build_py):
     def run(self):
-        # 1. First, let the standard build process run.
-        # This creates 'self.build_lib/infinite_rl/runtimes'
         super().run()
-
-        # 2. Determine where setuptools is staging the files for the wheel
-        # We must inject the files into the build_lib directory
+        # Inject into the build_lib so it ends up in the Wheel
         build_runtime_dir = os.path.join(self.build_lib, "infinite_rl", "runtimes")
-
-        # 3. Download directly into the build staging area
         download_assets(build_runtime_dir)
 
 
@@ -71,10 +74,7 @@ setup(
     version=PACKAGE_VERSION,
     packages=find_packages(),
     include_package_data=True,
-    # This is critical for finding files inside the package
-    package_data={
-        "infinite_rl.runtimes": ["*.wasm"],
-    },
+    package_data={"infinite_rl.runtimes": ["*.wasm"]},
     install_requires=[
         "wasmtime",
         "sympy",

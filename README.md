@@ -86,6 +86,48 @@ You can also run the built-in examples to verify that all task types are correct
 python -m infinite_rl.run_examples
 ```
 
+## Reward Orchestrator 🔧
+A convenience utility that loads available reward functions and (optionally) registers auxiliary rewards such as `repetition` and `length`. The orchestrator can compute a main task reward and aggregate auxiliary signals into a single `RewardFunctionScore`.
+
+- Initialization examples:
+
+```python
+from infinite_rl import RewardOrchestrator
+
+# Register repetition and length auxiliary rewards
+orch = RewardOrchestrator(timeout=10, include_repetition=True, include_length=True)
+
+# See which reward functions are available
+print(orch.available())  # e.g. ['math', 'coding', 'lang_consistency', 'reasoning_steps', 'repetition', 'length']
+```
+
+- Compute usage:
+
+```python
+# Legacy / simple usage: returns a single RewardFunctionScore for the given task
+score = orch.compute("<answer>42</answer>", "42", task="math")
+print(score.format_score, score.correctness_score)  # main task scores
+
+# Request auxiliary aggregation by providing a language target. When `lang` is given,
+# the orchestrator will include registered auxiliary rewards and return an aggregated
+# RewardFunctionScore whose `aux_score` is the sum of auxiliary signals.
+agg = orch.compute("<answer>Hello world</answer>", "", task="coding", lang="en")
+print(agg.aux_score)  # combined aux signals (lang_consistency + length + repetition when registered)
+```
+
+- Access individual auxiliaries:
+
+```python
+# You can call specific reward functions directly if you need per-reward details
+lang_score = orch.get_fn('lang_consistency').compute_reward("<answer>Hello</answer>", 'en')
+length_score = orch.get_fn('length').compute_reward("<answer>short</answer>", 2, is_correct=True)
+repetition_score = orch.get_fn('repetition').compute_reward("<answer>hi hi hi</answer>", None)
+```
+
+Notes:
+- `include_repetition` and `include_length` control whether those auxiliary reward functions are registered with the orchestrator.
+- The orchestrator preserves the main task's `format_score` and `correctness_score` (accessible on the aggregated return) and uses `aux_score` to surface auxiliary metrics (e.g., repetition penalty, length signal, language consistency).
+
 ## Supported Tasks
 
 ### 1. Coding Task
@@ -275,7 +317,7 @@ A utility to discourage *verbosity* when the answer is correct and to discourage
   - Incorrect answers (encourage effort): R = (1 - cos(pi * x)) / 2 (maps 0 -> 1 over range)
 - Implementation: See `infinite_rl/reward_functions/length.py` — function `cosine_length_reward(length, min_len=1, max_len=1000, target_len=None, correct=True)`.
 
-Usage example:
+Usage example (quick):
 ```python
 from infinite_rl.reward_functions.length import cosine_length_reward
 
@@ -289,6 +331,16 @@ len_reward = cosine_length_reward(
 )
 # Combine with a base correctness score (example):
 final_score = base_correctness_score * len_reward
+```
+
+Interactive examples (print to inspect behavior):
+```python
+from infinite_rl.reward_functions.length import cosine_length_reward
+
+print("Short correct:", cosine_length_reward(10, min_len=1, max_len=1000, target_len=20, correct=True))
+print("Long correct:", cosine_length_reward(500, min_len=1, max_len=1000, target_len=200, correct=True))
+print("Short incorrect (encourage longer):", cosine_length_reward(5, min_len=1, max_len=1000, correct=False))
+print("Moderate incorrect (some effort):", cosine_length_reward(150, min_len=1, max_len=1000, correct=False))
 ```
 
 Notes:
@@ -308,6 +360,18 @@ Behavior:
 - Uses simple tokenization (lowercasing and punctuation removal) and counts duplicated n-grams.
 - Returns a negative penalty (<= 0) proportional to the fraction of duplicated n-grams in the response; 0 if no duplicates.
 - `weight` controls the maximum magnitude (default -0.1).
+
+Quick example (inspect behavior):
+```python
+from infinite_rl.reward_functions.repetition import ngram_repetition_reward
+
+text = "Hello Hello Hello world world world"
+penalty = ngram_repetition_reward(text, n=2, weight=-0.1)
+print("Repetition penalty (n=2):", penalty)
+
+# Combine with base score
+# final_score = max(0.0, base_correctness_score + penalty)
+```
 
 Notes:
 - Combine this penalty with the base correctness score (e.g., final_score = max(0.0, base_correctness + penalty)).

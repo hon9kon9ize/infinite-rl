@@ -1,4 +1,4 @@
-from typing import Tuple, Union, Callable, Any
+from typing import Tuple, Union, Callable, Any, Optional
 from dataclasses import dataclass
 
 
@@ -7,6 +7,7 @@ class RewardFunctionScore:
     format_score: float
     correctness_score: float
     error_msg: str = ""
+    aux_score: float = 0.0
 
 
 class RewardFunction:
@@ -21,11 +22,24 @@ class RewardFunction:
     def compute_reward(
         self,
         model_output: str,
-        expected_output: Union[str, int, Callable],
+        expected_output: Union[str, int, float, Callable, None] = None,
         answer_tag: str = "answer",
     ) -> RewardFunctionScore:
         """Compute reward for given model output vs expected output.
 
-        answer_tag: optional tag name the model used to wrap the final output (default: 'answer').
+        Parameters
+        ----------
+        model_output:
+            Raw model response string.
+        expected_output:
+            Task-specific expected value (string, numeric, or validator). May be None.
+        answer_tag:
+            Optional tag name the model used to wrap the final output (default: 'answer').
+
+        Notes
+        -----
+        Keeping the base method accepting **kwargs avoids forcing subclasses to
+        declare every possible auxiliary parameter while allowing the orchestrator
+        to pass additional context to functions that need it.
         """
         raise NotImplementedError("This method should be overridden by subclasses.")

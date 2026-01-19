@@ -2,6 +2,8 @@ from .math import MathRewardFunction
 from .coding import CodingRewardFunction
 from .lang_consistency import LangConsistencyRewardFunction
 from .reasoning_steps import ReasoningStepsRewardFunction
+from .repetition import RepetitionRewardFunction
+from .length import LengthRewardFunction
 
 
 def get_reward_functions(timeout: int = 10):
@@ -15,6 +17,8 @@ def get_reward_functions(timeout: int = 10):
         "reasoning_steps": ReasoningStepsRewardFunction(
             "reasoning_steps", timeout=timeout
         ),
+        "repetition": RepetitionRewardFunction("repetition", timeout=timeout),
+        "length": LengthRewardFunction("length", timeout=timeout),
     }
 
     return reward_fns

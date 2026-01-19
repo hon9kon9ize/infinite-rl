@@ -26,4 +26,7 @@ try:
 except Exception:
     __version__ = "0.0.0"
 
-__all__ = ["Executor", "get_reward_functions", "run_examples"]
+__all__ = ["Executor", "get_reward_functions", "run_examples", "RewardOrchestrator"]
+
+# Import orchestration helper
+from .reward_orchestrator import RewardOrchestrator

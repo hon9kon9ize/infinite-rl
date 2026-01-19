@@ -67,3 +67,86 @@ def cosine_length_reward(
         x = (L - min_len) / denom  # 0..1
         # Use (1 - cos(pi * x)) / 2 which maps x=0 -> 0, x=1 -> 1, smooth curve
         return float((1.0 - math.cos(math.pi * x)) / 2.0)
+
+
+# New: LengthRewardFunction – wraps cosine_length_reward into a RewardFunction
+from typing import Union
+from .reward_function import RewardFunction, RewardFunctionScore
+from ..parser import ExampleParser
+
+
+class LengthRewardFunction(RewardFunction):
+    """Reward function that scores response length using `cosine_length_reward`.
+
+    expected_output may be an integer indicating the target length (in tokens/words).
+
+    Returns an auxiliary signal in `aux_score` (0..1) and zeroes for `format_score`
+    and `correctness_score` (aux-only behavior).
+    """
+
+    def __init__(
+        self,
+        task_name: str = "length",
+        timeout: int = 5,
+        min_len: int = 1,
+        max_len: int = 1000,
+        target_len: Optional[int] = None,
+    ):
+        super().__init__(task_name, timeout=timeout)
+        self.min_len = min_len
+        self.max_len = max_len
+        self.target_len = target_len
+
+    def initialize(self):
+        self.initialized = True
+
+    def _extract_length(self, model_output: str, answer_tag: str = "answer") -> int:
+        matches = ExampleParser.extract_answer_tags(model_output, tags=answer_tag)
+        text = matches[0] if matches else model_output
+        tokens = text.strip().split()
+        return max(0, len(tokens))
+
+    def compute_reward(
+        self,
+        model_output: str,
+        expected_output: Union[str, int, None],
+        answer_tag: str = "answer",
+        is_correct: Optional[bool] = None,
+    ) -> RewardFunctionScore:
+        """Compute length reward.
+
+        Parameters:
+          - expected_output: optional numeric target length (int), else uses configured target.
+          - is_correct: optional boolean indicating whether the main task was correct. If None,
+            defaults to True. When True, shorter answers are preferred; when False,
+            longer answers are preferred.
+        """
+        if not self.initialized:
+            self.initialize()
+
+        length = self._extract_length(model_output, answer_tag=answer_tag)
+
+        # Determine target length: prefer explicit expected_output if numeric, else fallback to configured target
+        target = None
+        if expected_output is not None:
+            try:
+                target = int(expected_output)
+            except Exception:
+                target = None
+        if target is None:
+            target = self.target_len
+
+        correct_flag = True if is_correct is None else bool(is_correct)
+
+        len_reward = cosine_length_reward(
+            length,
+            min_len=self.min_len,
+            max_len=self.max_len,
+            target_len=target,
+            correct=correct_flag,
+        )
+
+        # Aux-only behavior
+        return RewardFunctionScore(
+            format_score=0.0, correctness_score=0.0, aux_score=float(len_reward)
+        )

@@ -30,7 +30,9 @@ class ReasoningStepsRewardFunction(RewardFunction):
             self.initialize()
 
         if not model_output:
-            return RewardFunctionScore(format_score=0.0, correctness_score=0.0)
+            return RewardFunctionScore(
+                format_score=0.0, correctness_score=0.0, aux_score=0.0
+            )
 
         # Extract <think> block
         m = re.search(r"<think>(.*?)</think>", model_output, re.DOTALL | re.IGNORECASE)
@@ -39,6 +41,7 @@ class ReasoningStepsRewardFunction(RewardFunction):
                 format_score=0.0,
                 correctness_score=0.0,
                 error_msg="Missing <think> tags in response.",
+                aux_score=0.0,
             )
 
         thinking_content = m.group(1).lower()
@@ -67,4 +70,7 @@ class ReasoningStepsRewardFunction(RewardFunction):
         else:
             bonus = 0.0
 
-        return RewardFunctionScore(format_score=1.0, correctness_score=bonus)
+        # Auxiliary reward: zero format/correctness, signal in aux_score
+        return RewardFunctionScore(
+            format_score=0.0, correctness_score=0.0, aux_score=float(bonus)
+        )

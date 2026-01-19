@@ -150,14 +150,17 @@ class TestLanguageRewardFunction(unittest.TestCase):
         self.assertIsNotNone(example)
 
         score = self.reward_fn.compute_reward(example["response"], example["answer"])
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 1.0)
+        # Aux-only behavior: signal is in aux_score
+        self.assertEqual(score.format_score, 0.0)
+        self.assertEqual(score.correctness_score, 0.0)
+        self.assertAlmostEqual(score.aux_score, 1.0, places=5)
 
     def test_language_mismatch(self):
         # Expected Cantonese, but response is Mandarin/Chinese -> partial credit (mapping 0.25)
         score = self.reward_fn.compute_reward("<answer>这是普通话。</answer>", "yue")
-        self.assertEqual(score.format_score, 1.0)
-        self.assertAlmostEqual(score.correctness_score, 0.25, places=3)
+        self.assertEqual(score.format_score, 0.0)
+        self.assertEqual(score.correctness_score, 0.0)
+        self.assertAlmostEqual(score.aux_score, 0.25, places=3)
 
     def test_mapping_detected_zh_hant_for_zh(self):
         # If CLD2 details indicate zh-Hant for the response but expected is zh, score should be 0.25
@@ -169,8 +172,9 @@ class TestLanguageRewardFunction(unittest.TestCase):
             return_value=[("Chinese", "zh-Hant", 100)],
         ):
             score = self.reward_fn.compute_reward("<answer>示例文本</answer>", "zh")
-            self.assertEqual(score.format_score, 1.0)
-            self.assertAlmostEqual(score.correctness_score, 0.25, places=3)
+            self.assertEqual(score.format_score, 0.0)
+            self.assertEqual(score.correctness_score, 0.0)
+            self.assertAlmostEqual(score.aux_score, 0.25, places=3)
 
     def test_en_detection(self):
         from unittest.mock import patch
@@ -181,8 +185,9 @@ class TestLanguageRewardFunction(unittest.TestCase):
             return_value=[("English", "en", 100)],
         ):
             score = self.reward_fn.compute_reward("<answer>Hello world</answer>", "en")
-            self.assertEqual(score.format_score, 1.0)
-            self.assertAlmostEqual(score.correctness_score, 1.0, places=3)
+            self.assertEqual(score.format_score, 0.0)
+            self.assertEqual(score.correctness_score, 0.0)
+            self.assertAlmostEqual(score.aux_score, 1.0, places=3)
 
     def test_mixed_proportional_score(self):
         # Mixed English + Chinese content should result in a weighted score for expected 'zh'
@@ -204,7 +209,10 @@ class TestLanguageRewardFunction(unittest.TestCase):
                 expected_score += (b / total) * mapping["zh"].get(norm, 0.0)
 
         score = self.reward_fn.compute_reward(f"<answer>{text}</answer>", "zh")
-        self.assertAlmostEqual(score.correctness_score, expected_score, places=3)
+        # Aux-only behavior
+        self.assertEqual(score.format_score, 0.0)
+        self.assertEqual(score.correctness_score, 0.0)
+        self.assertAlmostEqual(score.aux_score, expected_score, places=3)
 
 
 if __name__ == "__main__":

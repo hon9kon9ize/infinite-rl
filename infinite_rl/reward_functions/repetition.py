@@ -67,3 +67,58 @@ def ngram_repetition_reward(text: str, n: int = 3, weight: float = -0.1) -> floa
 
     penalty = (duplicates / len(ngrams)) * weight
     return float(penalty)
+
+
+# New: RepetitionRewardFunction – a lightweight RewardFunction wrapper
+from typing import Union
+from .reward_function import RewardFunction, RewardFunctionScore
+from ..parser import ExampleParser
+
+
+class RepetitionRewardFunction(RewardFunction):
+    """Reward function that applies an n-gram repetition penalty as a lightweight reward.
+
+    The correctness_score is computed as max(0.0, 1.0 + penalty) where penalty <= 0.
+    format_score is 1.0 if an <answer> tag was present, else 0.5 to indicate weaker formatting.
+    """
+
+    def __init__(
+        self,
+        task_name: str = "repetition",
+        timeout: int = 5,
+        n: int = 3,
+        weight: float = -0.1,
+    ):
+        super().__init__(task_name, timeout=timeout)
+        self.n = n
+        self.weight = weight
+
+    def initialize(self):
+        self.initialized = True
+
+    def compute_reward(
+        self,
+        model_output: str,
+        expected_output: Union[str, int, None],
+        answer_tag: str = "answer",
+    ) -> RewardFunctionScore:
+        if not self.initialized:
+            self.initialize()
+
+        if not model_output:
+            return RewardFunctionScore(
+                format_score=0.0, correctness_score=0.0, aux_score=0.0
+            )
+
+        matches = ExampleParser.extract_answer_tags(model_output, tags=answer_tag)
+        text = matches[0] if matches else model_output
+        penalty = ngram_repetition_reward(text, n=self.n, weight=self.weight)
+        correctness = max(0.0, 1.0 + float(penalty))
+        fmt = 1.0 if matches else 0.5
+
+        # Auxiliary reward: zero format and correctness; expose signal in aux_score
+        return RewardFunctionScore(
+            format_score=0.0,
+            correctness_score=0.0,
+            aux_score=float(correctness),
+        )

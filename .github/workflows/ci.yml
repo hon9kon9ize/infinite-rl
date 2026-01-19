@@ -104,6 +104,25 @@ jobs:
           # This builds a wheel and triggers our build-time hook to bundle runtimes into the wheel.
           pip install git+https://github.com/${{ github.repository }}@runtimes-${{ needs.version-check.outputs.version }}
 
+      - name: Verify runtimes present
+        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
+        run: |
+          python - <<'PY'
+          import infinite_rl, os, sys
+          runtimes_dir = os.path.join(os.path.dirname(infinite_rl.__file__), 'runtimes')
+          if not os.path.isdir(runtimes_dir):
+              print('Runtimes directory missing:', runtimes_dir)
+              sys.exit(1)
+          files = sorted([f for f in os.listdir(runtimes_dir) if not f.startswith('.')])
+          print('Runtimes:', files)
+          # Expect at least the two core wasm files
+          needed = {'universal_js.wasm', 'micropython.wasm'}
+          if not needed.intersection(set(files)):
+              print('Missing expected wasm files; found:', files)
+              sys.exit(1)
+          print('Runtimes verification OK')
+          PY
+
       - name: Install test dependencies
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         run: |

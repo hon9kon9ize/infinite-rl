@@ -49,6 +49,24 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
   # Or locally use pytest if preferred: pytest tests/test_reward_functions.py -q
   ```
 
+- Install from git URL (recommended for CI / Colab):
+  ```bash
+  # Install matching runtimes release (replace runtimes-vX.Y.Z)
+  pip install git+https://github.com/owner/repo@runtimes-vX.Y.Z
+  # If you run into GitHub API rate limits, set GITHUB_TOKEN first:
+  # export GITHUB_TOKEN=...
+  ```
+
+- Verify runtimes are present after install:
+  ```bash
+  python - <<'PY'
+  import infinite_rl, os
+  runtimes_dir = os.path.join(os.path.dirname(infinite_rl.__file__), 'runtimes')
+  print('Runtimes dir:', runtimes_dir)
+  print('Contents:', sorted(os.listdir(runtimes_dir)) if os.path.exists(runtimes_dir) else '<missing>')
+  PY
+  ```
+
 - CI specifics: `.github/workflows/ci.yml` installs `nodejs`, `openjdk-17`, `g++` and runs the example suite, then `unittest` discovery.
 
 ## Project-specific conventions & patterns
@@ -63,9 +81,19 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 - LLM: `google.genai` (Gemini). `GEMINI_API_KEY` must be set for generation to work.
 - Code execution: `wasmtime` + packaged WASM runtimes (`universal_js.wasm`, `micropython.wasm`) in `infinite_rl/runtimes`. The `Executor` exposes only `javascript` and `python` by default; other runtimes (for example, separate embedding runtimes) were removed and must be provided explicitly if you need them.
   - Runtimes are built by the `build_src/build_wasm.sh` script and an automated GitHub Actions workflow (`.github/workflows/build_and_release_runtimes.yml`) uploads them to GitHub Releases.
-  - During `pip install`, `setup.py` will attempt to download these runtime assets from the latest GitHub release (or `RUNTIME_RELEASE_TAG` if set). Override the repo location with `RUNTIME_GITHUB_REPO` if needed. Example usage to pin a release during install:
+  - Installation & CI notes:
+    - `setup.py` will try to discover the latest release whose tag starts with `runtimes-` and download runtime assets into the package at build time. A `build_py` hook was added so installing from a git URL (e.g. `pip install git+https://github.com/owner/repo@runtimes-vX.Y.Z`) will include WASM files in the built wheel.
+    - CI installs from the corresponding runtimes release tag (e.g., `pip install git+https://github.com/owner/repo@runtimes-v0.1.16`) to ensure the wheel bundles the WASM files.
+    - If you hit GitHub API rate limits when discovering/downloading assets, set `GITHUB_TOKEN` in the environment before installing.
+    - You can override the release tag with `RUNTIME_RELEASE_TAG` or the repo using `RUNTIME_GITHUB_REPO` if needed.
+
+Example usage to pin a release during install:
 
 ```bash
+# Install from a pinned runtimes release
+pip install git+https://github.com/owner/repo@runtimes-v1.2.3
+
+# Or using the environment helper
 RUNTIME_RELEASE_TAG=v1.2.3 RUNTIME_GITHUB_REPO=owner/repo python -m pip install .
 ```
 - Math reward: `sympy` is used for symbolic checks.

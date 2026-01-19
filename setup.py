@@ -179,7 +179,12 @@ except Exception:
 setup(
     name="infinite_rl",
     version=PACKAGE_VERSION,
-    packages=["infinite_rl", "infinite_rl.reward_functions", "infinite_rl.examples"],
+    packages=[
+        "infinite_rl",
+        "infinite_rl.reward_functions",
+        "infinite_rl.examples",
+        "infinite_rl.runtimes",
+    ],
     include_package_data=True,
     package_data={
         "infinite_rl": ["VERSION.txt"],

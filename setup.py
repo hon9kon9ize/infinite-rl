@@ -157,6 +157,25 @@ class install(_install):
             download_runtimes_from_release()
 
 
+# Ensure runtimes are downloaded when building wheels from git URLs.
+# pip builds a wheel (using the build backend) when installing from a git URL,
+# so we hook into the build_py command to fetch runtimes at build time so that
+# the resulting wheel contains the wasm files.
+try:
+    from setuptools.command.build_py import build_py as _build_py
+
+    class build_py(_build_py):
+        def run(self):
+            # Best-effort: try to download runtimes but do not fail the build on error
+            try:
+                download_runtimes_from_release()
+            except Exception as e:
+                print(f"[warning] Failed to download runtimes during build_py: {e}")
+            super().run()
+
+except Exception:
+    build_py = None
+
 setup(
     name="infinite_rl",
     version=PACKAGE_VERSION,
@@ -175,5 +194,9 @@ setup(
         "pycld2",
         "cantonesedetect",
     ],
-    cmdclass={"install": install},
+    cmdclass={
+        k: v
+        for k, v in {"install": install, "build_py": build_py}.items()
+        if v is not None
+    },
 )

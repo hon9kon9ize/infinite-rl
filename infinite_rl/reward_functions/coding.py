@@ -5,28 +5,24 @@ from .reward_function import RewardFunction, RewardFunctionScore
 from ..executor import Executor
 
 
-class CodingRewardFunction(RewardFunction):
-    """Reward function for evaluating LLM-generated code solutions."""
+class CodeRewardFunction(RewardFunction):
+    """Base reward function for evaluating LLM-generated code solutions.
 
-    def __init__(self, task_name: str = "coding", timeout: int = 5):
+    This implementation is language-agnostic and expects a concrete subclass
+    to set the `language` attribute via the constructor.
+    """
+
+    def __init__(
+        self, task_name: str = "coding", language: str = "python", timeout: int = 5
+    ):
         super().__init__(task_name, timeout=timeout)
         self.executor = None
-        self.language = "python"  # default language
+        self.language = language.lower()  # e.g., 'python' or 'javascript'
 
     def initialize(self):
         """Initialize the executor for running code."""
         self.executor = Executor(timeout=self.timeout)
         self.initialized = True
-
-    def set_language(self, language: str):
-        """Set the programming language for code execution."""
-        supported_langs = [
-            "python",
-            "javascript",
-        ]
-        if language.lower() not in supported_langs:
-            raise ValueError(f"Unsupported language: {language}")
-        self.language = language.lower()
 
     def compute_reward(
         self,
@@ -60,7 +56,9 @@ class CodingRewardFunction(RewardFunction):
             return RewardFunctionScore(
                 format_score=0.0,
                 correctness_score=0.0,
-                error_msg="Missing <answer> tags in response. Ensure the code is wrapped in <answer> and </answer>.",
+                error_msg={
+                    "coding": "Missing <answer> tags in response. Ensure the code is wrapped in <answer> and </answer>."
+                },
             )
 
         content_to_parse = matches[0] if matches else ""
@@ -100,7 +98,9 @@ class CodingRewardFunction(RewardFunction):
                     return RewardFunctionScore(
                         format_score=0.2,
                         correctness_score=0.0,
-                        error_msg="Malformed markdown code block inside <answer> tags.",
+                        error_msg={
+                            "coding": "Malformed markdown code block inside <answer> tags."
+                        },
                     )
             else:
                 # Fallback D: No triple backticks at all, treat the whole content as code
@@ -141,10 +141,27 @@ class CodingRewardFunction(RewardFunction):
                 return RewardFunctionScore(
                     format_score=0.5,
                     correctness_score=0.0,
-                    error_msg=f"Execution failed:\n{stderr}",
+                    error_msg={"coding": f"Execution failed:\n{stderr}"},
                 )
 
-            # Execution was successful (filtered stderr is empty)
+            # Some runtimes may report failures to stdout instead of stderr (e.g., JS engines reporting ReferenceError)
+            # Detect common error patterns in stdout and treat them as execution failures.
+            error_patterns = [
+                r"ReferenceError",
+                r"SyntaxError",
+                r"Error:",
+                r"Traceback",
+            ]
+            if any(re.search(p, stdout, re.IGNORECASE) for p in error_patterns):
+                return RewardFunctionScore(
+                    format_score=0.5,
+                    correctness_score=0.0,
+                    error_msg={
+                        "coding": f"Execution failed (reported in stdout):\n{stdout}"
+                    },
+                )
+
+            # Execution was successful (no error patterns observed)
             # format_score remains what was set earlier (1.0 if perfectly tagged)
 
             # 3. Correctness Objective: Match stdout with expected_output
@@ -168,7 +185,9 @@ class CodingRewardFunction(RewardFunction):
                     return RewardFunctionScore(
                         format_score=format_score,
                         correctness_score=0.0,
-                        error_msg=f"Reference (Answer) execution failed: {ref_stderr}",
+                        error_msg={
+                            "coding": f"Reference (Answer) execution failed: {ref_stderr}"
+                        },
                     )
                 reference_stdout = ref_stdout
             elif (
@@ -201,7 +220,9 @@ class CodingRewardFunction(RewardFunction):
                         return RewardFunctionScore(
                             format_score=format_score,
                             correctness_score=0.0,
-                            error_msg=f"Reference (Answer) execution failed: {ref_stderr}",
+                            error_msg={
+                                "coding": f"Reference (Answer) execution failed: {ref_stderr}"
+                            },
                         )
                     # If it's ambiguous, fall back to comparing as string
                     reference_stdout = str(expected_output).strip()
@@ -227,22 +248,22 @@ class CodingRewardFunction(RewardFunction):
                     return RewardFunctionScore(
                         format_score=format_score,
                         correctness_score=0.0,
-                        error_msg=f"Callable validator failed: {e}",
+                        error_msg={"coding": f"Callable validator failed: {e}"},
                     )
 
-            # Case B: String/Int/Other - use robust similarity matching
-            similarity = self._compute_similarity(stdout, reference_stdout)
-            correctness_score = similarity
-
-            error_msg = ""
-            if (
-                correctness_score < 0.5
-            ):  # Changed from 1.0 to 0.5 for less noise in error messages
-                error_msg = (
-                    f"Output mismatch. Similarity: {similarity:.2f}.\n"
-                    f"Expected Output: {reference_stdout}\n"
+            # Case B: String/Int/Other - require exact match
+            # Compare trimmed stdout and reference_stdout for exact equality
+            out_norm = stdout.strip()
+            ref_norm = reference_stdout.strip()
+            if out_norm == ref_norm:
+                correctness_score = 1.0
+                error_msg = {}
+            else:
+                correctness_score = 0.0
+                error_msg = {
+                    "coding": f"Output mismatch. Expected Output: {reference_stdout}\n"
                     f"Actual Output: {stdout}"
-                )
+                }
 
             return RewardFunctionScore(
                 format_score=format_score,
@@ -255,74 +276,19 @@ class CodingRewardFunction(RewardFunction):
             return RewardFunctionScore(
                 format_score=format_score,
                 correctness_score=0.0,
-                error_msg=f"Unexpected error: {str(e)}",
+                error_msg={"coding": f"Unexpected error: {str(e)}"},
             )
 
-    def _compute_similarity(self, output1: str, output2: str) -> float:
-        """
-        Robust comparison between two output strings.
-        """
-        if output1 is None:
-            output1 = ""
-        if output2 is None:
-            output2 = ""
 
-        o1 = output1.strip()
-        o2 = output2.strip()
+class PythonRewardFunction(CodeRewardFunction):
+    """Reward function for Python code tasks."""
 
-        if not o1 or not o2:
-            return 1.0 if not o1 and not o2 else 0.0
+    def __init__(self, task_name: str = "python", timeout: int = 5):
+        super().__init__(task_name=task_name, language="python", timeout=timeout)
 
-        # 1. Exact match (case insensitive)
-        if o1.lower() == o2.lower():
-            return 1.0
 
-        # 2. Advanced line-by-line normalization (handles different line endings, trailing spaces)
-        def normalize_text(text):
-            # Strip ANSI escape sequences (like colors)
-            ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
-            text = ansi_escape.sub("", text)
+class JavascriptRewardFunction(CodeRewardFunction):
+    """Reward function for JavaScript code tasks."""
 
-            lines = text.replace("\r\n", "\n").split("\n")
-            # Strip trailing space from each line and remove empty lines at end
-            stripped_lines = [line.rstrip() for line in lines]
-            return "\n".join(stripped_lines).strip()
-
-        if normalize_text(o1).lower() == normalize_text(o2).lower():
-            return 1.0
-
-        # 3. Try JSON comparison
-        try:
-            # Try to see if both are valid JSON objects/lists
-            if (o1.startswith("{") or o1.startswith("[")) and (
-                o2.startswith("{") or o2.startswith("[")
-            ):
-                j1 = json.loads(o1)
-                j2 = json.loads(o2)
-                if j1 == j2:
-                    return 1.0
-        except Exception:
-            pass
-
-        # 4. Try numeric comparison
-        try:
-            f1 = float(o1.split()[-1]) if "=" in o1 else float(o1)
-            f2 = float(o2.split()[-1]) if "=" in o2 else float(o2)
-            if f1 == f2:
-                return 1.0
-            # Small tolerance for floats
-            if abs(f1 - f2) < 1e-9:
-                return 0.99
-        except Exception:
-            # Maybe the numeric part is embedded
-            pass
-
-        # 5. Normalized whitespace comparison
-        if " ".join(o1.split()) == " ".join(o2.split()):
-            return 0.95  # Increased from 0.9 since this is a very strong signal of equality
-
-        # 5. Sequence similarity (respects order)
-        # Use difflib for a robust similarity that penalizes wrong order
-        import difflib
-
-        return difflib.SequenceMatcher(None, o1.lower(), o2.lower()).ratio()
+    def __init__(self, task_name: str = "javascript", timeout: int = 5):
+        super().__init__(task_name=task_name, language="javascript", timeout=timeout)

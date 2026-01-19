@@ -1,5 +1,6 @@
 import unittest
 from infinite_rl import RewardOrchestrator
+from infinite_rl.reward_orchestrator import BatchRewardOrchestrator
 from infinite_rl.reward_functions.reward_function import RewardFunctionScore
 
 
@@ -10,7 +11,9 @@ class TestRewardOrchestrator(unittest.TestCase):
     def test_available_contains_math(self):
         av = self.orch.available()
         self.assertIn("math", av)
-        self.assertIn("coding", av)
+        # Coding split into Python/JavaScript
+        self.assertIn("python", av)
+        self.assertIn("javascript", av)
 
     def test_compute_math(self):
         example_out = "<answer>42</answer>"
@@ -84,20 +87,49 @@ class TestRewardOrchestrator(unittest.TestCase):
 
     def test_compute_with_lang_and_length(self):
         orch = RewardOrchestrator(include_length=True)
-        # main task: coding (exists), auxiliary: lang=en
+        # main task: python (exists), auxiliary: lang=en
         res = orch.compute(
             "<answer>Hello world</answer>",
             "",
-            task="coding",
+            task="python",
             lang="en",
         )
         # New API: compute returns a single aggregated RewardFunctionScore
         self.assertIsInstance(res, RewardFunctionScore)
-        # main reward unchanged (coding correctness may be 0 unless code block exists)
+        # main reward unchanged (python correctness may be 0 unless code block exists)
         self.assertEqual(res.format_score, 0.5)
         self.assertEqual(res.correctness_score, 0.0)
         # aux_score should be the sum of lang and length signals
         self.assertIsInstance(res.aux_score, float)
+
+    def test_persistent_worker_pool_reuse(self):
+        """Ensure compute_batch can be called repeatedly and reuses or recreates pool as needed."""
+        batch_orch = BatchRewardOrchestrator(num_workers=2)
+        samples = [
+            {
+                "model_output": "<answer>```python\nprint(1)```</answer>",
+                "expected_output": 1,
+                "task": "python",
+            },
+            {
+                "model_output": "<answer>```javascript\nconsole.log(2)```</answer>",
+                "expected_output": 2,
+                "task": "javascript",
+            },
+        ]
+
+        res1 = batch_orch.compute_batch(samples)
+        self.assertEqual(len(res1), len(samples))
+
+        # Second run should also succeed and generally reuse the pool (if available on platform)
+        res2 = batch_orch.compute_batch(samples)
+        self.assertEqual(len(res2), len(samples))
+
+        # If pool exists, it should have prewarmed tasks
+        if getattr(batch_orch, "_pool", None) is not None:
+            self.assertTrue(
+                set([s["task"] for s in samples]).issubset(batch_orch._pool_tasks)
+            )
 
     def test_length_wrapper(self):
         orch = RewardOrchestrator(include_length=True, length_target_len=10)

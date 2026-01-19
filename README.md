@@ -111,7 +111,7 @@ print(score.format_score, score.correctness_score)  # main task scores
 # Request auxiliary aggregation by providing a language target. When `lang` is given,
 # the orchestrator will include registered auxiliary rewards and return an aggregated
 # RewardFunctionScore whose `aux_score` is the sum of auxiliary signals.
-agg = orch.compute("<answer>Hello world</answer>", "", task="coding", lang="en")
+agg = orch.compute("<answer>Hello world</answer>", "", task="python", lang="en")
 print(agg.aux_score)  # combined aux signals (lang_consistency + length + repetition when registered)
 ```
 
@@ -149,11 +149,10 @@ from infinite_rl import get_reward_functions
 
 # Initialize with custom timeout
 reward_fns = get_reward_functions(timeout=10)
-coding_fn = reward_fns["coding"]
-coding_fn.set_language("python")
+python_fn = reward_fns["python"]
 
 # Evaluate with expected output
-result = coding_fn.compute_reward(
+result = python_fn.compute_reward(
     model_output="<answer>\n```python\nprint(2 + 2)\n```\n</answer>",
     expected_output="4"
 )
@@ -242,10 +241,9 @@ print(f"Executor test - Output: {stdout}, Error: {stderr}")
 
 # Test coding reward function
 reward_fns = get_reward_functions(timeout=5)
-coding_fn = reward_fns["coding"]
-coding_fn.set_language("python")
+python_fn = reward_fns["python"]
 
-result = coding_fn.compute_reward(
+result = python_fn.compute_reward(
     model_output="<answer>\n```python\nprint(2 + 2)\n```\n</answer>",
     expected_output="4"
 )

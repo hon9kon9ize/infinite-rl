@@ -12,7 +12,7 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 
 ## What to know before changing code
 - Samples must follow the strict 3-head format: `[PROMPT]`, `[ANSWER]`, `[RESPONSE]` and the final content must be wrapped in `<answer>` tags (see `prompts.py`).
-- `CodingRewardFunction` expects the answer to contain a code block (triple-backtick) inside `<answer>`; it executes code with `Executor.run_single`.
+- `PythonRewardFunction` / `JavascriptRewardFunction` expect the answer to contain a code block (triple-backtick) inside `<answer>`; they execute code with `Executor.run_single`.
 - Reward functions return a `RewardFunctionScore(format_score, correctness_score, error_msg, aux_score)`—the `aux_score` is used for auxiliary metrics like repetition, length, or language-consistency signals.
 - `generate_dataset()` is idempotent and resumable: it reads/writes `dataset.csv` and appends failures to `failed_dataset.csv` immediately.
 - `--task_dist` format is a comma-separated list of floats; current parsing expects 2 values: `[coding,math]` (see `generator.py`).

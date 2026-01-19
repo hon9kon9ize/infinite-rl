@@ -11,7 +11,7 @@ A comprehensive test suite for current reward function types:
 
 ## Test Coverage
 
-### 1. CodingRewardFunction (3 tests)
+### 1. PythonRewardFunction (3 tests)
 Tests the code execution and validation:
 - ✅ `test_valid_python_code_with_json_output` - Correct code with matching output
 - ✅ `test_missing_code_block` - Handles missing code blocks gracefully

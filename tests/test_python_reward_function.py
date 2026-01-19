@@ -1,13 +1,13 @@
 import unittest
 import json
-from infinite_rl.reward_functions.coding import CodingRewardFunction
+from infinite_rl.reward_functions.coding import PythonRewardFunction
 
 
-class TestCodingRewardFunction(unittest.TestCase):
-    """Test coding reward function with Python example."""
+class TestPythonRewardFunction(unittest.TestCase):
+    """Test Python reward function with Python example."""
 
     def setUp(self):
-        self.reward_fn = CodingRewardFunction(task_name="python_coding")
+        self.reward_fn = PythonRewardFunction(task_name="python")
         self.reward_fn.initialize()
 
     def test_valid_python_code_with_json_output(self):
@@ -72,7 +72,7 @@ def filter_even(numbers)  # Missing colon
         self.assertEqual(score.correctness_score, 0.0)
 
     def test_order_sensitivity_in_string_matching(self):
-        """Test that wrong order in string output results in 0.0 correctness."""
+        """Test that wrong order in string output results in 0.0 correctness under exact match."""
         # Task: Reverse the words
         model_output = """<answer>
 ```python
@@ -83,16 +83,13 @@ print("hello world")
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
 
-        # It should have 1.0 format (executed fine) but low correctness (wrong order)
+        # It should have 1.0 format (executed fine) but exact correctness must be 0.0
         self.assertEqual(score.format_score, 1.0)
-        self.assertLess(
-            score.correctness_score, 0.6
-        )  # Sequence ratio will be relatively low
-        self.assertGreater(score.correctness_score, 0.0)
+        self.assertEqual(score.correctness_score, 0.0)
 
     def test_json_robustness(self):
-        """Test JSON output with different formatting and key order."""
-        # Scenario 1: Key order independence
+        """Test JSON output with different formatting and key order. Under exact-match semantics, these should not be considered equal."""
+        # Scenario 1: Key order independence (now treated as mismatch)
         model_output1 = """<answer>
 ```python
 print('{"a": 1, "b": 2}')
@@ -100,9 +97,9 @@ print('{"a": 1, "b": 2}')
 </answer>"""
         expected_output1 = '{"b": 2, "a": 1}'
         score1 = self.reward_fn.compute_reward(model_output1, expected_output1)
-        self.assertEqual(score1.correctness_score, 1.0)
+        self.assertEqual(score1.correctness_score, 0.0)
 
-        # Scenario 2: Whitespace independence
+        # Scenario 2: Whitespace independence (now treated as mismatch)
         model_output2 = """<answer>
 ```python
 print('{"result"  :   [1, 2, 3]}')
@@ -110,10 +107,10 @@ print('{"result"  :   [1, 2, 3]}')
 </answer>"""
         expected_output2 = '{"result":[1,2,3]}'
         score2 = self.reward_fn.compute_reward(model_output2, expected_output2)
-        self.assertEqual(score2.correctness_score, 1.0)
+        self.assertEqual(score2.correctness_score, 0.0)
 
     def test_numeric_tolerance(self):
-        """Test numeric output with floating point tolerance."""
+        """Test numeric output with floating point tolerance behavior removed (exact match required)."""
         # Scenario 1: Small difference within 1e-9
         model_output1 = """<answer>
 ```python
@@ -122,8 +119,8 @@ print(3.141592653589)
 </answer>"""
         expected_output1 = 3.141592653590
         score1 = self.reward_fn.compute_reward(model_output1, expected_output1)
-        # Similarity should be 0.99 for small numeric differences
-        self.assertEqual(score1.correctness_score, 0.99)
+        # Exact-match semantics: different numeric value -> 0.0
+        self.assertEqual(score1.correctness_score, 0.0)
 
         # Scenario 2: Larger difference outside tolerance
         model_output2 = """<answer>
@@ -133,21 +130,18 @@ print(3.14)
 </answer>"""
         expected_output2 = 3.14159
         score2 = self.reward_fn.compute_reward(model_output2, expected_output2)
-        # Ratio will be partial but higher than 0.0
-        self.assertLess(score2.correctness_score, 0.99)
-        self.assertGreater(score2.correctness_score, 0.5)
+        self.assertEqual(score2.correctness_score, 0.0)
 
     def test_whitespace_normalization(self):
-        """Test string matching with extreme whitespace differences."""
+        """Test string matching with extreme whitespace differences. Exact-match semantics -> mismatch."""
         model_output = """<answer>
 ```python
-print("  hello      world\\n\\n  ")
+print("  hello      world\n\n  ")
 ```
 </answer>"""
         expected_output = "hello world"
         score = self.reward_fn.compute_reward(model_output, expected_output)
-        # Normalized whitespace comparison should return 0.95 similarity
-        self.assertEqual(score.correctness_score, 0.95)
+        self.assertEqual(score.correctness_score, 0.0)
 
     def test_multiple_code_blocks(self):
         """Test that the reward function correctly extracts code from multiple blocks."""
@@ -167,8 +161,7 @@ print("second")
         self.assertEqual(score.correctness_score, 1.0)
 
     def test_language_specific_extraction(self):
-        """Test picking the correct language block when multiple languages are present."""
-        self.reward_fn.set_language("python")
+        """Test picking the correct language block when multiple languages are present (Python-specific reward)."""
         model_output = """<answer>
 ```javascript
 console.log("js");
@@ -177,7 +170,7 @@ console.log("js");
 print("py");
 ```
 </answer>"""
-        # It should prefer the python block
+        # As a Python-specific reward function, it should prefer the python block
         score = self.reward_fn.compute_reward(model_output, "py")
         self.assertEqual(score.correctness_score, 1.0)
 
@@ -197,7 +190,7 @@ pass
         self.assertEqual(score2.correctness_score, 0.0)
 
     def test_nested_json_robustness(self):
-        """Test deeply nested JSON structure comparison."""
+        """Test deeply nested JSON structure comparison. Exact-match semantics -> mismatch when ordering differs."""
         nested_data = {"a": [1, {"b": 2}], "c": {"d": [3, 4], "e": "f"}}
         model_output = f"""<answer>
 ```python
@@ -207,4 +200,4 @@ print(json.dumps({nested_data}))
 </answer>"""
         expected_output = json.dumps({"c": {"e": "f", "d": [3, 4]}, "a": [1, {"b": 2}]})
         score = self.reward_fn.compute_reward(model_output, expected_output)
-        self.assertEqual(score.correctness_score, 1.0)
+        self.assertEqual(score.correctness_score, 0.0)

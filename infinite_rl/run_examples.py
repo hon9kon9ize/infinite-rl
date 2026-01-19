@@ -37,12 +37,11 @@ def run_examples():
 
         reward_fn = get_reward_function(task_type)
         if not reward_fn:
-            # Fallback if specific language name doesn't match directly
-            reward_fn = get_reward_function("coding")
+            # Fallback: try mapping by filename keywords
             if "python" in name.lower():
-                reward_fn.set_language("python")
-            elif "javascript" in name.lower():
-                reward_fn.set_language("javascript")
+                reward_fn = get_reward_function("python")
+            elif "javascript" in name.lower() or "js" in name.lower():
+                reward_fn = get_reward_function("javascript")
 
         if not reward_fn:
             print(f"{name:<20} | Skip       | N/A")
@@ -61,7 +60,7 @@ def run_examples():
             print(f"{name:<20} | {status:<10} | {total_score:<10.2f}")
 
             if total_score < 0.8 and score.error_msg:
-                print(f"  └─ Error: {score.error_msg}")
+                print(f"  └─ Error: {"\n".join(score.error_msg.values())}")
 
             results.append(total_score)
         except Exception as e:

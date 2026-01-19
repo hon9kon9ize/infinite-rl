@@ -122,7 +122,7 @@ class MathRewardFunction(RewardFunction):
             return RewardFunctionScore(
                 format_score=0.0,
                 correctness_score=0.0,
-                error_msg="Missing <answer> tags in response.",
+                error_msg={"math": "Missing <answer> tags in response."},
             )
 
         # Prepare expected list
@@ -140,7 +140,7 @@ class MathRewardFunction(RewardFunction):
                 )
                 return RewardFunctionScore(1.0, score)
             except Exception as e:
-                return RewardFunctionScore(1.0, 0.0, f"Validator error: {e}")
+                return RewardFunctionScore(1.0, 0.0, {"math": f"Validator error: {e}"})
         else:
             # String or other
             expected_str = str(expected_output).strip()
@@ -171,7 +171,9 @@ class MathRewardFunction(RewardFunction):
             return RewardFunctionScore(
                 format_score=0.4,  # Heavy penalty for multiple tags
                 correctness_score=correctness,
-                error_msg="Multiple <answer> tags found. Math problems must have exactly one final answer tag.",
+                error_msg={
+                    "math": "Multiple <answer> tags found. Math problems must have exactly one final answer tag."
+                },
             )
 
         # Single match case
@@ -187,8 +189,8 @@ class MathRewardFunction(RewardFunction):
             format_score=1.0,
             correctness_score=correctness,
             error_msg=(
-                ""
+                {}
                 if correctness == 1.0
-                else f"Mathematical mismatch. Expected {expected_str}"
+                else {"math": f"Mathematical mismatch. Expected {expected_str}"}
             ),
         )

@@ -10,23 +10,17 @@ from .prompts import (
     TASK_SYSTEM_PROMPTS,
 )
 from .parser import ExampleParser
-from .reward_functions.coding import CodingRewardFunction
+from .reward_functions.coding import PythonRewardFunction, JavascriptRewardFunction
 from .reward_functions.math import MathRewardFunction
 from .reward_functions.lang_consistency import LangConsistencyRewardFunction
 
 
 def get_reward_function(task_type, timeout=5):
     """Retrieve the appropriate reward function for a task type."""
-    if task_type in [
-        "python",
-        "javascript",
-    ]:
-        fn = CodingRewardFunction(task_name=task_type, timeout=timeout)
-        if task_type == "javascript":
-            fn.set_language("javascript")
-        elif task_type == "python":
-            fn.set_language("python")
-        return fn
+    if task_type == "python":
+        return PythonRewardFunction(task_name=task_type, timeout=timeout)
+    elif task_type == "javascript":
+        return JavascriptRewardFunction(task_name=task_type, timeout=timeout)
     elif task_type == "math":
         return MathRewardFunction(task_name="math", timeout=timeout)
     elif task_type == "lang_consistency":
@@ -97,8 +91,11 @@ def generate_dataset(
         print(f"Error parsing task_dist: {e}. Using default.")
         dist_values = [0.5, 0.5]
 
+    # Split coding weight across python and javascript equally for sub-task granularity
+    coding_weight = dist_values[0]
     distribution = {
-        "coding": dist_values[0],
+        "python": coding_weight / 2.0,
+        "javascript": coding_weight / 2.0,
         "math": dist_values[1],
     }
 
@@ -130,7 +127,7 @@ def generate_dataset(
     if total_calculated < num_samples:
         # Find the type with non-zero weight to add remainder, default to coding
         active_types = [t for t, w in distribution.items() if w > 0]
-        addition_type = active_types[0] if active_types else "coding"
+        addition_type = active_types[0] if active_types else "python"
         target_counts[addition_type] += num_samples - total_calculated
 
     # Calculate how many MORE we need for each type to reach targets
@@ -290,9 +287,7 @@ def generate_dataset(
                             rectify_count += 1
                             error_info = f"Format Score: {current_score.format_score:.2f}, Correctness Score: {current_score.correctness_score:.2f}"
                             if current_score.error_msg:
-                                error_info += (
-                                    f"\nError details: {current_score.error_msg}"
-                                )
+                                error_info += f"\nError details: {current_score.error_msg.values()}"
 
                             rectify_query = RECTIFY_PROMPT.format(
                                 error_info=error_info, current_raw=current_raw

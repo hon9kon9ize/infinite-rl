@@ -54,9 +54,6 @@ class LangConsistencyRewardFunction(RewardFunction):
         )
         return canto_segments / total
 
-    def _is_cantonese(self, text: str) -> bool:
-        return self._yue_ratio(text) >= 0.5
-
     def _detect_lang(self, text: str) -> Union[str, None]:
         try:
             _, _, details = cld2.detect(text.encode("utf-8"))
@@ -120,7 +117,9 @@ class LangConsistencyRewardFunction(RewardFunction):
             return RewardFunctionScore(
                 format_score=0.0,
                 correctness_score=0.0,
-                error_msg="Could not determine expected language from the Answer or example.",
+                error_msg={
+                    "lang_consistency": "Could not determine expected language from the Answer or example."
+                },
                 aux_score=0.0,
             )
 
@@ -133,8 +132,6 @@ class LangConsistencyRewardFunction(RewardFunction):
         }
 
         norm_expected = expected.lower()
-        if norm_expected in ["cantonese"]:
-            norm_expected = "yue"
 
         # Get detected language (CLD2) details
         details = self._detect_lang_details(content)
@@ -147,7 +144,7 @@ class LangConsistencyRewardFunction(RewardFunction):
         details = self._detect_lang_details(content)
 
         # If the expected is Cantonese, compute a weighted mapping score and combine with y_ratio
-        if norm_expected in ["yue"]:
+        if norm_expected == "yue":
             weighted = 0.0
             total_bytes = sum(entry[-1] for entry in details) if details else 0
             if total_bytes > 0:
@@ -167,11 +164,13 @@ class LangConsistencyRewardFunction(RewardFunction):
             return RewardFunctionScore(
                 format_score=0.0,
                 correctness_score=0.0,
-                error_msg=(
-                    ""
-                    if final_score > 0
-                    else "Response does not appear to be Cantonese."
-                ),
+                error_msg={
+                    "lang_consistency": (
+                        ("Response appears to be Cantonese.")
+                        if final_score > 0
+                        else "Response does not appear to be Cantonese."
+                    )
+                },
                 aux_score=float(final_score),
             )
 
@@ -212,7 +211,9 @@ class LangConsistencyRewardFunction(RewardFunction):
             return RewardFunctionScore(
                 format_score=0.0,
                 correctness_score=0.0,
-                error_msg="Failed to detect language of the response.",
+                error_msg={
+                    "lang_consistency": "Failed to detect language of the response."
+                },
                 aux_score=0.0,
             )
 

@@ -34,7 +34,8 @@ class TestBatchRewardOrchestrator(unittest.TestCase):
         r0 = results[0]
         r1 = results[1]
         self.assertIsInstance(r0, RewardFunctionScore)
-        self.assertGreater(r0.correctness_score, 0.5)
+        # Math should be exact: correct answer yields correctness 1.0
+        self.assertEqual(r0.correctness_score, 1.0)
         self.assertGreaterEqual(r0.aux_score, 0.0)
 
         self.assertIsInstance(r1, RewardFunctionScore)

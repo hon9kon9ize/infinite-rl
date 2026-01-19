@@ -40,7 +40,7 @@ class ReasoningStepsRewardFunction(RewardFunction):
             return RewardFunctionScore(
                 format_score=0.0,
                 correctness_score=0.0,
-                error_msg="Missing <think> tags in response.",
+                error_msg={"reasoning_steps": "Missing <think> tags in response."},
                 aux_score=0.0,
             )
 

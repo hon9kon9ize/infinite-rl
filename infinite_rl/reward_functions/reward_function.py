@@ -1,12 +1,13 @@
-from typing import Tuple, Union, Callable, Any, Optional
-from dataclasses import dataclass
+from typing import Union, Callable, Dict
+from dataclasses import dataclass, field
 
 
 @dataclass
 class RewardFunctionScore:
     format_score: float
     correctness_score: float
-    error_msg: str = ""
+    error_msg: Dict[str, str] = field(default_factory=dict)
+
     aux_score: float = 0.0
 
 

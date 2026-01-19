@@ -34,35 +34,13 @@ class ExampleParser:
         if matches:
             return [m.strip() for m in matches]
 
-        # 2. Heuristic: Look for anything that looks like an opening tag and a closing one
-        pattern = rf"(?:(?:```+|\[|<)\s*(?:{tag_alt})\s*(?:>|\]|```+)?)(.*?)(?:(?:```+|\[|<)\s*/\s*(?:{tag_alt})\s*(?:>|\]|```+)?)"
-        matches = re.findall(pattern, text, re.DOTALL | re.IGNORECASE)
-        if matches:
-            return [m.strip() for m in matches]
-
-        # 3. Only opening tag? Take everything after it
+        # 2. Only opening tag? Take everything after it
         opening_pattern = rf"(?:(?:```+|\[|<)\s*(?:{tag_alt})\s*(?:>|\]|```+)?)"
         match = re.search(opening_pattern, text, re.IGNORECASE)
         if match:
             content = text[match.end() :].strip()
             content = re.sub(r"```\s*$", "", content).strip()
             return [content]
-
-        # 4. Last resort: If only closing tag exists, take everything before it
-        closing_alt = "|".join(f"</{re.escape(t)}>" for t in tag_list)
-        if any(f"</{t}>" in text.lower() for t in tag_list):
-            match = re.search(
-                rf"(.*?)(?:</(?:{tag_alt})>)", text, re.DOTALL | re.IGNORECASE
-            )
-            if match:
-                content = match.group(1).strip()
-                if len(content) > 5000:
-                    header_match = list(
-                        re.finditer(r"^#+\s+.*$", content, re.MULTILINE)
-                    )
-                    if header_match:
-                        content = content[header_match[-1].end() :].strip()
-                return [content]
 
         return []
 

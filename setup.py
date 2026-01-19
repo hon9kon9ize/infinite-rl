@@ -21,53 +21,49 @@ def get_version():
 PACKAGE_VERSION = get_version()
 
 
-def download_runtimes(dest_dir):
-    """Downloads files into the actual build directory."""
+def download_assets(target_dir):
+    """Core download logic."""
     tag = f"runtimes-v{PACKAGE_VERSION}"
     api_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/tags/{tag}"
 
-    print(f"--> [Triggered] Downloading runtimes for {tag} to {dest_dir}")
-    os.makedirs(dest_dir, exist_ok=True)
+    print(f"--> [Action] Downloading runtimes to: {target_dir}")
+    os.makedirs(target_dir, exist_ok=True)
 
     try:
-        # Request with a User-Agent to avoid generic bot blocks
         req = urllib.request.Request(api_url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req) as resp:
-            release_info = json.load(resp)
-
-        assets = {
-            a["name"]: a["browser_download_url"] for a in release_info.get("assets", [])
-        }
+            assets = {
+                a["name"]: a["browser_download_url"]
+                for a in json.load(resp).get("assets", [])
+            }
 
         for fname in RUNTIME_FILES:
-            if fname not in assets:
-                print(f" [!] Warning: {fname} not found in GitHub assets.")
-                continue
-
-            target = os.path.join(dest_dir, fname)
-            print(f" --> Downloading {fname}...")
-            urllib.request.urlretrieve(assets[fname], target)
-
+            if fname in assets:
+                dest = os.path.join(target_dir, fname)
+                print(f"    Downloading {fname}...")
+                urllib.request.urlretrieve(assets[fname], dest)
+            else:
+                print(f"    [!] Missing asset in release: {fname}")
     except Exception as e:
-        print(f" [!] Error downloading assets: {e}")
-        # If this is critical, raise an error to stop the pip install
-        raise RuntimeError(f"Required runtimes failed to download: {e}")
+        print(f"    [!] Download failed: {e}")
+        # If runtimes are mandatory, raise an error to stop installation
+        raise RuntimeError(
+            f"Could not download runtimes. Package will be incomplete. Error: {e}"
+        )
 
 
 class build_py(_build_py):
-    """Custom build command to download assets before the build starts."""
-
     def run(self):
-        # Determine the package directory inside the build environment
-        # 'self.build_lib' is where pip gathers files for the wheel
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        target_dir = os.path.join(base_dir, "infinite_rl", "runtimes")
-
-        # Download files into the source tree so they are picked up
-        download_runtimes(target_dir)
-
-        # Now run the standard build which will copy these files to the wheel
+        # 1. First, let the standard build process run.
+        # This creates 'self.build_lib/infinite_rl/runtimes'
         super().run()
+
+        # 2. Determine where setuptools is staging the files for the wheel
+        # We must inject the files into the build_lib directory
+        build_runtime_dir = os.path.join(self.build_lib, "infinite_rl", "runtimes")
+
+        # 3. Download directly into the build staging area
+        download_assets(build_runtime_dir)
 
 
 setup(
@@ -75,8 +71,8 @@ setup(
     version=PACKAGE_VERSION,
     packages=find_packages(),
     include_package_data=True,
+    # This is critical for finding files inside the package
     package_data={
-        # This tells setuptools to look for .wasm files in that specific folder
         "infinite_rl.runtimes": ["*.wasm"],
     },
     install_requires=[
@@ -86,7 +82,5 @@ setup(
         "pycld2",
         "cantonesedetect",
     ],
-    cmdclass={
-        "build_py": build_py,
-    },
+    cmdclass={"build_py": build_py},
 )

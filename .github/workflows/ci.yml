@@ -121,6 +121,7 @@ jobs:
           # Install from the corresponding runtimes release tag (e.g., runtimes-v0.1.16)
           # This builds a wheel and triggers our build-time hook to bundle runtimes into the wheel.
           pip install git+https://github.com/${{ github.repository }}@runtimes-${{ needs.version-check.outputs.version }}
+          pip install pytest
 
       - name: Run examples
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}

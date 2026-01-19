@@ -4,3 +4,5 @@ include infinite_rl/*.py
 include infinite_rl/examples/__init__.py
 include README.md
 include requirements.txt
+recursive-include infinite_rl/runtimes *.wasm
+include VERSION.txt

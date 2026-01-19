@@ -80,8 +80,9 @@ def download_runtimes_from_release(tag=None, dest_dir="infinite_rl/runtimes"):
         for a in release_info.get("assets", [])
     }
 
-    # Print resolved URLs for debugging
+    # Print resolved URLs and available assets for debugging
     print(f"[info] Resolved release tag: {tag}")
+    print(f"[info] Available release asset names: {sorted(list(assets.keys()))}")
     for fname in RUNTIME_FILES:
         url = assets.get(fname)
         if url:
@@ -166,11 +167,39 @@ try:
 
     class build_py(_build_py):
         def run(self):
-            # Best-effort: try to download runtimes but do not fail the build on error
+            # Try to download runtimes and fail the build if essential files are missing.
             try:
                 download_runtimes_from_release()
             except Exception as e:
                 print(f"[warning] Failed to download runtimes during build_py: {e}")
+
+            # Verify that at least one of the core runtime files is present; fail fast
+            dest_dir = os.path.join(
+                os.path.dirname(__file__), "infinite_rl", "runtimes"
+            )
+            found = []
+            try:
+                for fname in RUNTIME_FILES:
+                    path = os.path.join(dest_dir, fname)
+                    if os.path.exists(path):
+                        found.append(fname)
+            except Exception:
+                found = []
+
+            if not found:
+                # Provide helpful diagnostic output and fail the build so CI surfaces the issue
+                print("[error] Runtimes not found after build-time download attempt.")
+                try:
+                    print("[error] Target runtimes directory contents:")
+                    print(sorted(os.listdir(dest_dir)))
+                except Exception:
+                    print("[error] Could not list runtimes directory (may not exist)")
+                raise RuntimeError(
+                    "Required runtime wasm files were not downloaded during build. "
+                    "Set GITHUB_TOKEN in the environment to avoid rate limits or ensure the release 'runtimes-*' exists and contains assets."
+                )
+
+            print(f"[info] Runtimes present: {found}")
             super().run()
 
 except Exception:

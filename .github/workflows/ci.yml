@@ -76,12 +76,26 @@ jobs:
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         uses: actions/checkout@v4
 
+      - name: Remove local package files to avoid conflicts
+        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
+        run: |
+          echo "Removing local package files that may conflict with pip-installed package"
+          # Remove source package directory and common build artifacts
+          rm -rf ./infinite_rl || true
+          rm -rf ./build ./dist || true
+          rm -rf ./*.egg-info || true
+          # Clean up any local Python package directories in repo tree
+          find . -maxdepth 3 -type d -name "infinite_rl" -exec rm -rf {} + || true
+          echo "Removal complete"
+
       - name: Set up Python
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
           cache: "pip"
+
+      - name: Remove local files
 
       - name: Install system dependencies
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}

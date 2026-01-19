@@ -89,12 +89,16 @@ jobs:
           echo "Release runtimes-${{ needs.version-check.outputs.version }} not found. Exiting CI run."
           exit 0
 
-      - name: Set up Python
+      - name: Note: no checkout in test job (install from git only)
+        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
+        run: |
+          echo "Not checking out repository in test job to avoid conflicts with installed package. We'll install from remote git URL and run tests."
+
+      - name: Set up Python (no repo cache)
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-          cache: "pip"
 
       - name: Install system dependencies
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}

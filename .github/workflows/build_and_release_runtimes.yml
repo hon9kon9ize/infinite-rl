@@ -74,20 +74,7 @@ jobs:
           echo "Release runtimes-${{ steps.get_version.outputs.version }} already exists. Skipping export/build and upload."
           exit 0
 
-      # 5. Export Model Weights (Native Build) - only run when we need to create release
-      # This runs the native code to pull weights into ./qwen3_local_cache
-      - name: Export Qwen3 Model Weights
-        if: steps.check_release.outputs.release_exists == 'false'
-        # Run the export from the qwen3_embed crate directory so the executable and
-        # generated `qwen3_local_cache` are created in the expected location.
-        working-directory: build_src/qwen3_embed
-        run: |
-          cargo run --release --features "hf-hub, candle" -- --document "hello" --query "world"
-          zip -r qwen3_local_cache.zip qwen3_local_cache
-          # Move the zip back to the repository root so subsequent steps can find it
-          mv qwen3_local_cache.zip "$GITHUB_WORKSPACE/"
-
-      # 6. Build WASM Runtimes - only run when we need to create release
+      # 5. Build WASM Runtimes - only run when we need to create release
       - name: Make build script executable
         if: steps.check_release.outputs.release_exists == 'false'
         run: chmod +x build_src/build_wasm.sh
@@ -99,11 +86,6 @@ jobs:
           export RUSTFLAGS="-C target-feature=+simd128"
           ./build_src/build_wasm.sh
 
-      - name: Build Qwen3 WASM
-        if: steps.check_release.outputs.release_exists == 'false'
-        working-directory: build_src/qwen3_embed
-        run: cargo build --release --target wasm32-wasip1 --no-default-features --features candle
-
       - name: Create release (if missing)
         id: create_release
         if: steps.check_release.outputs.release_exists == 'false'
@@ -113,30 +95,7 @@ jobs:
         with:
           tag_name: runtimes-${{ steps.get_version.outputs.version }}
           release_name: "Runtimes ${{ steps.get_version.outputs.version }}"
-          body: "Automated Build: Includes Qwen3 Embeddings and WASM Runtimes."
-
-      # 7. Asset Uploads (includes Qwen3 files) - only run when we created the release
-      - name: Upload qwen3_local_cache.zip
-        if: steps.check_release.outputs.release_exists == 'false'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: qwen3_local_cache.zip
-          asset_name: qwen3_local_cache.zip
-          asset_content_type: application/zip
-
-      - name: Upload qwen3_embed.wasm
-        if: steps.check_release.outputs.release_exists == 'false'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: build_src/qwen3_embed/target/wasm32-wasip1/release/qwen3_embed.wasm
-          asset_name: qwen3_embed.wasm
-          asset_content_type: application/wasm
+          body: "Automated Build: Includes WASM Runtimes."
 
       - name: Upload universal_js.wasm
         if: steps.check_release.outputs.release_exists == 'false'

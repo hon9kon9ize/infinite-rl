@@ -1,7 +1,6 @@
 from .math import MathRewardFunction
 from .coding import CodingRewardFunction
 from .lang_consistency import LangConsistencyRewardFunction
-from .summarization import SummarizationRewardFunction
 from .reasoning_steps import ReasoningStepsRewardFunction
 
 
@@ -13,7 +12,6 @@ def get_reward_functions(timeout: int = 10):
         "lang_consistency": LangConsistencyRewardFunction(
             "lang_consistency", timeout=timeout
         ),
-        "summarization": SummarizationRewardFunction("summarization", timeout=timeout),
         "reasoning_steps": ReasoningStepsRewardFunction(
             "reasoning_steps", timeout=timeout
         ),

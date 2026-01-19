@@ -8,7 +8,7 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
   1. `scripts/generate.py` -> calls `generate_dataset()` in `infinite_rl/generator.py` to orchestrate sampling.
   2. `generator.py` calls system prompts in `infinite_rl/prompts.py` and parses model outputs with `infinite_rl/parser.py`.
   3. Generated samples are evaluated by reward functions in `infinite_rl/reward_functions/` (currently `coding` and `math`).
-  4. Code execution for evaluation uses WASM runtimes via `infinite_rl/executor.py` (uses `wasmtime` and packaged runtimes in `infinite_rl/runtimes`).
+  4. Code execution for evaluation uses WASM runtimes via `infinite_rl/executor.py` (uses `wasmtime` and packaged runtimes in `infinite_rl/runtimes`; currently supports only the `javascript` and `python` runtimes).
 
 ## What to know before changing code
 - Samples must follow the strict 3-head format: `[PROMPT]`, `[ANSWER]`, `[RESPONSE]` and the final content must be wrapped in `<answer>` tags (see `prompts.py`).
@@ -29,6 +29,8 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
   source .venv/bin/activate
   ```
 - NOTE FOR AGENTS: Every time you run shell commands or tests, ensure `.venv/bin/activate` is applied in the session first.
+
+- Tip: install and test with `wasmtime` in your environment when running runtime-dependent tests or executing WASM-based examples.
 
 - Generate dataset locally:
   ```bash
@@ -59,7 +61,7 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 
 ## Integration points & dependencies
 - LLM: `google.genai` (Gemini). `GEMINI_API_KEY` must be set for generation to work.
-- Code execution: `wasmtime` + packaged WASM runtimes (`universal_js.wasm`, `micropython.wasm`) in `infinite_rl/runtimes`.
+- Code execution: `wasmtime` + packaged WASM runtimes (`universal_js.wasm`, `micropython.wasm`) in `infinite_rl/runtimes`. The `Executor` exposes only `javascript` and `python` by default; other runtimes (for example, separate embedding runtimes) were removed and must be provided explicitly if you need them.
   - Runtimes are built by the `build_src/build_wasm.sh` script and an automated GitHub Actions workflow (`.github/workflows/build_and_release_runtimes.yml`) uploads them to GitHub Releases.
   - During `pip install`, `setup.py` will attempt to download these runtime assets from the latest GitHub release (or `RUNTIME_RELEASE_TAG` if set). Override the repo location with `RUNTIME_GITHUB_REPO` if needed. Example usage to pin a release during install:
 
@@ -82,7 +84,7 @@ RUNTIME_RELEASE_TAG=v1.2.3 RUNTIME_GITHUB_REPO=owner/repo python -m pip install 
 - `infinite_rl/executor.py` — how code is run securely (WASM path)
 - `tests/test_reward_functions.py` and `tests/README.md` — canonical examples and unit test expectations
 
-Note: Several example files (HTML/CPP/JAVA/RUST/SUMMARIZATION) were archived to `archive_examples/` to keep `infinite_rl/examples/` focused on the active task types.
+Note: Several example files (JAVASCRIPT/PYTHON) were archived to `archive_examples/` to keep `infinite_rl/examples/` focused on the active task types.
 
 ---
 If something here is unclear or you'd like a different focus (e.g., more examples, a checklist for adding a new task type), tell me what to add and I'll iterate. 👍

@@ -135,27 +135,7 @@ result = math_fn.compute_reward(
 print(f"Correctness: {result.correctness_score}") 
 ```
 
-### 3. Summarization Task
-Uses semantic similarity (qwen3 embeddings) to score model summaries against a reference. The reward function now fetches embeddings for the reference document and the candidate summary independently (via `qwen3_embed` runtime) and computes a local cosine similarity using the project's `Executor.cosine_similarity` helper. This improves robustness and makes it easier to inspect or cache raw embeddings.
-
-**Notes:**
-- Requires `qwen3_embed.wasm` and (optionally) a `qwen3_local_cache` for model weights. Use `scripts/download_runtimes.py` or the pip install process to fetch the runtime assets.
-
-**Example:**
-```python
-from infinite_rl import get_reward_functions
-
-reward_fns = get_reward_functions()
-summ_fn = reward_fns["summarization"]
-
-score = summ_fn.compute_reward(
-    model_output="<answer>Remote work is shifting activity from cities to suburbs.</answer>",
-    expected_output="Remote work is shifting economic activity from city centers to suburbs, potentially forcing permanent changes to urban zoning and land use."
-)
-print(f"Similarity: {score.correctness_score}")
-```
-
-### 4. Reasoning Steps (encouragement bonus)
+### 3. Reasoning Steps (encouragement bonus)
 A small encouragement reward that detects explicit chain-of-thought style reasoning placed inside a `<think>...</think>` block. The `ReasoningStepsRewardFunction` looks for common reasoning indicators (e.g., "first", "second", "finally", "therefore") and awards a modest bonus when multiple indicators are present.
 
 **Behavior:**
@@ -198,10 +178,7 @@ print(f"Python: {stdout}")  # Output: Hello, World!
 stdout, stderr = executor.run_single("console.log('Hello, World!')", "javascript")
 print(f"JavaScript: {stdout}")  # Output: Hello, World!
 
-# Test Qwen3 Embed (similarity)
-# Provide either a (document, query) tuple or a string with a separator (e.g. 'document|||query')
-stdout, stderr = executor.run_single(("This is a passage", "query text"), "qwen3")
-print(f"Qwen3 similarity: {stdout}")  # Output: a float string like '0.8234' (if runtime present)
+# Embedding-based similarity can be tested if you provide an embeddings runtime.
 
 ```
 

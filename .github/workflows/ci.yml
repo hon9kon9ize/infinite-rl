@@ -101,25 +101,6 @@ jobs:
           # pip install will invoke setup.install which runs download_runtimes_from_release
           pip install .
 
-      - name: Verify runtimes were downloaded and cache extracted
-        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
-        run: |
-          echo "Contents of infinite_rl/runtimes:" || true
-          ls -la infinite_rl/runtimes || true
-
-          # Fail early if critical runtimes are absent
-          if [ ! -f infinite_rl/runtimes/qwen3_embed.wasm ]; then
-            echo "ERROR: qwen3_embed.wasm not found in infinite_rl/runtimes"; ls -la infinite_rl/runtimes; exit 1
-          fi
-
-          # If we requested the cache zip, ensure it extracted into a folder
-          if [ ! -d infinite_rl/runtimes/qwen3_local_cache ]; then
-            echo "ERROR: qwen3_local_cache directory not found in infinite_rl/runtimes (zip may not have been present or extraction failed)"; ls -la infinite_rl/runtimes; exit 1
-          fi
-
-          echo "qwen3_local_cache contents:" || true
-          ls -la infinite_rl/runtimes/qwen3_local_cache || true
-
       - name: Install test dependencies
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         run: |

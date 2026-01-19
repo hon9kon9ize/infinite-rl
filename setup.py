@@ -2,6 +2,7 @@ import os
 import json
 import urllib.request
 from setuptools import setup
+from setuptools import setup, find_packages
 from setuptools.command.build_py import build_py as _build_py
 
 # Configuration
@@ -9,36 +10,28 @@ RUNTIME_FILES = ["universal_js.wasm", "micropython.wasm"]
 GITHUB_REPO = os.environ.get("RUNTIME_GITHUB_REPO", "hon9kon9ize/infinite-rl")
 
 
-def read_version():
+def get_version():
     try:
         with open("VERSION.txt", "r") as f:
             return f.read().strip()
     except:
-        return "0.1.16"  # Fallback version
+        return "0.1.16"
 
 
-PACKAGE_VERSION = read_version()
+PACKAGE_VERSION = get_version()
 
 
-def download_runtimes():
-    """Download assets directly into the source tree before build."""
-    # 1. Determine the path relative to this setup.py
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    dest_dir = os.path.join(base_dir, "infinite_rl", "runtimes")
-    os.makedirs(dest_dir, exist_ok=True)
-
-    # 2. Define the tag (Prioritize the version we are currently installing)
-    # We use 'runtimes-v' prefix to match your repo structure
+def download_runtimes(dest_dir):
+    """Downloads files into the actual build directory."""
     tag = f"runtimes-v{PACKAGE_VERSION}"
     api_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/tags/{tag}"
 
-    print(f"[info] Fetching runtimes for {tag}...")
+    print(f"--> [Triggered] Downloading runtimes for {tag} to {dest_dir}")
+    os.makedirs(dest_dir, exist_ok=True)
 
     try:
-        # Headers to identify the request (helps avoid some generic blocks)
-        headers = {"User-Agent": "Mozilla/5.0 (Python urllib)"}
-        req = urllib.request.Request(api_url, headers=headers)
-
+        # Request with a User-Agent to avoid generic bot blocks
+        req = urllib.request.Request(api_url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req) as resp:
             release_info = json.load(resp)
 
@@ -47,50 +40,44 @@ def download_runtimes():
         }
 
         for fname in RUNTIME_FILES:
-            target_path = os.path.join(dest_dir, fname)
-
-            # Skip if already exists (e.g. during local dev)
-            if os.path.exists(target_path):
-                print(f"[info] {fname} already exists, skipping.")
+            if fname not in assets:
+                print(f" [!] Warning: {fname} not found in GitHub assets.")
                 continue
 
-            url = assets.get(fname)
-            if not url:
-                print(f"[error] {fname} not found in release assets for {tag}")
-                continue
-
-            print(f"[info] Downloading {fname}...")
-            urllib.request.urlretrieve(url, target_path)
+            target = os.path.join(dest_dir, fname)
+            print(f" --> Downloading {fname}...")
+            urllib.request.urlretrieve(assets[fname], target)
 
     except Exception as e:
-        print(f"[error] Failed to download runtimes: {e}")
-        # We raise an error here because the package won't work without them
-        raise RuntimeError(
-            f"Could not download required wasm runtimes from GitHub: {e}"
-        )
+        print(f" [!] Error downloading assets: {e}")
+        # If this is critical, raise an error to stop the pip install
+        raise RuntimeError(f"Required runtimes failed to download: {e}")
 
 
 class build_py(_build_py):
-    """Inject the download process into the build lifecycle."""
+    """Custom build command to download assets before the build starts."""
 
     def run(self):
-        download_runtimes()
+        # Determine the package directory inside the build environment
+        # 'self.build_lib' is where pip gathers files for the wheel
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        target_dir = os.path.join(base_dir, "infinite_rl", "runtimes")
+
+        # Download files into the source tree so they are picked up
+        download_runtimes(target_dir)
+
+        # Now run the standard build which will copy these files to the wheel
         super().run()
 
 
 setup(
     name="infinite_rl",
     version=PACKAGE_VERSION,
-    packages=[
-        "infinite_rl",
-        "infinite_rl.reward_functions",
-        "infinite_rl.examples",
-        "infinite_rl.runtimes",
-    ],
+    packages=find_packages(),
     include_package_data=True,
     package_data={
+        # This tells setuptools to look for .wasm files in that specific folder
         "infinite_rl.runtimes": ["*.wasm"],
-        "infinite_rl": ["VERSION.txt"],
     },
     install_requires=[
         "wasmtime",
@@ -99,5 +86,7 @@ setup(
         "pycld2",
         "cantonesedetect",
     ],
-    cmdclass={"build_py": build_py},
+    cmdclass={
+        "build_py": build_py,
+    },
 )

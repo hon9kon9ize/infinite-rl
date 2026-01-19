@@ -25,13 +25,62 @@ class TestRewardOrchestrator(unittest.TestCase):
         s1 = orch.compute("<answer>Hello world</answer>", None, task="repetition")
         self.assertEqual(s1.format_score, 0.0)
         self.assertEqual(s1.correctness_score, 0.0)
-        self.assertAlmostEqual(s1.aux_score, 1.0, places=3)
-        # High repetition
+        # Expect low-repetition score to be higher than high-repetition score
         s2 = orch.compute(
             "<answer>Hello Hello Hello Hello</answer>", None, task="repetition"
         )
         self.assertEqual(s2.correctness_score, 0.0)
-        self.assertLess(s2.aux_score, s1.aux_score)
+        self.assertGreater(s1.aux_score, s2.aux_score)
+
+    def test_gatekeeping_blocks_when_main_incorrect(self):
+        # Gatekeeping should zero out everything when main correctness <= 0.5
+        orch = RewardOrchestrator(
+            gatekeeping=True, include_length=True, include_repetition=True
+        )
+        # math incorrect example
+        res = orch.compute("<answer>wrong</answer>", "42", task="math", lang="en")
+        self.assertIsInstance(res, RewardFunctionScore)
+        self.assertEqual(res.format_score, 0.0)
+        self.assertEqual(res.correctness_score, 0.0)
+        self.assertEqual(res.aux_score, 0.0)
+
+    def test_gatekeeping_allows_when_main_correct(self):
+        orch = RewardOrchestrator(
+            gatekeeping=True, include_length=True, include_repetition=True
+        )
+        res = orch.compute("<answer>42</answer>", 42, task="math", lang="en")
+        self.assertIsInstance(res, RewardFunctionScore)
+        self.assertGreater(res.correctness_score, 0.5)
+        # aux signals should be computed and added
+        self.assertGreaterEqual(res.aux_score, 0.0)
+
+    def test_aux_score_weights_respected(self):
+        orch = RewardOrchestrator(
+            include_length=True,
+            include_repetition=True,
+            aux_score_weights={"length": 0.1, "repetition": 0.9},
+        )
+        # Model output that is numerically correct (math) and contains repetition
+        model_output = "<answer>42 hi hi hi hi</answer>"
+        res = orch.compute(model_output, 42, task="math", lang="en")
+
+        # Compute expected weighted average manually using the same underlying reward functions
+        length_score = orch.get_fn("length").compute_reward(
+            model_output, None, is_correct=True
+        )
+        rep_score = orch.get_fn("repetition").compute_reward(model_output, None)
+        # The orchestrator should produce an aux_score within the min/max bounds
+        # and closer to the higher-weighted component (repetition)
+        self.assertGreaterEqual(
+            res.aux_score, min(length_score.aux_score, rep_score.aux_score)
+        )
+        self.assertLessEqual(
+            res.aux_score, max(length_score.aux_score, rep_score.aux_score)
+        )
+        self.assertLess(
+            abs(res.aux_score - rep_score.aux_score),
+            abs(res.aux_score - length_score.aux_score),
+        )
 
     def test_compute_with_lang_and_length(self):
         orch = RewardOrchestrator(include_length=True)

@@ -100,9 +100,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python -m pip install --upgrade pip
-          # Install from the repository at the release tag; this will build a wheel
-          # and trigger our build-time hook to download the runtimes into the wheel.
-          pip install git+https://github.com/${{ github.repository }}@${{ needs.version-check.outputs.version }}
+          # Install from the corresponding runtimes release tag (e.g., runtimes-v0.1.16)
+          # This builds a wheel and triggers our build-time hook to bundle runtimes into the wheel.
+          pip install git+https://github.com/${{ github.repository }}@runtimes-${{ needs.version-check.outputs.version }}
 
       - name: Install test dependencies
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}

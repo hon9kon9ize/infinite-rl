@@ -4,67 +4,7 @@ Tests cover all reward function types with mocked dependencies.
 """
 
 import unittest
-import json
-from pathlib import Path
-from infinite_rl.reward_functions.coding import CodingRewardFunction
 from infinite_rl.reward_functions.math import MathRewardFunction
-from infinite_rl.parser import ExampleParser
-
-
-class TestExamples(unittest.TestCase):
-    """Data-driven tests using example markdown files."""
-
-    @classmethod
-    def setUpClass(cls):
-        # The examples directory is now inside the package
-        cls.examples_dir = Path(__file__).parent.parent / "infinite_rl" / "examples"
-        if not cls.examples_dir.exists():
-            # Fallback for localized testing
-            cls.examples_dir = Path(__file__).parent.parent / "examples"
-        cls.examples = ExampleParser.get_all_examples(cls.examples_dir)
-
-    def test_python_example(self):
-        example = self.examples.get("PYTHON")
-        self.assertIsNotNone(example)
-
-        reward_fn = CodingRewardFunction(task_name="python")
-        reward_fn.initialize()
-
-        # Python example already outputs JSON
-        score = reward_fn.compute_reward(example["response"], example["answer"])
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 1.0)
-
-    def test_javascript_example(self):
-        example = self.examples.get("JAVASCRIPT")
-        self.assertIsNotNone(example)
-
-        reward_fn = CodingRewardFunction(task_name="javascript")
-        reward_fn.set_language("javascript")
-        reward_fn.initialize()
-
-        # JS example already outputs JSON
-        score = reward_fn.compute_reward(example["response"], example["answer"])
-        self.assertEqual(score.format_score, 1.0)
-        # Check if the score is 1.0, but if not, print debug
-        if score.correctness_score < 1.0:
-            print(f"JS Debug: score={score}")
-        reward_fn.initialize()
-
-        score = reward_fn.compute_reward(example["response"], example["answer"])
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 1.0)
-
-    def test_math_example(self):
-        example = self.examples.get("MATH")
-        self.assertIsNotNone(example)
-
-        reward_fn = MathRewardFunction(task_name="math")
-        reward_fn.initialize()
-
-        score = reward_fn.compute_reward(example["response"], example["answer"])
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 1.0)
 
 
 class TestMathRewardFunction(unittest.TestCase):

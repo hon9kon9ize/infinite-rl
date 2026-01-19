@@ -76,18 +76,25 @@ jobs:
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         uses: actions/checkout@v4
 
-      - name: Remove local package files to avoid conflicts
+      - name: Purge repository files to test fresh installation
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         run: |
-          echo "Removing local package files that may conflict with pip-installed package"
-          # Remove source package directory and common build artifacts
-          rm -rf ./infinite_rl || true
-          rm -rf ./build ./dist || true
-          rm -rf ./*.egg-info || true
-          # Clean up any local Python package directories in repo tree
-          find . -maxdepth 3 -type d -name "infinite_rl" -exec rm -rf {} + || true
-          echo "Removal complete"
+          echo "Uninstalling any preinstalled infinite_rl package from environment"
+          pip uninstall -y infinite_rl || true
 
+          echo "Listing repo contents BEFORE purge:"
+          ls -la || true
+
+          # Purge everything in the workspace including tracked files so we can
+          # test installing the wheel from git into a clean environment.
+          # Note: We intentionally delete hidden files too (.*) but skip '.' and '..'.
+          echo "Purging repository files..."
+          rm -rf ./* ./.??* || true
+
+          echo "Listing repo contents AFTER purge (should be minimal):"
+          ls -la || true
+
+          echo "Purge complete"
       - name: Set up Python
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         uses: actions/setup-python@v5

@@ -122,11 +122,6 @@ jobs:
           # This builds a wheel and triggers our build-time hook to bundle runtimes into the wheel.
           pip install git+https://github.com/${{ github.repository }}@runtimes-${{ needs.version-check.outputs.version }}
 
-      - name: Install test dependencies
-        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
-        run: |
-          pip install -r requirements_dev.txt
-
       - name: Run examples
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         run: |

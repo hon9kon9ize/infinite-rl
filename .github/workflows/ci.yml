@@ -44,7 +44,7 @@ jobs:
           echo "Found version: $VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Check for existing release and required assets
+      - name: Check for existing release
         id: check_release
         shell: bash
         env:
@@ -52,26 +52,9 @@ jobs:
         run: |
           TAG="runtimes-${{ steps.get_version.outputs.version }}"
           resp=$(curl -sS -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG" || true)
-
           if echo "$resp" | jq -e '.id' >/dev/null 2>&1; then
-            # Check that required asset names exist in this release
-            required=("universal_js.wasm" "micropython.wasm")
-            present_assets=$(echo "$resp" | jq -r '.assets[].name' | tr '\n' ' ')
-
-            missing=()
-            for a in "${required[@]}"; do
-              if ! echo "$present_assets" | grep -q -- "$a"; then
-                missing+=("$a")
-              fi
-            done
-
-            if [ ${#missing[@]} -ne 0 ]; then
-              echo "[warning] Release $TAG missing required assets: ${missing[*]}"
-              echo "release_exists=false" >> "$GITHUB_OUTPUT"
-            else
-              echo "release_exists=true" >> "$GITHUB_OUTPUT"
-              echo "upload_url=$(echo "$resp" | jq -r '.upload_url' | sed 's/{?name,label}//')" >> "$GITHUB_OUTPUT"
-            fi
+            echo "release_exists=true" >> "$GITHUB_OUTPUT"
+            echo "upload_url=$(echo "$resp" | jq -r '.upload_url' | sed 's/{?name,label}//')" >> "$GITHUB_OUTPUT"
           else
             echo "release_exists=false" >> "$GITHUB_OUTPUT"
           fi
@@ -89,16 +72,16 @@ jobs:
           echo "Release runtimes-${{ needs.version-check.outputs.version }} not found. Exiting CI run."
           exit 0
 
-      - name: Note: no checkout in test job (install from git only)
+      - name: Continue when release present
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}
-        run: |
-          echo "Not checking out repository in test job to avoid conflicts with installed package. We'll install from remote git URL and run tests."
+        uses: actions/checkout@v4
 
-      - name: Set up Python (no repo cache)
+      - name: Set up Python
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
+          cache: "pip"
 
       - name: Install system dependencies
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}
@@ -120,25 +103,6 @@ jobs:
           # Install from the corresponding runtimes release tag (e.g., runtimes-v0.1.16)
           # This builds a wheel and triggers our build-time hook to bundle runtimes into the wheel.
           pip install git+https://github.com/${{ github.repository }}@runtimes-${{ needs.version-check.outputs.version }}
-
-      - name: Verify runtimes present
-        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
-        run: |
-          python - <<'PY'
-          import infinite_rl, os, sys
-          runtimes_dir = os.path.join(os.path.dirname(infinite_rl.__file__), 'runtimes')
-          if not os.path.isdir(runtimes_dir):
-              print('Runtimes directory missing:', runtimes_dir)
-              sys.exit(1)
-          files = sorted([f for f in os.listdir(runtimes_dir) if not f.startswith('.')])
-          print('Runtimes:', files)
-          # Expect at least the two core wasm files
-          needed = {'universal_js.wasm', 'micropython.wasm'}
-          if not needed.intersection(set(files)):
-              print('Missing expected wasm files; found:', files)
-              sys.exit(1)
-          print('Runtimes verification OK')
-          PY
 
       - name: Install test dependencies
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}

@@ -91,11 +91,6 @@ jobs:
 
       - name: Install Python package (will download runtimes via setup.py)
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}
-        env:
-          # Tell setup.py which release tag to fetch runtimes from (version is like 'vX.Y.Z')
-          RUNTIME_RELEASE_TAG: ${{ needs.version-check.outputs.version }}
-          # Allow override of repo if needed (defaults to package value)
-          RUNTIME_GITHUB_REPO: ${{ github.repository }}
         run: |
           python -m pip install --upgrade pip
           # pip install will invoke setup.install which runs download_runtimes_from_release

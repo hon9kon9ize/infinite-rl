@@ -87,7 +87,7 @@ python -m infinite_rl.run_examples
 ```
 
 ## Reward Orchestrator 🔧
-A convenience utility that loads available reward functions and (optionally) registers auxiliary rewards such as `repetition` and `length`. The orchestrator can compute a main task reward and aggregate auxiliary signals into a single `RewardFunctionScore`.
+A convenience utility that loads available reward functions and (optionally) registers auxiliary rewards such as `repetition` and `length`. The orchestrator can compute a main task reward and aggregate auxiliary signals into an `AggregatedReward`.
 
 - Initialization examples:
 
@@ -104,13 +104,13 @@ print(orch.available())  # e.g. ['math', 'coding', 'lang_consistency', 'reasonin
 - Compute usage:
 
 ```python
-# Legacy / simple usage: returns a single RewardFunctionScore for the given task
+# Compute a task reward using the orchestrator (returns an AggregatedReward)
 score = orch.compute("<answer>42</answer>", "42", task="math")
-print(score.format_score, score.correctness_score)  # main task scores
+print(score.format_score, score.correctness_score)  # main task scores (format & correctness)
 
 # Request auxiliary aggregation by providing a language target. When `lang` is given,
-# the orchestrator will include registered auxiliary rewards and return an aggregated
-# RewardFunctionScore whose `aux_score` is the sum of auxiliary signals.
+# the orchestrator will include registered auxiliary rewards and return an AggregatedReward
+# whose `aux_score` is the aggregated auxiliary signal.
 agg = orch.compute("<answer>Hello world</answer>", "", task="python", lang="en")
 print(agg.aux_score)  # combined aux signals (lang_consistency + length + repetition when registered)
 ```
@@ -156,7 +156,8 @@ result = python_fn.compute_reward(
     model_output="<answer>\n```python\nprint(2 + 2)\n```\n</answer>",
     expected_output="4"
 )
-print(f"Score: {result.correctness_score}")
+# Per-reward functions now return a unified RewardFunctionScore with `.score`
+print(f"Score: {result.score}")
 ```
 
 ### 2. Math Task
@@ -173,7 +174,7 @@ result = math_fn.compute_reward(
     model_output="<answer>x^2 + 2x + 1</answer>",
     expected_output="(x+1)^2"
 )
-print(f"Correctness: {result.correctness_score}") 
+print(f"Correctness: {result.score}") 
 ```
 
 ### 3. Reasoning Steps (encouragement bonus)
@@ -193,7 +194,7 @@ reason_fn = reward_fns["reasoning_steps"]
 
 model_out = "<think>First, we compute the sum. Second, we verify the result. Finally, we present it.</think>"
 score = reason_fn.compute_reward(model_out, expected_output=None)
-print(f"Reasoning bonus: {score.correctness_score}")
+print(f"Reasoning bonus: {score.score}")
 ```
 
 

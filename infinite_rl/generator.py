@@ -33,14 +33,27 @@ def get_reward_function(task_type, timeout=5):
 def log_failed_sample(
     failed_list, out_dir, task_type, parsed, score, raw_text, rectified
 ):
-    """Log a failed sample to the failed dataset and save immediately."""
+    """Log a failed sample to the failed dataset and save immediately.
+
+    This function now computes a separate format score using the FormatRewardFunction
+    instantiated for the specific `task_type` so format is recorded independently.
+    """
+    # Compute format score using the format reward for this task type
+    try:
+        from .reward_functions.format import FormatRewardFunction
+
+        fmt_fn = FormatRewardFunction(task_name=task_type)
+        fmt_score = float(fmt_fn.compute_reward(parsed.get("response", ""), None).score)
+    except Exception:
+        fmt_score = 0.0
+
     entry = {
         "type": task_type,
         "prompt": parsed.get("prompt", ""),
         "answer": parsed.get("answer", ""),
         "response": parsed.get("response", ""),
-        "format_score": getattr(score, "format_score", 0.0),
-        "correctness_score": getattr(score, "correctness_score", 0.0),
+        "format_score": fmt_score,
+        "correctness_score": float(getattr(score, "score", 0.0)),
         "error_msg": getattr(score, "error_msg", ""),
         "raw_text": raw_text,
         "rectified": rectified,
@@ -262,7 +275,23 @@ def generate_dataset(
                     score = reward_fn.compute_reward(
                         parsed["response"], parsed["answer"]
                     )
-                    quality_score = (score.format_score + score.correctness_score) / 2.0
+
+                    # Compute format score using a task-specific FormatRewardFunction
+                    try:
+                        from .reward_functions.format import FormatRewardFunction
+
+                        fmt_fn = FormatRewardFunction(task_name=t)
+                        fmt_score = float(
+                            fmt_fn.compute_reward(
+                                parsed.get("response", ""), None
+                            ).score
+                        )
+                    except Exception:
+                        fmt_score = 0.0
+
+                    quality_score = (
+                        fmt_score + float(getattr(score, "score", 0.0))
+                    ) / 2.0
 
                     if quality_score < 0.8:
                         # Log initial failure
@@ -285,8 +314,9 @@ def generate_dataset(
 
                         while rectify_count < max_rectify and (quality_score < 0.8):
                             rectify_count += 1
-                            error_info = f"Format Score: {current_score.format_score:.2f}, Correctness Score: {current_score.correctness_score:.2f}"
-                            if current_score.error_msg:
+                            current_fmt = fmt_score
+                            error_info = f"Format Score: {current_fmt:.2f}, Correctness Score: {float(getattr(current_score, 'score', 0.0)):.2f}"
+                            if getattr(current_score, "error_msg", None):
                                 error_info += f"\nError details: {current_score.error_msg.values()}"
 
                             rectify_query = RECTIFY_PROMPT.format(
@@ -310,9 +340,18 @@ def generate_dataset(
                                     parsed["response"],
                                     parsed["answer"],
                                 )
+                                try:
+                                    fmt_score = float(
+                                        fmt_fn.compute_reward(
+                                            parsed.get("response", ""), None
+                                        ).score
+                                    )
+                                except Exception:
+                                    fmt_score = 0.0
+
                                 quality_score = (
-                                    current_score.format_score
-                                    + current_score.correctness_score
+                                    fmt_score
+                                    + float(getattr(current_score, "score", 0.0))
                                 ) / 2.0
                                 raw_text = current_raw
 

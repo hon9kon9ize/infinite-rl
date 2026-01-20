@@ -72,7 +72,7 @@ def ngram_repetition_reward(text: str, n: int = 3, weight: float = -0.1) -> floa
 # New: RepetitionRewardFunction – a lightweight RewardFunction wrapper
 from typing import Union
 from .reward_function import RewardFunction, RewardFunctionScore
-from ..parser import ExampleParser
+from ..utils.parser_utils import extract_answer_tags
 
 
 class RepetitionRewardFunction(RewardFunction):
@@ -88,8 +88,12 @@ class RepetitionRewardFunction(RewardFunction):
         timeout: int = 5,
         n: int = 3,
         weight: float = -0.1,
+        answer_tag: str = "answer",
+        think_tag: str = "think",
     ):
-        super().__init__(task_name, timeout=timeout)
+        super().__init__(
+            task_name, timeout=timeout, answer_tag=answer_tag, think_tag=think_tag
+        )
         self.n = n
         self.weight = weight
 
@@ -100,25 +104,17 @@ class RepetitionRewardFunction(RewardFunction):
         self,
         model_output: str,
         expected_output: Union[str, int, None],
-        answer_tag: str = "answer",
     ) -> RewardFunctionScore:
         if not self.initialized:
             self.initialize()
 
         if not model_output:
-            return RewardFunctionScore(
-                format_score=0.0, correctness_score=0.0, aux_score=0.0
-            )
+            return RewardFunctionScore(score=0.0)
 
-        matches = ExampleParser.extract_answer_tags(model_output, tags=answer_tag)
-        text = matches[0] if matches else model_output
+        matches = extract_answer_tags(model_output, tag=self.answer_tag)
+        text = matches if matches else model_output
         penalty = ngram_repetition_reward(text, n=self.n, weight=self.weight)
         correctness = max(0.0, 1.0 + float(penalty))
-        fmt = 1.0 if matches else 0.5
 
         # Auxiliary reward: zero format and correctness; expose signal in aux_score
-        return RewardFunctionScore(
-            format_score=0.0,
-            correctness_score=0.0,
-            aux_score=float(correctness),
-        )
+        return RewardFunctionScore(score=float(correctness))

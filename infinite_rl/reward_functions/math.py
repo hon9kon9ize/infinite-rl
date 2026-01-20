@@ -8,18 +8,25 @@ from sympy.parsing.sympy_parser import (
 )
 from sympy.parsing.latex import parse_latex
 from .reward_function import RewardFunction, RewardFunctionScore
+from ..utils.parser_utils import extract_answer_tags
 
 
 class MathRewardFunction(RewardFunction):
-    def __init__(self, task_name: str = "math", timeout: int = 5):
-        super().__init__(task_name, timeout=timeout)
+    def __init__(
+        self,
+        task_name: str = "math",
+        timeout: int = 5,
+        answer_tag: str = "answer",
+        think_tag: str = "think",
+    ):
+        super().__init__(
+            task_name, timeout=timeout, answer_tag=answer_tag, think_tag=think_tag
+        )
 
     def initialize(self):
         self.initialized = True
 
-    def _check_equality(
-        self, predicted_str: str, expected_str: str, allow_partial: bool = False
-    ) -> float:
+    def _check_equality(self, predicted_str: str, expected_str: str) -> float:
         """Simplified equality: extract first numeric value from strings and compare as floats.
 
         Behavior:
@@ -92,19 +99,16 @@ class MathRewardFunction(RewardFunction):
         self,
         model_output: str,
         expected_output: Union[str, int, Callable],
-        answer_tag: str = "answer",
     ) -> RewardFunctionScore:
-        from ..parser import ExampleParser
-
         if not self.initialized:
             self.initialize()
 
         # Handle expected_output being a JSON string (unwrap if necessary)
         if isinstance(expected_output, str):
             # Check for <answer> tags in expected output as well
-            exp_matches = ExampleParser.extract_answer_tags(expected_output)
+            exp_matches = extract_answer_tags(expected_output)
             if exp_matches:
-                expected_output = exp_matches[0]
+                expected_output = exp_matches
 
             trimmed = expected_output.strip()
             if trimmed.startswith("{") and trimmed.endswith("}"):
@@ -117,12 +121,33 @@ class MathRewardFunction(RewardFunction):
                 except Exception:
                     pass
 
-        matches = ExampleParser.extract_answer_tags(model_output, tags=answer_tag)
+        matches = extract_answer_tags(model_output, tag=self.answer_tag)
         if not matches:
             return RewardFunctionScore(
-                format_score=0.0,
-                correctness_score=0.0,
+                score=0.0,
                 error_msg={"math": "Missing <answer> tags in response."},
+            )
+
+        # Handle multiple occurrences: look for explicit tag pairs and extract them
+        tag_pattern = re.compile(
+            rf"<\s*{re.escape(self.answer_tag)}\s*>(.*?)</\s*{re.escape(self.answer_tag)}\s*>",
+            re.DOTALL | re.IGNORECASE,
+        )
+        multi_matches = tag_pattern.findall(model_output)
+        if len(multi_matches) > 1:
+            # Check if any of the tags match the expected answer
+            correctness = 0.0
+            expected_str = str(expected_output).strip()
+            for m in multi_matches:
+                if self._check_equality(m.strip(), expected_str) == 1.0:
+                    correctness = 1.0
+                    break
+
+            return RewardFunctionScore(
+                score=correctness,
+                error_msg={
+                    "math": "Multiple <answer> tags found. Math problems must have exactly one final answer tag."
+                },
             )
 
         # Prepare expected list
@@ -138,9 +163,11 @@ class MathRewardFunction(RewardFunction):
                     if (result is True)
                     else (result if isinstance(result, float) else 0.0)
                 )
-                return RewardFunctionScore(1.0, score)
+                return RewardFunctionScore(score=score)
             except Exception as e:
-                return RewardFunctionScore(1.0, 0.0, {"math": f"Validator error: {e}"})
+                return RewardFunctionScore(
+                    score=0.0, error_msg={"math": f"Validator error: {e}"}
+                )
         else:
             # String or other
             expected_str = str(expected_output).strip()
@@ -169,8 +196,7 @@ class MathRewardFunction(RewardFunction):
                     break
 
             return RewardFunctionScore(
-                format_score=0.4,  # Heavy penalty for multiple tags
-                correctness_score=correctness,
+                score=correctness,
                 error_msg={
                     "math": "Multiple <answer> tags found. Math problems must have exactly one final answer tag."
                 },
@@ -186,8 +212,7 @@ class MathRewardFunction(RewardFunction):
         )
 
         return RewardFunctionScore(
-            format_score=1.0,
-            correctness_score=correctness,
+            score=correctness,
             error_msg=(
                 {}
                 if correctness == 1.0

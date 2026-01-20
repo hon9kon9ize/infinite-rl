@@ -4,6 +4,7 @@ from .lang_consistency import LangConsistencyRewardFunction
 from .reasoning_steps import ReasoningStepsRewardFunction
 from .repetition import RepetitionRewardFunction
 from .length import LengthRewardFunction
+from .format import FormatRewardFunction
 
 
 def get_reward_functions(timeout: int = 10):
@@ -20,6 +21,8 @@ def get_reward_functions(timeout: int = 10):
         ),
         "repetition": RepetitionRewardFunction("repetition", timeout=timeout),
         "length": LengthRewardFunction("length", timeout=timeout),
+        # Format-only reward (separate from main task correctness)
+        "format": FormatRewardFunction("format", timeout=timeout),
     }
 
     return reward_fns

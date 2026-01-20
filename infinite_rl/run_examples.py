@@ -31,36 +31,58 @@ def run_examples():
     print(f"{'Example Name':<20} | {'Status':<10} | {'Score':<10}")
     print("-" * 50)
 
+    # Pre-create reward functions registry to reuse across examples
+    from .reward_functions import get_reward_functions
+
+    reward_fns = get_reward_functions(timeout=5)
+    format_fn = reward_fns.get("format")
+
     for name, data in examples.items():
         # Map filename to task type
         task_type = name.lower()
 
-        reward_fn = get_reward_function(task_type)
-        if not reward_fn:
-            # Fallback: try mapping by filename keywords
-            if "python" in name.lower():
-                reward_fn = get_reward_function("python")
-            elif "javascript" in name.lower() or "js" in name.lower():
-                reward_fn = get_reward_function("javascript")
-
-        if not reward_fn:
-            print(f"{name:<20} | Skip       | N/A")
-            continue
-
         try:
-            reward_fn.initialize()
-
-            # Expected output is taken directly from the example; any JSON parsing should be handled by the reward function itself.
             expected_output = data["answer"]
+            model_output = data["response"]
 
-            score = reward_fn.compute_reward(data["response"], expected_output)
-            total_score = (score.format_score + score.correctness_score) / 2.0
+            # Main task function (fall back to generic if task not found)
+            main_fn = reward_fns.get(task_type)
+            if main_fn is None:
+                print(
+                    f"{name:<20} | SKIP       | 0.00  (no reward fn for '{task_type}')"
+                )
+                continue
 
-            status = "PASS" if total_score > 0.8 else "FAIL"
+            main_score = main_fn.compute_reward(model_output, expected_output)
+            fmt_score = (
+                format_fn.compute_reward(model_output, None) if format_fn else format_fn
+            )
+
+            main_val = float(getattr(main_score, "score", 0.0))
+            fmt_val = float(getattr(fmt_score, "score", 0.0)) if fmt_score else 0.0
+
+            total_score = (fmt_val + main_val) / 2.0
+
+            # Some rewards are aux-only (e.g., repetition/length). If main_val low but aux high, consider PASS
+            aux_val = (
+                float(getattr(main_score, "aux_score", 0.0))
+                if hasattr(main_score, "aux_score")
+                else 0.0
+            )
+            if total_score < 0.8 and aux_val >= 0.8:
+                total_score = aux_val
+                status = "PASS"
+            else:
+                status = "PASS" if total_score > 0.8 else "FAIL"
+
             print(f"{name:<20} | {status:<10} | {total_score:<10.2f}")
 
-            if total_score < 0.8 and score.error_msg:
-                print(f"  └─ Error: {"\n".join(score.error_msg.values())}")
+            if status == "FAIL" and getattr(main_score, "error_msg", None):
+                em = main_score.error_msg
+                if isinstance(em, dict):
+                    print(f"  └─ Error: {"\n".join(em.values())}")
+                else:
+                    print(f"  └─ Error: {em}")
 
             results.append(total_score)
         except Exception as e:

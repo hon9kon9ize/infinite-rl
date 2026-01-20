@@ -27,10 +27,9 @@ print(json.dumps({"result": result}))
         score = self.reward_fn.compute_reward(model_output, expected_output)
 
         self.assertIsNotNone(score)
-        self.assertGreaterEqual(score.format_score, 0.0)
-        self.assertLessEqual(score.format_score, 1.0)
-        self.assertGreaterEqual(score.correctness_score, 0.0)
-        self.assertLessEqual(score.correctness_score, 1.0)
+        # Format is validated via separate format reward; correctness is unified in `score`
+        self.assertGreaterEqual(float(score.score), 0.0)
+        self.assertLessEqual(float(score.score), 1.0)
 
     def test_missing_code_block(self):
         """Test when code block is missing."""
@@ -38,9 +37,13 @@ print(json.dumps({"result": result}))
         expected_output = '{"result": [2, 4, 6, 8]}'
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
+        from infinite_rl.reward_functions.format import FormatRewardFunction
 
-        self.assertEqual(score.format_score, 0.5)
-        self.assertEqual(score.correctness_score, 0.0)
+        fmt = FormatRewardFunction(task_name="python")
+        fmt.initialize()
+        fmt_score = fmt.compute_reward(model_output, None).score
+        self.assertEqual(fmt_score, 0.5)
+        self.assertEqual(score.score, 0.0)
 
     def test_custom_tag_for_code_block(self):
         """Test that code block inside a custom tag can be found and executed."""
@@ -51,8 +54,13 @@ print(json.dumps({"result": result}))
             model_output, expected_output, answer_tag="final"
         )
 
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 1.0)
+        from infinite_rl.reward_functions.format import FormatRewardFunction
+
+        fmt = FormatRewardFunction(task_name="python")
+        fmt.initialize()
+        fmt_score = fmt.compute_reward(model_output, None, answer_tag="final").score
+        self.assertEqual(fmt_score, 1.0)
+        self.assertEqual(score.score, 1.0)
 
     def test_syntax_error_in_code(self):
         """Test code with syntax errors."""
@@ -66,10 +74,14 @@ def filter_even(numbers)  # Missing colon
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
 
-        # Syntax errors result in stderr.
-        # Format score is 0.5 because the code block was successfully extracted.
-        self.assertEqual(score.format_score, 0.5)
-        self.assertEqual(score.correctness_score, 0.0)
+        # Syntax errors result in stderr; formatting (code fence) still valid
+        from infinite_rl.reward_functions.format import FormatRewardFunction
+
+        fmt = FormatRewardFunction(task_name="python")
+        fmt.initialize()
+        fmt_score = fmt.compute_reward(model_output, None).score
+        self.assertEqual(fmt_score, 1.0)
+        self.assertEqual(score.score, 0.0)
 
     def test_order_sensitivity_in_string_matching(self):
         """Test that wrong order in string output results in 0.0 correctness under exact match."""
@@ -83,9 +95,8 @@ print("hello world")
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
 
-        # It should have 1.0 format (executed fine) but exact correctness must be 0.0
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 0.0)
+        # Execution ran, but exact correctness must be 0.0
+        self.assertEqual(score.score, 0.0)
 
     def test_json_robustness(self):
         """Test JSON output with different formatting and key order. Under exact-match semantics, these should not be considered equal."""
@@ -97,7 +108,7 @@ print('{"a": 1, "b": 2}')
 </answer>"""
         expected_output1 = '{"b": 2, "a": 1}'
         score1 = self.reward_fn.compute_reward(model_output1, expected_output1)
-        self.assertEqual(score1.correctness_score, 0.0)
+        self.assertEqual(score1.score, 0.0)
 
         # Scenario 2: Whitespace independence (now treated as mismatch)
         model_output2 = """<answer>
@@ -107,7 +118,7 @@ print('{"result"  :   [1, 2, 3]}')
 </answer>"""
         expected_output2 = '{"result":[1,2,3]}'
         score2 = self.reward_fn.compute_reward(model_output2, expected_output2)
-        self.assertEqual(score2.correctness_score, 0.0)
+        self.assertEqual(score2.score, 0.0)
 
     def test_numeric_tolerance(self):
         """Test numeric output with floating point tolerance behavior removed (exact match required)."""
@@ -120,7 +131,7 @@ print(3.141592653589)
         expected_output1 = 3.141592653590
         score1 = self.reward_fn.compute_reward(model_output1, expected_output1)
         # Exact-match semantics: different numeric value -> 0.0
-        self.assertEqual(score1.correctness_score, 0.0)
+        self.assertEqual(score1.score, 0.0)
 
         # Scenario 2: Larger difference outside tolerance
         model_output2 = """<answer>
@@ -130,7 +141,7 @@ print(3.14)
 </answer>"""
         expected_output2 = 3.14159
         score2 = self.reward_fn.compute_reward(model_output2, expected_output2)
-        self.assertEqual(score2.correctness_score, 0.0)
+        self.assertEqual(score2.score, 0.0)
 
     def test_whitespace_normalization(self):
         """Test string matching with extreme whitespace differences. Exact-match semantics -> mismatch."""
@@ -141,7 +152,7 @@ print("  hello      world\n\n  ")
 </answer>"""
         expected_output = "hello world"
         score = self.reward_fn.compute_reward(model_output, expected_output)
-        self.assertEqual(score.correctness_score, 0.0)
+        self.assertEqual(score.score, 0.0)
 
     def test_multiple_code_blocks(self):
         """Test that the reward function correctly extracts code from multiple blocks."""
@@ -158,7 +169,7 @@ print("second")
 </answer>"""
         # The current implementation uses re.search, which finds the FIRST match.
         score = self.reward_fn.compute_reward(model_output, "first")
-        self.assertEqual(score.correctness_score, 1.0)
+        self.assertEqual(score.score, 1.0)
 
     def test_language_specific_extraction(self):
         """Test picking the correct language block when multiple languages are present (Python-specific reward)."""
@@ -172,7 +183,7 @@ print("py");
 </answer>"""
         # As a Python-specific reward function, it should prefer the python block
         score = self.reward_fn.compute_reward(model_output, "py")
-        self.assertEqual(score.correctness_score, 1.0)
+        self.assertEqual(score.score, 1.0)
 
     def test_empty_output_matching(self):
         """Test cases where the code produces empty output."""
@@ -183,11 +194,11 @@ pass
 </answer>"""
         # Scenario 1: Expected is also empty
         score1 = self.reward_fn.compute_reward(model_output, "")
-        self.assertEqual(score1.correctness_score, 1.0)
+        self.assertEqual(score1.score, 1.0)
 
         # Scenario 2: Expected is NOT empty
         score2 = self.reward_fn.compute_reward(model_output, "some output")
-        self.assertEqual(score2.correctness_score, 0.0)
+        self.assertEqual(score2.score, 0.0)
 
     def test_nested_json_robustness(self):
         """Test deeply nested JSON structure comparison. Exact-match semantics -> mismatch when ordering differs."""
@@ -200,4 +211,4 @@ print(json.dumps({nested_data}))
 </answer>"""
         expected_output = json.dumps({"c": {"e": "f", "d": [3, 4]}, "a": [1, {"b": 2}]})
         score = self.reward_fn.compute_reward(model_output, expected_output)
-        self.assertEqual(score.correctness_score, 0.0)
+        self.assertEqual(score.score, 0.0)

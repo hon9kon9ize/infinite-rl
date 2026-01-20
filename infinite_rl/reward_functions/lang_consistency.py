@@ -1,6 +1,6 @@
 from typing import Union
 from .reward_function import RewardFunction, RewardFunctionScore
-from ..parser import ExampleParser
+from ..utils.parser_utils import extract_answer_tags
 import pycld2 as cld2
 
 # cantonesedetect is an optional specialized detector included in requirements
@@ -18,8 +18,16 @@ class LangConsistencyRewardFunction(RewardFunction):
     from that text as a fallback.
     """
 
-    def __init__(self, task_name: str = "lang_consistency", timeout: int = 5):
-        super().__init__(task_name, timeout=timeout)
+    def __init__(
+        self,
+        task_name: str = "lang_consistency",
+        timeout: int = 5,
+        answer_tag: str = "answer",
+        think_tag: str = "think",
+    ):
+        super().__init__(
+            task_name, timeout=timeout, answer_tag=answer_tag, think_tag=think_tag
+        )
 
     def initialize(self):
         self.initialized = True
@@ -75,23 +83,18 @@ class LangConsistencyRewardFunction(RewardFunction):
         self,
         model_output: str,
         expected_output: Union[str, int, None],
-        answer_tag: str = "answer",
     ) -> RewardFunctionScore:
         # Ensure initialized
         if not self.initialized:
             self.initialize()
 
         # 1. Format: require <answer> tags
-        matches = ExampleParser.extract_answer_tags(model_output, tags=answer_tag)
+        matches = extract_answer_tags(model_output, tag=self.answer_tag)
         if not matches:
-            return RewardFunctionScore(
-                format_score=0.0,
-                correctness_score=0.0,
-                error_msg=f"Missing <{answer_tag}> tags in response.",
-                aux_score=0.0,
-            )
-
-        content = matches[0].strip()
+            content = model_output.strip()
+        else:
+            # remove answer tag content from content (single-string result)
+            content = model_output.replace(matches, "").strip()
 
         # Determine expected language code or dialect
         # expected_output is expected to be a short language target like 'en', 'zh', or 'yue'.
@@ -110,17 +113,13 @@ class LangConsistencyRewardFunction(RewardFunction):
             detected_from_answer = self._detect_lang(content)
             if detected_from_answer:
                 # We have something but without a stated expectation: treat as auxiliary signal
-                return RewardFunctionScore(
-                    format_score=0.0, correctness_score=0.0, aux_score=1.0
-                )
+                return RewardFunctionScore(score=1.0)
 
             return RewardFunctionScore(
-                format_score=0.0,
-                correctness_score=0.0,
+                score=0.0,
                 error_msg={
                     "lang_consistency": "Could not determine expected language from the Answer or example."
                 },
-                aux_score=0.0,
             )
 
         # Graded mapping to handle overlap between Chinese variants and Cantonese
@@ -162,8 +161,7 @@ class LangConsistencyRewardFunction(RewardFunction):
 
             final_score = max(y_ratio, weighted)
             return RewardFunctionScore(
-                format_score=0.0,
-                correctness_score=0.0,
+                score=float(final_score),
                 error_msg={
                     "lang_consistency": (
                         ("Response appears to be Cantonese.")
@@ -171,7 +169,6 @@ class LangConsistencyRewardFunction(RewardFunction):
                         else "Response does not appear to be Cantonese."
                     )
                 },
-                aux_score=float(final_score),
             )
 
         # For other expected languages, compute weighted score from CLD2 details
@@ -199,22 +196,16 @@ class LangConsistencyRewardFunction(RewardFunction):
                     weighted, mapping[norm_expected].get("yue", 0.0) * y_ratio
                 )
 
-            # Auxiliary signal: expose weighted mapping in aux_score; zero format/correctness
-            return RewardFunctionScore(
-                format_score=0.0,
-                correctness_score=0.0,
-                aux_score=float(weighted),
-            )
+            # Auxiliary signal: expose weighted mapping in score
+            return RewardFunctionScore(score=float(weighted))
 
         # Fallback: previous prefix matching logic (binary)
         if not norm_detected:
             return RewardFunctionScore(
-                format_score=0.0,
-                correctness_score=0.0,
+                score=0.0,
                 error_msg={
                     "lang_consistency": "Failed to detect language of the response."
                 },
-                aux_score=0.0,
             )
 
         if (
@@ -222,13 +213,9 @@ class LangConsistencyRewardFunction(RewardFunction):
             or norm_detected.startswith(norm_expected)
             or norm_expected.startswith(norm_detected)
         ):
-            return RewardFunctionScore(
-                format_score=0.0, correctness_score=0.0, aux_score=1.0
-            )
+            return RewardFunctionScore(score=1.0)
 
         return RewardFunctionScore(
-            format_score=0.0,
-            correctness_score=0.0,
+            score=0.0,
             error_msg=f"Detected language '{norm_detected}' does not match expected '{expected}'.",
-            aux_score=0.0,
         )

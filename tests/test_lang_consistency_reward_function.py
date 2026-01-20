@@ -20,18 +20,35 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
         example = self.examples.get("LANG_CONSISTENCY")
         self.assertIsNotNone(example)
 
+        # The reward function checks language outside of the <answer> tag.
+        # The example's surrounding text contains an explicit Cantonese hint ("Cantonese (Yue)")
+        # so we expect a strong aux signal.
         score = self.reward_fn.compute_reward(example["response"], example["answer"])
-        # Aux-only behavior: format and correctness are zero; signal in aux_score
-        self.assertEqual(score.format_score, 0.0)
-        self.assertEqual(score.correctness_score, 0.0)
-        self.assertAlmostEqual(score.aux_score, 1.0, places=5)
+        # Aux-only behaviour: signal now in unified `score` field
+        self.assertAlmostEqual(score.score, 1.0, places=5)
+
+    def test_language_example_external_text(self):
+        """If the text outside the <answer> tag is Cantonese, we should detect it."""
+        # Simulate an external Cantonese hint (outside of <answer>) and verify aux_score
+        response = "我哋今晚去食茶啦。\n\n<answer>內文可任意</answer>"
+        # Patch detectors to ensure a strong Cantonese signal
+        from unittest.mock import patch
+
+        with patch.object(
+            type(self.reward_fn), "_yue_ratio", return_value=1.0
+        ), patch.object(
+            type(self.reward_fn),
+            "_detect_lang_details",
+            return_value=[("Chinese", "zh", 100)],
+        ):
+            score = self.reward_fn.compute_reward(response, "yue")
+            self.assertAlmostEqual(score.score, 1.0, places=3)
 
     def test_language_mismatch(self):
-        # Expected Cantonese, but response is Mandarin/Chinese -> partial credit (mapping 0.25)
+        # Expected Cantonese, but response is Mandarin/Chinese inside <answer> ->
+        # since detection checks outside <answer>, we get no signal (aux_score 0.0)
         score = self.reward_fn.compute_reward("<answer>这是普通话。</answer>", "yue")
-        self.assertEqual(score.format_score, 0.0)
-        self.assertEqual(score.correctness_score, 0.0)
-        self.assertAlmostEqual(score.aux_score, 0.25, places=3)
+        self.assertAlmostEqual(score.score, 0.0, places=3)
 
     def test_mapping_detected_zh_hant_for_zh(self):
         # If CLD2 details indicate zh-Hant for the response but expected is zh, score should be 0.25
@@ -43,9 +60,7 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
             return_value=[("Chinese", "zh-Hant", 100)],
         ):
             score = self.reward_fn.compute_reward("<answer>示例文本</answer>", "zh")
-            self.assertEqual(score.format_score, 0.0)
-            self.assertEqual(score.correctness_score, 0.0)
-            self.assertAlmostEqual(score.aux_score, 0.25, places=3)
+            self.assertAlmostEqual(score.score, 0.25, places=3)
 
     def test_en_detection(self):
         from unittest.mock import patch
@@ -56,9 +71,7 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
             return_value=[("English", "en", 100)],
         ):
             score = self.reward_fn.compute_reward("<answer>Hello world</answer>", "en")
-            self.assertEqual(score.format_score, 0.0)
-            self.assertEqual(score.correctness_score, 0.0)
-            self.assertAlmostEqual(score.aux_score, 1.0, places=3)
+            self.assertAlmostEqual(score.score, 1.0, places=3)
 
     def test_mixed_proportional_score(self):
         # Mixed English + Chinese content should result in a weighted score for expected 'zh'
@@ -80,7 +93,6 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
                 expected_score += (b / total) * mapping["zh"].get(norm, 0.0)
 
         score = self.reward_fn.compute_reward(f"<answer>{text}</answer>", "zh")
-        # Aux-only behavior
-        self.assertEqual(score.format_score, 0.0)
-        self.assertEqual(score.correctness_score, 0.0)
-        self.assertAlmostEqual(score.aux_score, expected_score, places=3)
+        # Because detection checks outside the <answer> tags, there will be no
+        # detected bytes and thus score should be 0.0 for this input.
+        self.assertAlmostEqual(score.score, 0.0, places=3)

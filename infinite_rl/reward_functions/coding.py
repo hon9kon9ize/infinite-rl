@@ -3,6 +3,7 @@ import re
 from typing import Union, Callable
 from .reward_function import RewardFunction, RewardFunctionScore
 from ..executor import Executor
+from ..utils.parser_utils import extract_answer_tags
 
 
 class CodeRewardFunction(RewardFunction):
@@ -13,9 +14,16 @@ class CodeRewardFunction(RewardFunction):
     """
 
     def __init__(
-        self, task_name: str = "coding", language: str = "python", timeout: int = 5
+        self,
+        task_name: str = "coding",
+        language: str = "python",
+        timeout: int = 5,
+        answer_tag: str = "answer",
+        think_tag: str = "think",
     ):
-        super().__init__(task_name, timeout=timeout)
+        super().__init__(
+            task_name, timeout=timeout, answer_tag=answer_tag, think_tag=think_tag
+        )
         self.executor = None
         self.language = language.lower()  # e.g., 'python' or 'javascript'
 
@@ -28,12 +36,15 @@ class CodeRewardFunction(RewardFunction):
         self,
         model_output: str,
         expected_output: Union[str, int, Callable],
-        answer_tag: str = "answer",
+        answer_tag: str = None,
+        think_tag: str = None,
     ) -> RewardFunctionScore:
-        from ..parser import ExampleParser
-
         if not self.initialized:
             self.initialize()
+
+        # Resolve tags (instance-level defaults)
+        answer_tag = answer_tag or self.answer_tag
+        think_tag = think_tag or self.think_tag
 
         # Handle expected_output being a JSON string (unwrap if necessary)
         if isinstance(expected_output, str):
@@ -49,19 +60,18 @@ class CodeRewardFunction(RewardFunction):
                 except Exception:
                     pass
 
-        # 1. Format Objective: Check for tags (default: <answer>)
-        matches = ExampleParser.extract_answer_tags(model_output, tags=answer_tag)
+        # 1. Format Objective: Check for tags using configured answer tag
+        matches = extract_answer_tags(model_output, tag=self.answer_tag)
 
         if not matches:
             return RewardFunctionScore(
-                format_score=0.0,
-                correctness_score=0.0,
+                score=0.0,
                 error_msg={
                     "coding": "Missing <answer> tags in response. Ensure the code is wrapped in <answer> and </answer>."
                 },
             )
 
-        content_to_parse = matches[0] if matches else ""
+        content_to_parse = matches
         format_score = 0.5  # Tag found
 
         # 1. Format Objective: Extract code from markdown block inside <answer>
@@ -96,8 +106,7 @@ class CodeRewardFunction(RewardFunction):
                     format_score = 0.3  # Penalize for malformed blocks
                 else:
                     return RewardFunctionScore(
-                        format_score=0.2,
-                        correctness_score=0.0,
+                        score=0.0,
                         error_msg={
                             "coding": "Malformed markdown code block inside <answer> tags."
                         },
@@ -137,10 +146,8 @@ class CodeRewardFunction(RewardFunction):
             filtered_stderr = filter_noise(stderr)
             if filtered_stderr:
                 # Code extracted but failed during compilation or runtime
-                # We penalize format_score to 0.5 as per expected behavior in tests
                 return RewardFunctionScore(
-                    format_score=0.5,
-                    correctness_score=0.0,
+                    score=0.0,
                     error_msg={"coding": f"Execution failed:\n{stderr}"},
                 )
 
@@ -154,8 +161,7 @@ class CodeRewardFunction(RewardFunction):
             ]
             if any(re.search(p, stdout, re.IGNORECASE) for p in error_patterns):
                 return RewardFunctionScore(
-                    format_score=0.5,
-                    correctness_score=0.0,
+                    score=0.0,
                     error_msg={
                         "coding": f"Execution failed (reported in stdout):\n{stdout}"
                     },
@@ -183,8 +189,7 @@ class CodeRewardFunction(RewardFunction):
                 filtered_ref_stderr = filter_noise(ref_stderr)
                 if filtered_ref_stderr:
                     return RewardFunctionScore(
-                        format_score=format_score,
-                        correctness_score=0.0,
+                        score=0.0,
                         error_msg={
                             "coding": f"Reference (Answer) execution failed: {ref_stderr}"
                         },
@@ -200,10 +205,8 @@ class CodeRewardFunction(RewardFunction):
             ):
                 # Heuristic: looks like raw code (maybe from <answer> tags without backticks)
                 # First try to extract from <answer> if present
-                from ..parser import ExampleParser
-
-                ref_tags = ExampleParser.extract_answer_tags(str(expected_output))
-                ref_code = ref_tags[0] if ref_tags else str(expected_output)
+                ref_tags = extract_answer_tags(str(expected_output))
+                ref_code = ref_tags if ref_tags else str(expected_output)
 
                 # Cleanup potential trailing markdown artifacts
                 ref_code = re.sub(r"```\s*$", "", ref_code).strip()
@@ -218,8 +221,7 @@ class CodeRewardFunction(RewardFunction):
                     # We only return 0 if there's a clear error and it looks like it SHOULD have been code.
                     if any(kw in ref_code for kw in ["def ", "class ", "import "]):
                         return RewardFunctionScore(
-                            format_score=format_score,
-                            correctness_score=0.0,
+                            score=0.0,
                             error_msg={
                                 "coding": f"Reference (Answer) execution failed: {ref_stderr}"
                             },
@@ -241,13 +243,11 @@ class CodeRewardFunction(RewardFunction):
                         correctness_score = float(result)
                     else:
                         correctness_score = 0.0
-                    return RewardFunctionScore(
-                        format_score=format_score, correctness_score=correctness_score
-                    )
+                    return RewardFunctionScore(score=correctness_score)
+
                 except Exception as e:
                     return RewardFunctionScore(
-                        format_score=format_score,
-                        correctness_score=0.0,
+                        score=0.0,
                         error_msg={"coding": f"Callable validator failed: {e}"},
                     )
 
@@ -266,16 +266,14 @@ class CodeRewardFunction(RewardFunction):
                 }
 
             return RewardFunctionScore(
-                format_score=format_score,
-                correctness_score=correctness_score,
+                score=correctness_score,
                 error_msg=error_msg,
             )
 
         except Exception as e:
             # Catch-all for unexpected execution failures
             return RewardFunctionScore(
-                format_score=format_score,
-                correctness_score=0.0,
+                score=0.0,
                 error_msg={"coding": f"Unexpected error: {str(e)}"},
             )
 
@@ -283,12 +281,36 @@ class CodeRewardFunction(RewardFunction):
 class PythonRewardFunction(CodeRewardFunction):
     """Reward function for Python code tasks."""
 
-    def __init__(self, task_name: str = "python", timeout: int = 5):
-        super().__init__(task_name=task_name, language="python", timeout=timeout)
+    def __init__(
+        self,
+        task_name: str = "python",
+        timeout: int = 5,
+        answer_tag: str = "answer",
+        think_tag: str = "think",
+    ):
+        super().__init__(
+            task_name=task_name,
+            language="python",
+            timeout=timeout,
+            answer_tag=answer_tag,
+            think_tag=think_tag,
+        )
 
 
 class JavascriptRewardFunction(CodeRewardFunction):
     """Reward function for JavaScript code tasks."""
 
-    def __init__(self, task_name: str = "javascript", timeout: int = 5):
-        super().__init__(task_name=task_name, language="javascript", timeout=timeout)
+    def __init__(
+        self,
+        task_name: str = "javascript",
+        timeout: int = 5,
+        answer_tag: str = "answer",
+        think_tag: str = "think",
+    ):
+        super().__init__(
+            task_name=task_name,
+            language="javascript",
+            timeout=timeout,
+            answer_tag=answer_tag,
+            think_tag=think_tag,
+        )

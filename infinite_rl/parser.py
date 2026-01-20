@@ -7,42 +7,14 @@ class ExampleParser:
     """Parses markdown example files or Gemini-generated text with Prompt, Answer, and Response sections."""
 
     @staticmethod
-    def extract_answer_tags(text, tags=None):
-        """Robustly extract content from tags (default: <answer> or <summary>), handling common LLM malformations.
+    def extract_answer_tags(text, tag=None):
+        """Compatibility wrapper delegating to `infinite_rl.utils.parser_utils.extract_answer_tags`.
 
-        tags: str or list[str] - tag name(s) to search for (case-insensitive). If None, defaults to ['answer','summary'].
+        Note: new helper accepts a single `tag` and returns a single string.
         """
-        if not text:
-            return []
+        from .utils.parser_utils import extract_answer_tags as _extract
 
-        if tags is None:
-            tag_list = ["answer", "summary"]
-        elif isinstance(tags, str):
-            tag_list = [tags]
-        else:
-            tag_list = list(tags)
-
-        # Build alternation for regex
-        tag_alt = "|".join(re.escape(t) for t in tag_list)
-
-        # 1. Standard tags: <tag>...</tag>
-        matches = re.findall(
-            rf"<(?:{tag_alt})>(.*?)</(?:{tag_alt})>",
-            text,
-            re.DOTALL | re.IGNORECASE,
-        )
-        if matches:
-            return [m.strip() for m in matches]
-
-        # 2. Only opening tag? Take everything after it
-        opening_pattern = rf"(?:(?:```+|\[|<)\s*(?:{tag_alt})\s*(?:>|\]|```+)?)"
-        match = re.search(opening_pattern, text, re.IGNORECASE)
-        if match:
-            content = text[match.end() :].strip()
-            content = re.sub(r"```\s*$", "", content).strip()
-            return [content]
-
-        return []
+        return _extract(text, tag=tag)
 
     @staticmethod
     def parse_text(text):
@@ -118,9 +90,8 @@ class ExampleParser:
         answer_matches = ExampleParser.extract_answer_tags(answer_raw)
 
         if answer_matches:
-            # Join multiple matches with newlines instead of " | " to keep it natural
-            # Especially helpful when model wraps multiple parts of a multi-step answer in separate tags
-            answer = "\n".join(m.strip() for m in answer_matches)
+            # Helper now returns a single string (possibly containing newlines for multiple occurrences)
+            answer = answer_matches
         else:
             # 2. Try finding code blocks in the Answer section
             match = re.search(
@@ -143,7 +114,8 @@ class ExampleParser:
                             sections["Response"]
                         )
                         if response_matches:
-                            answer = " | ".join(m.strip() for m in response_matches)
+                            # The utility returns a single string (may include newlines)
+                            answer = response_matches
                         else:
                             answer = answer_raw.strip()
                     else:

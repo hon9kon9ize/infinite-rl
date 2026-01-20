@@ -29,8 +29,8 @@ Using the power rule:
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
 
-        self.assertEqual(score.format_score, 1.0)  # Answer tag found
-        self.assertEqual(score.correctness_score, 1.0)  # Mathematically correct
+        # Correctness is reported in the unified `score` field
+        self.assertEqual(score.score, 1.0)  # Mathematically correct
 
     def test_latex_answer_symbolic_match(self):
         """Latex formatted answer should match symbolic expected output."""
@@ -47,8 +47,7 @@ Using the power rule:
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
 
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 1.0)
+        self.assertEqual(score.score, 1.0)
 
     def test_missing_answer_tag(self):
         """Test when answer tag is missing."""
@@ -57,8 +56,7 @@ Using the power rule:
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
 
-        self.assertEqual(score.format_score, 0.0)
-        self.assertEqual(score.correctness_score, 0.0)
+        self.assertEqual(score.score, 0.0)
 
     def test_incorrect_mathematical_answer(self):
         """Test mathematically incorrect answer."""
@@ -67,8 +65,7 @@ Using the power rule:
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
 
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 0.0)
+        self.assertEqual(score.score, 0.0)
 
     def test_integer_expected_output(self):
         """Test with integer expected output."""
@@ -77,8 +74,7 @@ Using the power rule:
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
 
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 1.0)
+        self.assertEqual(score.score, 1.0)
 
     def test_numeric_only_comparison_from_string(self):
         """Ensure math reward compares numbers only when annotations are present."""
@@ -94,14 +90,12 @@ Using the power rule:
         ]
         for model_out, expected in cases:
             score = self.reward_fn.compute_reward(model_out, expected)
-            self.assertEqual(score.format_score, 1.0)
-            self.assertEqual(score.correctness_score, 1.0)
+            self.assertEqual(score.score, 1.0)
 
     def test_non_numeric_fails(self):
         """If the answer can't be parsed to a number, correctness is 0.0."""
         score = self.reward_fn.compute_reward("<answer>ten hours</answer>", 10)
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 0.0)
+        self.assertEqual(score.score, 0.0)
 
     def test_integer_with_wrong_value(self):
         """Test with integer but wrong value (now strict numeric equality)."""
@@ -110,8 +104,7 @@ Using the power rule:
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
 
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 0.0)
+        self.assertEqual(score.score, 0.0)
 
     def test_custom_tag_numeric_extraction(self):
         """Test numeric extraction when model uses a custom tag name."""
@@ -122,8 +115,14 @@ Using the power rule:
             model_output, expected_output, answer_tag="result"
         )
 
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 1.0)
+        self.assertEqual(score.score, 1.0)
+        from infinite_rl.reward_functions.format import FormatRewardFunction
+
+        fmt = FormatRewardFunction(task_name="math")
+        fmt.initialize()
+        self.assertEqual(
+            fmt.compute_reward(model_output, None, answer_tag="result").score, 1.0
+        )
 
 
 class TestLanguageRewardFunction(unittest.TestCase):
@@ -150,17 +149,14 @@ class TestLanguageRewardFunction(unittest.TestCase):
         self.assertIsNotNone(example)
 
         score = self.reward_fn.compute_reward(example["response"], example["answer"])
-        # Aux-only behavior: signal is in aux_score
-        self.assertEqual(score.format_score, 0.0)
-        self.assertEqual(score.correctness_score, 0.0)
-        self.assertAlmostEqual(score.aux_score, 1.0, places=5)
+        # Aux-only behavior: signal is now in the unified `score` field
+        self.assertAlmostEqual(score.score, 1.0, places=5)
 
     def test_language_mismatch(self):
-        # Expected Cantonese, but response is Mandarin/Chinese -> partial credit (mapping 0.25)
+        # Expected Cantonese, but response is Mandarin/Chinese. Since detection checks
+        # outside <answer> tags now, content entirely inside <answer> produces no signal.
         score = self.reward_fn.compute_reward("<answer>这是普通话。</answer>", "yue")
-        self.assertEqual(score.format_score, 0.0)
-        self.assertEqual(score.correctness_score, 0.0)
-        self.assertAlmostEqual(score.aux_score, 0.25, places=3)
+        self.assertAlmostEqual(score.score, 0.0, places=3)
 
     def test_mapping_detected_zh_hant_for_zh(self):
         # If CLD2 details indicate zh-Hant for the response but expected is zh, score should be 0.25
@@ -172,9 +168,7 @@ class TestLanguageRewardFunction(unittest.TestCase):
             return_value=[("Chinese", "zh-Hant", 100)],
         ):
             score = self.reward_fn.compute_reward("<answer>示例文本</answer>", "zh")
-            self.assertEqual(score.format_score, 0.0)
-            self.assertEqual(score.correctness_score, 0.0)
-            self.assertAlmostEqual(score.aux_score, 0.25, places=3)
+            self.assertAlmostEqual(score.score, 0.25, places=3)
 
     def test_en_detection(self):
         from unittest.mock import patch
@@ -185,9 +179,7 @@ class TestLanguageRewardFunction(unittest.TestCase):
             return_value=[("English", "en", 100)],
         ):
             score = self.reward_fn.compute_reward("<answer>Hello world</answer>", "en")
-            self.assertEqual(score.format_score, 0.0)
-            self.assertEqual(score.correctness_score, 0.0)
-            self.assertAlmostEqual(score.aux_score, 1.0, places=3)
+            self.assertAlmostEqual(score.score, 1.0, places=3)
 
     def test_mixed_proportional_score(self):
         # Mixed English + Chinese content should result in a weighted score for expected 'zh'
@@ -209,10 +201,9 @@ class TestLanguageRewardFunction(unittest.TestCase):
                 expected_score += (b / total) * mapping["zh"].get(norm, 0.0)
 
         score = self.reward_fn.compute_reward(f"<answer>{text}</answer>", "zh")
-        # Aux-only behavior
-        self.assertEqual(score.format_score, 0.0)
-        self.assertEqual(score.correctness_score, 0.0)
-        self.assertAlmostEqual(score.aux_score, expected_score, places=3)
+        # Because detection checks outside the <answer> tags, there will be no
+        # detected bytes and thus aux_score should be 0.0 for this input.
+        self.assertAlmostEqual(score.score, 0.0, places=3)
 
 
 if __name__ == "__main__":

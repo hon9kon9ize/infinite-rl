@@ -7,6 +7,7 @@ yue
 [RESPONSE]
 The following is a response in Cantonese (Yue).
 
-<answer>
 我哋今晚去食茶啦，你想幾點出發？
+<answer>
+some answer content
 </answer>

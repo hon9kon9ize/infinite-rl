@@ -1,6 +1,7 @@
 import re
 from typing import Union
 from .reward_function import RewardFunction, RewardFunctionScore
+from ..utils.parser_utils import extract_answer_tags
 
 
 class ReasoningStepsRewardFunction(RewardFunction):
@@ -13,8 +14,16 @@ class ReasoningStepsRewardFunction(RewardFunction):
     using format_score to indicate whether a <think> block was present.
     """
 
-    def __init__(self, task_name: str = "reasoning_steps", timeout: int = 5):
-        super().__init__(task_name, timeout=timeout)
+    def __init__(
+        self,
+        task_name: str = "reasoning_steps",
+        timeout: int = 5,
+        answer_tag: str = "answer",
+        think_tag: str = "think",
+    ):
+        super().__init__(
+            task_name, timeout=timeout, answer_tag=answer_tag, think_tag=think_tag
+        )
 
     def initialize(self):
         self.initialized = True
@@ -23,28 +32,32 @@ class ReasoningStepsRewardFunction(RewardFunction):
         self,
         model_output: str,
         expected_output: Union[str, int, None],
-        answer_tag: str = "answer",
     ) -> RewardFunctionScore:
         # Ensure initialized
         if not self.initialized:
             self.initialize()
 
         if not model_output:
-            return RewardFunctionScore(
-                format_score=0.0, correctness_score=0.0, aux_score=0.0
-            )
+            return RewardFunctionScore(score=0.0)
 
-        # Extract <think> block
-        m = re.search(r"<think>(.*?)</think>", model_output, re.DOTALL | re.IGNORECASE)
-        if not m:
-            return RewardFunctionScore(
-                format_score=0.0,
-                correctness_score=0.0,
-                error_msg={"reasoning_steps": "Missing <think> tags in response."},
-                aux_score=0.0,
+        # Prefer using the utility to get think content; fall back to regex if needed
+        think_content = extract_answer_tags(model_output, tag=self.think_tag)
+        if think_content:
+            thinking_content = think_content.lower()
+        else:
+            m = re.search(
+                rf"<{self.think_tag}>(.*?)</{self.think_tag}>",
+                model_output,
+                re.DOTALL | re.IGNORECASE,
             )
-
-        thinking_content = m.group(1).lower()
+            if not m:
+                return RewardFunctionScore(
+                    score=0.0,
+                    error_msg={
+                        "reasoning_steps": f"Missing <{self.think_tag}> tags in response."
+                    },
+                )
+            thinking_content = m.group(1).lower()
 
         indicators = [
             "step",
@@ -70,7 +83,5 @@ class ReasoningStepsRewardFunction(RewardFunction):
         else:
             bonus = 0.0
 
-        # Auxiliary reward: zero format/correctness, signal in aux_score
-        return RewardFunctionScore(
-            format_score=0.0, correctness_score=0.0, aux_score=float(bonus)
-        )
+        # Signal the bonus in the single score field
+        return RewardFunctionScore(score=float(bonus))

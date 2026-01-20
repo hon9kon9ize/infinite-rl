@@ -52,7 +52,7 @@ def compute_reward(
 ) -> RewardFunctionScore:
 ```
 
-Returns `RewardFunctionScore(format_score: float, correctness_score: float)`
+Returns `RewardFunctionScore(score: float)` — per-reward functions return a unified `score`. The orchestrator returns an `AggregatedReward` with `format_score`, `correctness_score`, and `aux_score`.
 
 ### 2. Expected Output Types
 Different reward functions support different input types:

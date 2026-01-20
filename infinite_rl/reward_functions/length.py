@@ -72,7 +72,7 @@ def cosine_length_reward(
 # New: LengthRewardFunction – wraps cosine_length_reward into a RewardFunction
 from typing import Union
 from .reward_function import RewardFunction, RewardFunctionScore
-from ..parser import ExampleParser
+from ..utils.parser_utils import extract_answer_tags
 
 
 class LengthRewardFunction(RewardFunction):
@@ -80,8 +80,7 @@ class LengthRewardFunction(RewardFunction):
 
     expected_output may be an integer indicating the target length (in tokens/words).
 
-    Returns an auxiliary signal in `aux_score` (0..1) and zeroes for `format_score`
-    and `correctness_score` (aux-only behavior).
+    Returns an auxiliary signal in `score` (0..1). This reward is aux-only (it does not check correctness).
     """
 
     def __init__(
@@ -91,8 +90,12 @@ class LengthRewardFunction(RewardFunction):
         min_len: int = 1,
         max_len: int = 1000,
         target_len: Optional[int] = None,
+        answer_tag: str = "answer",
+        think_tag: str = "think",
     ):
-        super().__init__(task_name, timeout=timeout)
+        super().__init__(
+            task_name, timeout=timeout, answer_tag=answer_tag, think_tag=think_tag
+        )
         self.min_len = min_len
         self.max_len = max_len
         self.target_len = target_len
@@ -100,9 +103,10 @@ class LengthRewardFunction(RewardFunction):
     def initialize(self):
         self.initialized = True
 
-    def _extract_length(self, model_output: str, answer_tag: str = "answer") -> int:
-        matches = ExampleParser.extract_answer_tags(model_output, tags=answer_tag)
-        text = matches[0] if matches else model_output
+    def _extract_length(self, model_output: str, answer_tag: str = None) -> int:
+        answer_tag = answer_tag or self.answer_tag
+        matches = extract_answer_tags(model_output, tag=answer_tag)
+        text = matches if matches else model_output
         tokens = text.strip().split()
         return max(0, len(tokens))
 
@@ -110,7 +114,6 @@ class LengthRewardFunction(RewardFunction):
         self,
         model_output: str,
         expected_output: Union[str, int, None],
-        answer_tag: str = "answer",
         is_correct: Optional[bool] = None,
     ) -> RewardFunctionScore:
         """Compute length reward.
@@ -124,8 +127,7 @@ class LengthRewardFunction(RewardFunction):
         if not self.initialized:
             self.initialize()
 
-        length = self._extract_length(model_output, answer_tag=answer_tag)
-
+        length = self._extract_length(model_output)
         # Determine target length: prefer explicit expected_output if numeric, else fallback to configured target
         target = None
         if expected_output is not None:
@@ -146,7 +148,5 @@ class LengthRewardFunction(RewardFunction):
             correct=correct_flag,
         )
 
-        # Aux-only behavior
-        return RewardFunctionScore(
-            format_score=0.0, correctness_score=0.0, aux_score=float(len_reward)
-        )
+        # Aux-only behavior: return the length reward in the single score field
+        return RewardFunctionScore(score=float(len_reward))

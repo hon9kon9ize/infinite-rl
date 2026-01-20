@@ -25,8 +25,8 @@ Using the power rule:
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
 
-        self.assertEqual(score.format_score, 1.0)  # Answer tag found
-        self.assertEqual(score.correctness_score, 1.0)  # Mathematically correct
+        # Correctness reflected in unified `score` field
+        self.assertEqual(score.score, 1.0)  # Mathematically correct
 
     def test_latex_answer_symbolic_match(self):
         """Latex formatted answer should match symbolic expected output."""
@@ -43,8 +43,12 @@ Using the power rule:
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
 
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 1.0)
+        self.assertEqual(score.score, 1.0)
+        from infinite_rl.reward_functions.format import FormatRewardFunction
+
+        fmt = FormatRewardFunction(task_name="math")
+        fmt.initialize()
+        self.assertEqual(fmt.compute_reward(model_output, None).score, 1.0)
 
     def test_missing_answer_tag(self):
         """Test when answer tag is missing."""
@@ -53,8 +57,12 @@ Using the power rule:
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
 
-        self.assertEqual(score.format_score, 0.0)
-        self.assertEqual(score.correctness_score, 0.0)
+        self.assertEqual(score.score, 0.0)
+        from infinite_rl.reward_functions.format import FormatRewardFunction
+
+        fmt = FormatRewardFunction(task_name="math")
+        fmt.initialize()
+        self.assertEqual(fmt.compute_reward(model_output, None).score, 0.0)
 
     def test_incorrect_mathematical_answer(self):
         """Test mathematically incorrect answer."""
@@ -63,8 +71,13 @@ Using the power rule:
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
 
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 0.0)
+        # Correctness now in unified `score` field; format checked separately
+        self.assertEqual(score.score, 0.0)
+        from infinite_rl.reward_functions.format import FormatRewardFunction
+
+        fmt = FormatRewardFunction(task_name="math")
+        fmt.initialize()
+        self.assertEqual(fmt.compute_reward(model_output, None).score, 1.0)
 
     def test_integer_expected_output(self):
         """Test with integer expected output."""
@@ -73,8 +86,14 @@ Using the power rule:
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
 
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 1.0)
+        self.assertEqual(score.score, 1.0)
+        from infinite_rl.reward_functions.format import FormatRewardFunction
+
+        fmt = FormatRewardFunction(task_name="math")
+        fmt.initialize()
+        self.assertEqual(
+            fmt.compute_reward(model_output, None, answer_tag="result").score, 1.0
+        )
 
     def test_numeric_only_comparison_from_string(self):
         """Ensure math reward compares numbers only when annotations are present."""
@@ -90,14 +109,24 @@ Using the power rule:
         ]
         for model_out, expected in cases:
             score = self.reward_fn.compute_reward(model_out, expected)
-            self.assertEqual(score.format_score, 1.0)
-            self.assertEqual(score.correctness_score, 1.0)
+            self.assertEqual(score.score, 1.0)
+            from infinite_rl.reward_functions.format import FormatRewardFunction
+
+            fmt = FormatRewardFunction(task_name="math")
+            fmt.initialize()
+            self.assertEqual(fmt.compute_reward(model_out, None).score, 1.0)
 
     def test_non_numeric_fails(self):
         """If the answer can't be parsed to a number, correctness is 0.0."""
         score = self.reward_fn.compute_reward("<answer>ten hours</answer>", 10)
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 0.0)
+        self.assertEqual(score.score, 0.0)
+        from infinite_rl.reward_functions.format import FormatRewardFunction
+
+        fmt = FormatRewardFunction(task_name="math")
+        fmt.initialize()
+        self.assertEqual(
+            fmt.compute_reward("<answer>ten hours</answer>", None).score, 1.0
+        )
 
     def test_integer_with_wrong_value(self):
         """Test with integer but wrong value (now strict numeric equality)."""
@@ -106,8 +135,12 @@ Using the power rule:
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
 
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 0.0)
+        self.assertEqual(score.score, 0.0)
+        from infinite_rl.reward_functions.format import FormatRewardFunction
+
+        fmt = FormatRewardFunction(task_name="math")
+        fmt.initialize()
+        self.assertEqual(fmt.compute_reward(model_output, None).score, 1.0)
 
     def test_custom_tag_numeric_extraction(self):
         """Test numeric extraction when model uses a custom tag name."""
@@ -118,5 +151,11 @@ Using the power rule:
             model_output, expected_output, answer_tag="result"
         )
 
-        self.assertEqual(score.format_score, 1.0)
-        self.assertEqual(score.correctness_score, 1.0)
+        self.assertEqual(score.score, 1.0)
+        from infinite_rl.reward_functions.format import FormatRewardFunction
+
+        fmt = FormatRewardFunction(task_name="math")
+        fmt.initialize()
+        self.assertEqual(
+            fmt.compute_reward(model_output, None, answer_tag="result").score, 1.0
+        )

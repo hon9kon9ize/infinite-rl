@@ -2,7 +2,7 @@ import os
 import wasmtime
 import tempfile
 from importlib import resources
-from typing import Union, List, Tuple
+from typing import Union, Tuple
 
 
 class Executor:

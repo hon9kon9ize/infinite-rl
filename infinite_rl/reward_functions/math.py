@@ -1,6 +1,5 @@
 import re
-import json
-from typing import Union, Callable
+from typing import Union
 from sympy import simplify, parse_expr
 from sympy.parsing.sympy_parser import (
     standard_transformations,
@@ -8,7 +7,123 @@ from sympy.parsing.sympy_parser import (
 )
 from sympy.parsing.latex import parse_latex
 from .reward_function import RewardFunction, RewardFunctionScore
-from ..utils.parser_utils import extract_answer_tags
+from ..utils.parser_utils import extract_tag
+
+
+def _last_boxed_only_string(string):
+    idx = string.rfind("\\boxed")
+    if idx < 0:
+        idx = string.rfind("\\fbox")
+        if idx < 0:
+            return None
+
+    i = idx
+    right_brace_idx = None
+    num_left_braces_open = 0
+    while i < len(string):
+        if string[i] == "{":
+            num_left_braces_open += 1
+        if string[i] == "}":
+            num_left_braces_open -= 1
+            if num_left_braces_open == 0:
+                right_brace_idx = i
+                break
+        i += 1
+
+    if right_brace_idx is None:
+        retval = None
+    else:
+        retval = string[idx : right_brace_idx + 1]
+
+    return retval
+
+
+def _remove_boxed(s):
+    left = "\\boxed{"
+    try:
+        assert s[: len(left)] == left
+        assert s[-1] == "}"
+        return s[len(left) : -1]
+    except AssertionError:
+        return None
+
+
+def _extract_boxed_answer(s: str):
+    """Extract the answer from inside a LaTeX \\boxed{} command"""
+    solution = _last_boxed_only_string(solution)
+    solution = _remove_boxed(solution)
+    return solution
+
+
+def _extract_number(s: str):
+    s_clean = s.replace("$", "").replace(",", "")
+    s_clean = re.sub(r"\\text\{([^}]*)\}", r"\1", s_clean)
+    s_clean = s_clean.replace("{", "").replace("}", "")
+
+    # Fraction like 1/2
+    m = re.search(r"([-+]?[0-9]*\.?[0-9]+)\s*/\s*([0-9]*\.?[0-9]+)", s_clean)
+    if m:
+        try:
+            num = float(m.group(1)) / float(m.group(2))
+            return num
+        except Exception:
+            pass
+
+    m2 = re.search(r"[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?", s_clean)
+    if not m2:
+        return None
+    try:
+        return float(m2.group(0))
+    except Exception:
+        return None
+
+
+def _to_sympy(text):
+    text = re.sub(r"\+?\s*[cC]$", "", text).strip()
+    if "\\" in text or "{" in text:
+        return parse_latex(text)
+    else:
+        text = text.replace("^", "**")
+        transformations = standard_transformations + (
+            implicit_multiplication_application,
+        )
+        return parse_expr(text, transformations=transformations)
+
+
+def _check_equality(predicted_str: str, expected_str: str) -> float:
+    """Simplified equality: extract first numeric value from strings and compare as floats.
+
+    Behavior:
+    - If both sides contain a parsable number, compare numerically (absolute tolerance 1e-9).
+    - If parsing fails on either side, return 0.0 (no credit).
+    - This intentionally ignores textual annotations/units: numbers only.
+    """
+    pred = predicted_str.strip()
+    exp = expected_str.strip()
+
+    # Try exact string match first (cheap)
+    if pred.lower() == exp.lower():
+        # If both strings are numeric-like, we'll check numerically below.
+        pass
+
+    # First: attempt symbolic equivalence using SymPy (handles expressions like (1/2)x^4 etc.)
+    try:
+        pred_expr = _to_sympy(pred)
+        ref_expr = _to_sympy(exp)
+        if simplify(pred_expr - ref_expr) == 0:
+            return True
+    except Exception:
+        # If symbolic parsing fails, fall back to numeric-only comparison
+        pass
+
+    # Fallback: numeric-only comparison (extract numbers including fractions)
+    p_num = _extract_number(pred)
+    e_num = _extract_number(exp)
+
+    if p_num is None or e_num is None:
+        return False
+
+    return True if abs(p_num - e_num) <= 1e-9 else False
 
 
 class MathRewardFunction(RewardFunction):
@@ -26,196 +141,39 @@ class MathRewardFunction(RewardFunction):
     def initialize(self):
         self.initialized = True
 
-    def _check_equality(self, predicted_str: str, expected_str: str) -> float:
-        """Simplified equality: extract first numeric value from strings and compare as floats.
-
-        Behavior:
-        - If both sides contain a parsable number, compare numerically (absolute tolerance 1e-9).
-        - If parsing fails on either side, return 0.0 (no credit).
-        - This intentionally ignores textual annotations/units: numbers only.
-        """
-        pred = predicted_str.strip()
-        exp = expected_str.strip()
-
-        # Try exact string match first (cheap)
-        if pred.lower() == exp.lower():
-            # If both strings are numeric-like, we'll check numerically below.
-            pass
-
-        # First: attempt symbolic equivalence using SymPy (handles expressions like (1/2)x^4 etc.)
-        try:
-
-            def to_sympy(text):
-                text = re.sub(r"\+?\s*[cC]$", "", text).strip()
-                if "\\" in text or "{" in text:
-                    return parse_latex(text)
-                else:
-                    text = text.replace("^", "**")
-                    transformations = standard_transformations + (
-                        implicit_multiplication_application,
-                    )
-                    return parse_expr(text, transformations=transformations)
-
-            pred_expr = to_sympy(pred)
-            ref_expr = to_sympy(exp)
-            if simplify(pred_expr - ref_expr) == 0:
-                return 1.0
-        except Exception:
-            # If symbolic parsing fails, fall back to numeric-only comparison
-            pass
-
-        # Fallback: numeric-only comparison (extract numbers including fractions)
-        def _extract_number(s: str):
-            s_clean = s.replace("$", "").replace(",", "")
-            s_clean = re.sub(r"\\text\{([^}]*)\}", r"\1", s_clean)
-            s_clean = s_clean.replace("{", "").replace("}", "")
-
-            # Fraction like 1/2
-            m = re.search(r"([-+]?[0-9]*\.?[0-9]+)\s*/\s*([0-9]*\.?[0-9]+)", s_clean)
-            if m:
-                try:
-                    num = float(m.group(1)) / float(m.group(2))
-                    return num
-                except Exception:
-                    pass
-
-            m2 = re.search(r"[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?", s_clean)
-            if not m2:
-                return None
-            try:
-                return float(m2.group(0))
-            except Exception:
-                return None
-
-        p_num = _extract_number(pred)
-        e_num = _extract_number(exp)
-
-        if p_num is None or e_num is None:
-            return 0.0
-
-        return 1.0 if abs(p_num - e_num) <= 1e-9 else 0.0
-
     def compute_reward(
         self,
         model_output: str,
-        expected_output: Union[str, int, Callable],
+        expected_output: Union[str, int],
     ) -> RewardFunctionScore:
         if not self.initialized:
             self.initialize()
 
-        # Handle expected_output being a JSON string (unwrap if necessary)
-        if isinstance(expected_output, str):
-            # Check for <answer> tags in expected output as well
-            exp_matches = extract_answer_tags(expected_output)
-            if exp_matches:
-                expected_output = exp_matches
+        predicted_str = extract_tag(model_output, tag=self.answer_tag)
 
-            trimmed = expected_output.strip()
-            if trimmed.startswith("{") and trimmed.endswith("}"):
-                try:
-                    data = json.loads(trimmed)
-                    for key in ["answer", "result", "solution", "value"]:
-                        if key in data:
-                            expected_output = data[key]
-                            break
-                except Exception:
-                    pass
+        if "\\boxed" in predicted_str:
+            predicted_str = _extract_boxed_answer(predicted_str)
 
-        matches = extract_answer_tags(model_output, tag=self.answer_tag)
-        if not matches:
+        if not predicted_str:
             return RewardFunctionScore(
                 score=0.0,
                 error_msg={"math": "Missing <answer> tags in response."},
             )
 
-        # Handle multiple occurrences: look for explicit tag pairs and extract them
-        tag_pattern = re.compile(
-            rf"<\s*{re.escape(self.answer_tag)}\s*>(.*?)</\s*{re.escape(self.answer_tag)}\s*>",
-            re.DOTALL | re.IGNORECASE,
-        )
-        multi_matches = tag_pattern.findall(model_output)
-        if len(multi_matches) > 1:
-            # Check if any of the tags match the expected answer
-            correctness = 0.0
-            expected_str = str(expected_output).strip()
-            for m in multi_matches:
-                if self._check_equality(m.strip(), expected_str) == 1.0:
-                    correctness = 1.0
-                    break
-
-            return RewardFunctionScore(
-                score=correctness,
-                error_msg={
-                    "math": "Multiple <answer> tags found. Math problems must have exactly one final answer tag."
-                },
-            )
-
-        # Prepare expected list
-        if isinstance(expected_output, (int, float)):
-            expected_list = [str(expected_output)]
-        elif callable(expected_output):
-            # Special case: callable handles its own thing
-            predicted_str = matches[0]
-            try:
-                result = expected_output(predicted_str)
-                score = (
-                    1.0
-                    if (result is True)
-                    else (result if isinstance(result, float) else 0.0)
-                )
-                return RewardFunctionScore(score=score)
-            except Exception as e:
-                return RewardFunctionScore(
-                    score=0.0, error_msg={"math": f"Validator error: {e}"}
-                )
-        else:
-            # String or other
-            expected_str = str(expected_output).strip()
-            # Handle joined answers from parser (now joined by newlines)
-            if "\n" in expected_str:
-                expected_list = [
-                    p.strip() for p in expected_str.split("\n") if p.strip()
-                ]
-            elif " | " in expected_str:  # Backwards compatibility for older CSVs
-                expected_list = [
-                    p.strip() for p in expected_str.split("|") if p.strip()
-                ]
-            else:
-                expected_list = [expected_str]
-
-        # Validation logic
-        # We now strictly enforce ONE <answer> tag containing a simple value.
-        if len(matches) > 1:
-            # Check if any of the tags match the expected answer
-            # We still want to give some credit if the answer is there, but penalize format
-            correctness = 0.0
-            expected_str = str(expected_output).strip()
-            for m in matches:
-                if self._check_equality(m, expected_str) == 1.0:
-                    correctness = 1.0
-                    break
-
-            return RewardFunctionScore(
-                score=correctness,
-                error_msg={
-                    "math": "Multiple <answer> tags found. Math problems must have exactly one final answer tag."
-                },
-            )
-
-        # Single match case
-        predicted_str = matches[0]
         expected_str = str(expected_output).strip()
-        allow_partial = isinstance(expected_output, (int, float))
 
-        correctness = self._check_equality(
-            predicted_str, expected_str, allow_partial=allow_partial
-        )
+        if "\\boxed" in expected_str:
+            expected_str = _extract_boxed_answer(expected_str)
+
+        correctness = _check_equality(predicted_str, expected_str)
 
         return RewardFunctionScore(
-            score=correctness,
+            score=1.0 if correctness else 0.0,
             error_msg=(
-                {}
-                if correctness == 1.0
-                else {"math": f"Mathematical mismatch. Expected {expected_str}"}
+                (
+                    {}
+                    if correctness == 1.0
+                    else {"math": f"Mathematical mismatch. Expected {expected_str}"}
+                ),
             ),
         )

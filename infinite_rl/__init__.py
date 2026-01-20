@@ -2,7 +2,6 @@
 
 from .executor import Executor
 from .reward_functions import get_reward_functions
-from .run_examples import run_examples
 
 # Expose package version from VERSION.txt included in the package
 try:
@@ -26,4 +25,4 @@ try:
 except Exception:
     __version__ = "0.0.0"
 
-__all__ = ["Executor", "get_reward_functions", "run_examples"]
+__all__ = ["Executor", "get_reward_functions"]

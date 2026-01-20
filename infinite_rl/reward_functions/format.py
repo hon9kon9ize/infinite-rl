@@ -1,7 +1,7 @@
 import re
 from typing import Union
 from .reward_function import RewardFunction, RewardFunctionScore
-from ..utils.parser_utils import extract_answer_tags
+from ..utils.parser_utils import extract_tag
 
 
 class FormatRewardFunction(RewardFunction):
@@ -38,13 +38,24 @@ class FormatRewardFunction(RewardFunction):
         if not self.initialized:
             self.initialize()
 
-        matches = extract_answer_tags(model_output, tag=self.answer_tag)
+        matches = extract_tag(model_output, tag=self.answer_tag)
         if not matches:
             return RewardFunctionScore(
                 score=0.0, error_msg={"format": "Missing <answer> tags"}
             )
 
         content = matches.strip()
+
+        # For tasks that encourage explicit reasoning, ensure a <think> block exists
+        if self.task_name == "reasoning_steps":
+            think_content = extract_tag(model_output, tag=self.think_tag)
+            if not think_content:
+                return RewardFunctionScore(
+                    score=0.0,
+                    error_msg={
+                        "format": f"Missing <{self.think_tag}> tags in response for reasoning task."
+                    },
+                )
 
         # Code-like tasks
         if self.task_name in ("python", "javascript", "coding"):

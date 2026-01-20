@@ -8,12 +8,12 @@ class TestRepetitionRewardFunction(unittest.TestCase):
         self.fn.initialize()
 
     def test_no_repetition_full_score(self):
-        s = self.fn.compute_reward("<answer>hello world</answer>", None)
+        s = self.fn.compute_reward("<answer>hello world</answer>")
         # Aux-only reward: returned in unified `score` field
         self.assertAlmostEqual(s.score, 1.0, places=5)
 
     def test_repetition_penalized(self):
-        s = self.fn.compute_reward("<answer>hello hello hello hello</answer>", None)
+        s = self.fn.compute_reward("<answer>hello hello hello hello</answer>")
         # High repetition -> lower score than 1.0
         self.assertLess(s.score, 1.0)
         self.assertGreaterEqual(s.score, 0.0)

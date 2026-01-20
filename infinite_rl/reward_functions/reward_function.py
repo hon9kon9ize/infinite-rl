@@ -29,7 +29,7 @@ class RewardFunction:
     def compute_reward(
         self,
         model_output: str,
-        expected_output: Union[str, int, float, Callable, None] = None,
+        expected_output: Union[str, int, float, None] = None,
     ) -> RewardFunctionScore:
         """Compute reward for given model output vs expected output.
 

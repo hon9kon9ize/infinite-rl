@@ -1,7 +1,7 @@
 import re
 from typing import Union
 from .reward_function import RewardFunction, RewardFunctionScore
-from ..utils.parser_utils import extract_answer_tags
+from ..utils.parser_utils import extract_tag
 
 
 class ReasoningStepsRewardFunction(RewardFunction):
@@ -31,7 +31,6 @@ class ReasoningStepsRewardFunction(RewardFunction):
     def compute_reward(
         self,
         model_output: str,
-        expected_output: Union[str, int, None],
     ) -> RewardFunctionScore:
         # Ensure initialized
         if not self.initialized:
@@ -41,23 +40,16 @@ class ReasoningStepsRewardFunction(RewardFunction):
             return RewardFunctionScore(score=0.0)
 
         # Prefer using the utility to get think content; fall back to regex if needed
-        think_content = extract_answer_tags(model_output, tag=self.think_tag)
+        think_content = extract_tag(model_output, tag=self.think_tag)
         if think_content:
             thinking_content = think_content.lower()
         else:
-            m = re.search(
-                rf"<{self.think_tag}>(.*?)</{self.think_tag}>",
-                model_output,
-                re.DOTALL | re.IGNORECASE,
+            return RewardFunctionScore(
+                score=0.0,
+                error_msg={
+                    "reasoning_steps": f"Missing <{self.think_tag}> tags in response."
+                },
             )
-            if not m:
-                return RewardFunctionScore(
-                    score=0.0,
-                    error_msg={
-                        "reasoning_steps": f"Missing <{self.think_tag}> tags in response."
-                    },
-                )
-            thinking_content = m.group(1).lower()
 
         indicators = [
             "step",

@@ -5,7 +5,6 @@ Detects n-gram repetitions and returns a penalty (negative float).
 
 from collections import Counter
 import re
-from typing import Optional
 
 
 def _tokenize(text: str) -> list:
@@ -70,16 +69,14 @@ def ngram_repetition_reward(text: str, n: int = 3, weight: float = -0.1) -> floa
 
 
 # New: RepetitionRewardFunction – a lightweight RewardFunction wrapper
-from typing import Union
 from .reward_function import RewardFunction, RewardFunctionScore
-from ..utils.parser_utils import extract_answer_tags
+from ..utils.parser_utils import extract_tag
 
 
 class RepetitionRewardFunction(RewardFunction):
     """Reward function that applies an n-gram repetition penalty as a lightweight reward.
 
     The correctness_score is computed as max(0.0, 1.0 + penalty) where penalty <= 0.
-    format_score is 1.0 if an <answer> tag was present, else 0.5 to indicate weaker formatting.
     """
 
     def __init__(
@@ -103,7 +100,6 @@ class RepetitionRewardFunction(RewardFunction):
     def compute_reward(
         self,
         model_output: str,
-        expected_output: Union[str, int, None],
     ) -> RewardFunctionScore:
         if not self.initialized:
             self.initialize()
@@ -111,10 +107,9 @@ class RepetitionRewardFunction(RewardFunction):
         if not model_output:
             return RewardFunctionScore(score=0.0)
 
-        matches = extract_answer_tags(model_output, tag=self.answer_tag)
+        matches = extract_tag(model_output, tag=self.answer_tag)
         text = matches if matches else model_output
         penalty = ngram_repetition_reward(text, n=self.n, weight=self.weight)
         correctness = max(0.0, 1.0 + float(penalty))
 
-        # Auxiliary reward: zero format and correctness; expose signal in aux_score
         return RewardFunctionScore(score=float(correctness))

@@ -6,6 +6,7 @@ whether the model was correct.
 
 import math
 from typing import Optional
+from ..utils.parser_utils import extract_tag
 
 
 def cosine_length_reward(
@@ -72,7 +73,7 @@ def cosine_length_reward(
 # New: LengthRewardFunction – wraps cosine_length_reward into a RewardFunction
 from typing import Union
 from .reward_function import RewardFunction, RewardFunctionScore
-from ..utils.parser_utils import extract_answer_tags
+from ..utils.parser_utils import extract_tag
 
 
 class LengthRewardFunction(RewardFunction):
@@ -103,18 +104,10 @@ class LengthRewardFunction(RewardFunction):
     def initialize(self):
         self.initialized = True
 
-    def _extract_length(self, model_output: str, answer_tag: str = None) -> int:
-        answer_tag = answer_tag or self.answer_tag
-        matches = extract_answer_tags(model_output, tag=answer_tag)
-        text = matches if matches else model_output
-        tokens = text.strip().split()
-        return max(0, len(tokens))
-
     def compute_reward(
         self,
         model_output: str,
-        expected_output: Union[str, int, None],
-        is_correct: Optional[bool] = None,
+        is_correct: bool = False,
     ) -> RewardFunctionScore:
         """Compute length reward.
 
@@ -127,26 +120,21 @@ class LengthRewardFunction(RewardFunction):
         if not self.initialized:
             self.initialize()
 
-        length = self._extract_length(model_output)
-        # Determine target length: prefer explicit expected_output if numeric, else fallback to configured target
-        target = None
-        if expected_output is not None:
-            try:
-                target = int(expected_output)
-            except Exception:
-                target = None
-        if target is None:
-            target = self.target_len
+        thought_content = extract_tag(model_output, tag=self.think_tag)
 
-        correct_flag = True if is_correct is None else bool(is_correct)
+        if not thought_content:
+            return RewardFunctionScore(
+                score=0.0,
+                error_msg={"length": f"Missing <{self.think_tag}> tags in response."},
+            )
 
+        length = len(thought_content.strip())
+        print(length)
         len_reward = cosine_length_reward(
             length,
             min_len=self.min_len,
             max_len=self.max_len,
-            target_len=target,
-            correct=correct_flag,
+            correct=is_correct,
         )
 
-        # Aux-only behavior: return the length reward in the single score field
         return RewardFunctionScore(score=float(len_reward))

@@ -79,27 +79,9 @@ python -m pytest tests -v
 python -m pytest tests/test_reward_functions.py -v
 ```
 
-### Run Example Suite
-You can also run the built-in examples to verify that all task types are correctly parsed and evaluated:
-
-```bash
-python -m infinite_rl.run_examples
-```
 
 ## Reward Orchestrator 🔧
 A convenience utility that loads available reward functions and (optionally) registers auxiliary rewards such as `repetition` and `length`. The orchestrator can compute a main task reward and aggregate auxiliary signals into an `AggregatedReward`.
-
-- Initialization examples:
-
-```python
-from infinite_rl import RewardOrchestrator
-
-# Register repetition and length auxiliary rewards
-orch = RewardOrchestrator(timeout=10, include_repetition=True, include_length=True)
-
-# See which reward functions are available
-print(orch.available())  # e.g. ['math', 'coding', 'lang_consistency', 'reasoning_steps', 'repetition', 'length']
-```
 
 - Compute usage:
 
@@ -291,9 +273,6 @@ All task types are designed for RLHF (Reinforcement Learning from Human Feedback
 1.  **Prompt**: The instruction.
 2.  **Answer**: The ground-truth reference.
 3.  **Response**: A detailed step-by-step reasoning (Chain-of-Thought) where the final solution is **always** wrapped in `<answer>` tags.
-
-### Robust Extraction & Validation
-We use a specialized `ExampleParser` with fuzzy logic to extract answers even when the LLM slightly deviates from markdown standards (e.g., malformed tags or missing headers).
 
 ### RewardExecutor
 Handles execution of code in multiple languages with timeout protection and error handling. Located in [infinite_rl/executor.py](infinite_rl/executor.py).

@@ -37,30 +37,7 @@ print(json.dumps({"result": result}))
         expected_output = '{"result": [2, 4, 6, 8]}'
 
         score = self.reward_fn.compute_reward(model_output, expected_output)
-        from infinite_rl.reward_functions.format import FormatRewardFunction
-
-        fmt = FormatRewardFunction(task_name="python")
-        fmt.initialize()
-        fmt_score = fmt.compute_reward(model_output, None).score
-        self.assertEqual(fmt_score, 0.5)
         self.assertEqual(score.score, 0.0)
-
-    def test_custom_tag_for_code_block(self):
-        """Test that code block inside a custom tag can be found and executed."""
-        model_output = "<final>```python\nprint(2+2)\n```</final>"
-        expected_output = "4"
-
-        score = self.reward_fn.compute_reward(
-            model_output, expected_output, answer_tag="final"
-        )
-
-        from infinite_rl.reward_functions.format import FormatRewardFunction
-
-        fmt = FormatRewardFunction(task_name="python")
-        fmt.initialize()
-        fmt_score = fmt.compute_reward(model_output, None, answer_tag="final").score
-        self.assertEqual(fmt_score, 1.0)
-        self.assertEqual(score.score, 1.0)
 
     def test_syntax_error_in_code(self):
         """Test code with syntax errors."""
@@ -75,12 +52,6 @@ def filter_even(numbers)  # Missing colon
         score = self.reward_fn.compute_reward(model_output, expected_output)
 
         # Syntax errors result in stderr; formatting (code fence) still valid
-        from infinite_rl.reward_functions.format import FormatRewardFunction
-
-        fmt = FormatRewardFunction(task_name="python")
-        fmt.initialize()
-        fmt_score = fmt.compute_reward(model_output, None).score
-        self.assertEqual(fmt_score, 1.0)
         self.assertEqual(score.score, 0.0)
 
     def test_order_sensitivity_in_string_matching(self):

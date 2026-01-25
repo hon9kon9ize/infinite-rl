@@ -76,25 +76,6 @@ jobs:
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         uses: actions/checkout@v4
 
-      - name: Purge repository files to test fresh installation
-        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
-        run: |
-          echo "Uninstalling any preinstalled infinite_rl package from environment"
-          pip uninstall -y infinite_rl || true
-
-          echo "Listing repo contents BEFORE purge:"
-          ls -la || true
-
-          # Purge everything in the workspace including tracked files so we can
-          # test installing the wheel from git into a clean environment.
-          # Note: We intentionally delete hidden files too (.*) but skip '.' and '..'.
-          echo "Purging repository files..."
-          rm -rf ./* ./.??* || true
-
-          echo "Listing repo contents AFTER purge (should be minimal):"
-          ls -la || true
-
-          echo "Purge complete"
       - name: Set up Python
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         uses: actions/setup-python@v5

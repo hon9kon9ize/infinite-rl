@@ -31,6 +31,8 @@ class ReasoningStepsRewardFunction(RewardFunction):
     def compute_reward(
         self,
         model_output: str,
+        expected_output: Union[str, int, None] = None,
+        target_tag: str = None,
     ) -> RewardFunctionScore:
         # Ensure initialized
         if not self.initialized:
@@ -39,15 +41,17 @@ class ReasoningStepsRewardFunction(RewardFunction):
         if not model_output:
             return RewardFunctionScore(score=0.0)
 
+        target_tag = target_tag if target_tag is not None else self.think_tag
+
         # Prefer using the utility to get think content; fall back to regex if needed
-        think_content = extract_tag(model_output, tag=self.think_tag)
+        think_content = extract_tag(model_output, tag=target_tag)
         if think_content:
             thinking_content = think_content.lower()
         else:
             return RewardFunctionScore(
                 score=0.0,
                 error_msg={
-                    "reasoning_steps": f"Missing <{self.think_tag}> tags in response."
+                    "reasoning_steps": f"Missing <{target_tag}> tags in response."
                 },
             )
 

@@ -30,6 +30,7 @@ class RewardFunction:
         self,
         model_output: str,
         expected_output: Union[str, int, float, None] = None,
+        target_tag: str = None,
     ) -> RewardFunctionScore:
         """Compute reward for given model output vs expected output.
 
@@ -39,6 +40,8 @@ class RewardFunction:
             Raw model response string.
         expected_output:
             Task-specific expected value (string, numeric, or validator). May be None.
+        target_tag:
+            Optional tag to extract from model output for evaluation.
 
         Notes
         -----

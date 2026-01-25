@@ -12,3 +12,4 @@ third_party
 .pytest_cache
 .venv
 *.gguf
+*.log

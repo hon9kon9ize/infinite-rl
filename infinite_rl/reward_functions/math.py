@@ -145,11 +145,13 @@ class MathRewardFunction(RewardFunction):
         self,
         model_output: str,
         expected_output: Union[str, int],
+        target_tag: str = None,
     ) -> RewardFunctionScore:
         if not self.initialized:
             self.initialize()
 
-        predicted_str = extract_tag(model_output, tag=self.answer_tag)
+        target_tag = target_tag if target_tag is not None else self.answer_tag
+        predicted_str = extract_tag(model_output, tag=target_tag)
 
         if "\\boxed" in predicted_str:
             predicted_str = _extract_boxed_answer(predicted_str)
@@ -157,7 +159,7 @@ class MathRewardFunction(RewardFunction):
         if not predicted_str:
             return RewardFunctionScore(
                 score=0.0,
-                error_msg={"math": "Missing <answer> tags in response."},
+                error_msg={"math": f"Missing <{target_tag}> tags in response."},
             )
 
         expected_str = str(expected_output).strip()
@@ -171,9 +173,11 @@ class MathRewardFunction(RewardFunction):
             score=1.0 if correctness else 0.0,
             error_msg=(
                 (
-                    {}
-                    if correctness == 1.0
-                    else {"math": f"Mathematical mismatch. Expected {expected_str}"}
+                    (
+                        {}
+                        if correctness == 1.0
+                        else {"math": f"Mathematical mismatch. Expected {expected_str}"}
+                    ),
                 ),
             ),
         )

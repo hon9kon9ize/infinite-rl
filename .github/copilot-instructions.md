@@ -7,15 +7,15 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 - Key runtime flow:
   1. `scripts/generate.py` -> calls `generate_dataset()` in `infinite_rl/generator.py` to orchestrate sampling.
   2. `generator.py` calls system prompts in `infinite_rl/prompts.py` and parses model outputs with `infinite_rl/parser.py`.
-  3. Generated samples are evaluated by reward functions in `infinite_rl/reward_functions/` (currently `coding` and `math`).
-  4. Code execution for evaluation uses WASM runtimes via `infinite_rl/executor.py` (uses `wasmtime` and packaged runtimes in `infinite_rl/runtimes`; currently supports only the `javascript` and `python` runtimes).
+  3. Generated samples are evaluated by reward functions in `infinite_rl/reward_functions/` (currently `puzzle`, `math`, and others).
+  4. Puzzle evaluation uses WASM runtimes for JavaScript via `infinite_rl/executor.py` (uses `wasmtime` and `puzzle_js.wasm`) and local Python execution via `infinite_rl/runner.py`.
 
 ## What to know before changing code
 - Samples must follow the strict 3-head format: `[PROMPT]`, `[ANSWER]`, `[RESPONSE]` and the final content must be wrapped in `<answer>` tags (see `prompts.py`).
-- `PythonRewardFunction` / `JavascriptRewardFunction` expect the answer to contain a code block (triple-backtick) inside `<answer>`; they execute code with `Executor.run_single`.
+- `PuzzleRewardFunction` expects the answer to contain a code block (triple-backtick) inside `<answer>`; it executes JavaScript puzzles via WASM and Python puzzles via local subprocess.
 - Reward functions return a `RewardFunctionScore(format_score, correctness_score, error_msg, aux_score)`—the `aux_score` is used for auxiliary metrics like repetition, length, or language-consistency signals.
 - `generate_dataset()` is idempotent and resumable: it reads/writes `dataset.csv` and appends failures to `failed_dataset.csv` immediately.
-- `--task_dist` format is a comma-separated list of floats; current parsing expects 2 values: `[coding,math]` (see `generator.py`).
+- `--task_dist` format is a comma-separated list of floats; current parsing expects values for available task types (see `generator.py`).
 - Generator has a rectification loop: low-quality outputs are retried and passed through a `RECTIFY_PROMPT` before being retried; be careful modifying retry logic or thresholds.
 - Concurrency uses `ThreadPoolExecutor` with explicit locks (`dataset_lock`, `failed_dataset_lock`, `save_lock`)—be precise when adding shared state.
 
@@ -73,7 +73,7 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 
 ## Integration points & dependencies
 - LLM: `google.genai` (Gemini). `GEMINI_API_KEY` must be set for generation to work.
-- Code execution: `wasmtime` + packaged WASM runtimes (`universal_js.wasm`, `micropython.wasm`) in `infinite_rl/runtimes`. The `Executor` exposes only `javascript` and `python` by default; other runtimes (for example, separate embedding runtimes) were removed and must be provided explicitly if you need them.
+- Code execution: `wasmtime` + packaged WASM runtimes (`puzzle_js.wasm`) in `infinite_rl/runtimes`. The `Executor` exposes `javascript` for puzzles; Python puzzles use local subprocess execution via `infinite_rl/runner.py`.
   - Runtimes are built by the `build_src/build_wasm.sh` script and an automated GitHub Actions workflow (`.github/workflows/build_and_release_runtimes.yml`) uploads them to GitHub Releases.
   - Installation & CI notes:
     - `setup.py` will try to discover the latest release whose tag starts with `runtimes-` and download runtime assets into the package at build time. A `build_py` hook was added so installing from a git URL (e.g. `pip install git+https://github.com/owner/repo@runtimes-vX.Y.Z`) will include WASM files in the built wheel.
@@ -103,6 +103,7 @@ RUNTIME_RELEASE_TAG=v1.2.3 RUNTIME_GITHUB_REPO=owner/repo python -m pip install 
 - `infinite_rl/parser.py` — tag and markdown parsing logic
 - `infinite_rl/reward_functions/*.py` — reward function implementations and interfaces
 - `infinite_rl/executor.py` — how code is run securely (WASM path)
+- `infinite_rl/runner.py` — Python puzzle evaluation via local subprocess
 
 ---
 If something here is unclear or you'd like a different focus (e.g., more examples, a checklist for adding a new task type), tell me what to add and I'll iterate. 👍

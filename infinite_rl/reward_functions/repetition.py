@@ -4,6 +4,7 @@ Detects n-gram repetitions and returns a penalty (negative float).
 """
 
 from collections import Counter
+from typing import Union
 import re
 
 
@@ -100,6 +101,8 @@ class RepetitionRewardFunction(RewardFunction):
     def compute_reward(
         self,
         model_output: str,
+        expected_output: Union[str, int, None] = None,
+        target_tag: str = None,
     ) -> RewardFunctionScore:
         if not self.initialized:
             self.initialize()
@@ -107,7 +110,8 @@ class RepetitionRewardFunction(RewardFunction):
         if not model_output:
             return RewardFunctionScore(score=0.0)
 
-        matches = extract_tag(model_output, tag=self.answer_tag)
+        target_tag = target_tag if target_tag is not None else self.answer_tag
+        matches = extract_tag(model_output, tag=target_tag)
         text = matches if matches else model_output
         penalty = ngram_repetition_reward(text, n=self.n, weight=self.weight)
         correctness = max(0.0, 1.0 + float(penalty))

@@ -1,8 +1,9 @@
 import os
+import json
 import wasmtime
 import tempfile
 from importlib import resources
-from typing import Union, Tuple
+from typing import Union, Tuple, List
 
 
 class Executor:
@@ -18,8 +19,7 @@ class Executor:
 
         # Load available modules; be tolerant if optional runtimes are not present
         self._modules = {
-            "javascript": self._load_wasm_module("universal_js.wasm"),
-            "python": self._load_wasm_module("micropython.wasm"),
+            "javascript": self._load_wasm_module("puzzle_js.wasm"),
         }
 
     def _load_wasm_module(self, filename):
@@ -35,7 +35,9 @@ class Executor:
         except Exception:
             raise FileNotFoundError(f"Could not find {filename}")
 
-    def _execute_wasm(self, lang: str, input: Union[str, tuple]):
+    def _execute_wasm(
+        self, lang: str, input: Union[str, tuple], argv: List[str] = None
+    ):
         module = self._modules.get(lang)
         if module is None:
             raise FileNotFoundError(f"No wasm module registered for language '{lang}'")
@@ -72,12 +74,8 @@ class Executor:
                 pass
 
             # Set argv appropriately per runtime
-            if lang == "python":
-                wasi_config.argv = [
-                    "micropython",
-                    "-c",
-                    input if isinstance(input, str) else "",
-                ]
+            if argv:
+                wasi_config.argv = argv
 
             # Instantiate and run the wasm module (capture any runtime exceptions but continue to read outputs)
             try:
@@ -105,10 +103,10 @@ class Executor:
 
             return stdout, stderr
 
-    def run_single(self, input: Union[str, tuple], lang: str):
+    def run_single(self, input: Union[str, tuple], lang: str, argv: List[str] = None):
         lang = lang.lower()
         try:
-            stdout, stderr = self._execute_wasm(lang, input)
+            stdout, stderr = self._execute_wasm(lang, input, argv)
             return stdout.strip(), stderr.strip()
         except Exception as e:
             return None, f"Executor Error: {str(e)}"

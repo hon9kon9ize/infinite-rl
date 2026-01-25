@@ -1,20 +1,46 @@
-const source = readStdin();
-const result = evalUserCode(source);
+import * as generators from './js_puzzles/generators/index.js';
+
+const input = JSON.parse(readStdin());
+const { puzzle, code, inputs } = input;
+
+const result = evalPuzzle(puzzle, code, inputs);
 writeOutput(result);
 
 // =======================
-// Eval logic
+// Puzzle evaluation
+// =======================
+
+function evalPuzzle (puzzle, code, inputs) {
+  try {
+    // Eval the user's code in global scope
+    const modifiedCode = code.replace('function sol', 'globalThis.sol = function');
+    globalThis.eval(modifiedCode);
+
+    // Call sol with inputs
+    const result = globalThis.sol(inputs);
+
+    // Check against sat
+    let isCorrect = false;
+    if (generators[puzzle]) {
+      isCorrect = generators[puzzle].sat(result, ...Object.values(inputs));
+    } else {
+      return { error: `Unknown puzzle: ${puzzle}` };
+    }
+
+    return { result, isCorrect };
+  } catch (err) {
+    return {
+      error: String(err),
+      stack: err && err.stack ? err.stack : null
+    };
+  }
+}
+
+// =======================
+// Legacy eval logic (for backward compatibility)
 // =======================
 
 function evalUserCode (code) {
-  /*
-    The evaluated code SHOULD return a value, e.g.:
-
-    ({ x: 1 + 2 })
-    or
-    (() => 42)()
-  */
-
   try {
     return eval(code);
   } catch (err) {

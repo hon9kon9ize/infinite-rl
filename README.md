@@ -1,6 +1,6 @@
 # Infinite-RL
 
-Infinite-RL is a reward functions toolbox for LLM Reinforcement Learning. It provides modular reward functions (coding, math, language detection, length and repetition penalties), utilities for evaluating model responses, and optional dataset generation for synthetic RLHF samples via the Gemini API.
+Infinite-RL is a reward functions toolbox for LLM Reinforcement Learning. It provides modular reward functions for evaluating programming puzzles, mathematical problems, language detection, and auxiliary metrics like length and repetition penalties. The toolbox includes utilities for model response evaluation and optional dataset generation for synthetic RLHF samples via the Gemini API.
 
 ## Installation
 
@@ -36,8 +36,8 @@ pip install git+https://github.com/hon9kon9ize/infinite-rl.git
    ```
 
 4. Runtimes (WASM)
-   - The JS and MicroPython runtimes are built by `build_src/build_wasm.sh`.
-   - A GitHub Actions workflow (`.github/workflows/build_and_release_runtimes.yml`) runs the build and uploads `universal_js.wasm` and `micropython.wasm` to a GitHub Release.
+   - The JS runtime is built by `build_src/build_wasm.sh`.
+   - A GitHub Actions workflow (`.github/workflows/build_and_release_runtimes.yml`) runs the build and uploads `puzzle_js.wasm` to a GitHub Release.
    - During installation, `setup.py` will try to download these runtimes automatically from the latest release (or use the `RUNTIME_RELEASE_TAG` environment variable to pin a release). If you prefer to build locally, run `./build_src/build_wasm.sh` and the generated files will be placed in `infinite_rl/runtimes/`.
 
 ## Usage
@@ -56,7 +56,7 @@ Arguments:
 - `--threads`: Number of parallel generation threads (default: 1).
 - `--max_retries`: Maximum consecutive failed attempts per task type before stopping (default: 5).
 - `--timeout`: Timeout (in seconds) for reward function execution (default: 5).
-- `--task_dist`: Task distribution as comma-separated floats `[coding, math]` (default: `0.5,0.5`).
+- `--task_dist`: Task distribution as comma-separated floats for available task types (default: `0.5,0.5`).
 - `--debug`: Enable verbose logging and save raw LLM responses to `data/debug_prompts`.
 
 **Example for generating only math tasks:**
@@ -77,6 +77,9 @@ python -m pytest tests -v
 
 # Run specific reward function tests
 python -m pytest tests/test_reward_functions.py -v
+
+# Run puzzle reward function tests
+python -m pytest tests/test_puzzle_reward_function.py -v
 ```
 
 
@@ -112,17 +115,17 @@ Notes:
 
 ## Supported Tasks
 
-### 1. Coding Task
-Evaluates LLM-generated code across multiple programming languages with test case validation.
+### 1. Puzzle Task
+Evaluates LLM-generated solutions to programming puzzles across multiple languages with automated verification.
 
 **Supported Languages:**
-- Python
-- JavaScript
+- Python (executed locally via subprocess)
+- JavaScript (executed via WASM runtime)
 
 **Features:**
-- Code execution and validation
-- Test case evaluation
-- Output comparison with similarity scoring
+- Puzzle solution validation using predefined sat functions
+- Support for various puzzle types (algebra, basic math, etc.)
+- Secure execution environments (WASM for JS, local subprocess for Python)
 - Detailed error reporting
 
 **Example:**
@@ -131,14 +134,13 @@ from infinite_rl import get_reward_functions
 
 # Initialize with custom timeout
 reward_fns = get_reward_functions(timeout=10)
-python_fn = reward_fns["python"]
+puzzle_fn = reward_fns["puzzle"]
 
-# Evaluate with expected output
-result = python_fn.compute_reward(
-    model_output="<answer>\n```python\nprint(2 + 2)\n```\n</answer>",
-    expected_output="4"
+# Evaluate Python puzzle solution
+result = puzzle_fn.compute_reward(
+    model_output="<answer>\n```python\ndef sol(inputs):\n    return \"19\"\n```\n</answer>",
+    expected_output={"puzzle": "SumOfDigits", "inputs": {"s": 10}, "language": "python"}
 )
-# Per-reward functions now return a unified RewardFunctionScore with `.score`
 print(f"Score: {result.score}")
 ```
 
@@ -194,9 +196,13 @@ from infinite_rl import RewardExecutor
 
 executor = RewardExecutor(timeout=5)
 
-# Test Python
-stdout, stderr = executor.run_single("print('Hello, World!')", "python")
-print(f"Python: {stdout}")  # Output: Hello, World!
+# Test JavaScript puzzle execution
+stdout, stderr = executor.run_single('{"puzzle": "SumOfDigits", "inputs": {"s": 10}, "code": "function sol(inputs) { return \'19\'; }"}', "javascript")
+print(f"JS Result: {stdout}")
+
+# Test Python puzzle execution (via local runner)
+# Note: Python puzzles are executed via subprocess in the reward function, not directly through executor
+```
 
 # Test JavaScript
 stdout, stderr = executor.run_single("console.log('Hello, World!')", "javascript")

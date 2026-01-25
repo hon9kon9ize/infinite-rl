@@ -34,14 +34,17 @@ class FormatRewardFunction(RewardFunction):
         self,
         model_output: str,
         expected_output: Union[str, int, None] = None,
+        target_tag: str = None,
     ) -> RewardFunctionScore:
         if not self.initialized:
             self.initialize()
 
-        matches = extract_tag(model_output, tag=self.answer_tag)
+        target_tag = target_tag if target_tag is not None else self.answer_tag
+
+        matches = extract_tag(model_output, tag=target_tag)
         if not matches:
             return RewardFunctionScore(
-                score=0.0, error_msg={"format": "Missing <answer> tags"}
+                score=0.0, error_msg={"format": f"Missing <{target_tag}> tags"}
             )
 
         content = matches.strip()
@@ -87,7 +90,8 @@ class FormatRewardFunction(RewardFunction):
                 return RewardFunctionScore(score=0.5)
 
             return RewardFunctionScore(
-                score=0.0, error_msg={"format": "No code block found inside <answer>"}
+                score=0.0,
+                error_msg={"format": f"No code block found inside <{target_tag}>"},
             )
 
         # Math tasks: expect a simple numeric value inside the tag (no backticks)
@@ -96,13 +100,13 @@ class FormatRewardFunction(RewardFunction):
             if "```" in content:
                 return RewardFunctionScore(
                     score=0.0,
-                    error_msg={"format": "Unexpected code fence in math answer"},
+                    error_msg={"format": f"Unexpected code fence in <{target_tag}>"},
                 )
 
             if content.strip():
                 return RewardFunctionScore(score=1.0)
             return RewardFunctionScore(
-                score=0.0, error_msg={"format": "Empty <answer> tag"}
+                score=0.0, error_msg={"format": f"Empty <{target_tag}> tag"}
             )
 
         # Generic fallback

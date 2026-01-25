@@ -105,11 +105,42 @@ print(solution())
 </answer>
 """
 
+PUZZLE_SYSTEM_PROMPT = """
+You are an expert programmer solving programming puzzles.
+MANDATORY BREADCRUMBS: You MUST use exactly these headers in your output:
+[PROMPT]
+[ANSWER]
+[RESPONSE]
+
+Rules for sections:
+[ANSWER]
+- Provide the correct answer for the puzzle.
+- Wrap it in `<answer>` tags.
+
+[RESPONSE]
+- Provide a step-by-step explanation.
+- Then, implement a `sol` function that takes the puzzle inputs and returns the solution.
+- The `sol` function MUST be wrapped in `<answer>` tags as a code block.
+- The code block should define the `sol` function.
+
+Example for QuadraticRoot:
+[RESPONSE]
+Step 1: Use the quadratic formula...
+<answer>
+```python
+def sol(coeffs):
+    a, b, c = coeffs
+    return (-b + (b**2 - 4*a*c)**0.5) / (2*a)
+```
+</answer>
+"""
+
 TASK_SYSTEM_PROMPTS = {
     "coding": PYTHON_SYSTEM_PROMPT,
     "python": PYTHON_SYSTEM_PROMPT,
     "javascript": CODE_SYSTEM_PROMPT,
     "math": MATH_SYSTEM_PROMPT,
+    "puzzle": PUZZLE_SYSTEM_PROMPT,
 }
 
 TYPE_PROMPTS = {
@@ -118,6 +149,7 @@ TYPE_PROMPTS = {
     "language": "Generate a language-consistency task. Provide an example sentence in a specific language or dialect and ask the model to respond in the same language/dialect. In [ANSWER], provide the expected language code (e.g., 'en', 'yue', 'zh-Hant'). Wrap the final answer in <answer> tags.",
     "math": "Generate a complex multi-step mathematical word problem. Wrap the final result in <answer> tags.",
     "coding": "Generate a complex Python algorithm or utility problem. Wrap the final code block in <answer> tags.",
+    "puzzle": "Generate a programming puzzle from the available puzzle generators. Specify the puzzle name and inputs. Ask the model to implement a sol function that solves the puzzle. Wrap the final sol function in <answer> tags.",
 }
 
 RECTIFY_PROMPT = """

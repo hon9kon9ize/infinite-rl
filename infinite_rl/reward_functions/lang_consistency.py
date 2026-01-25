@@ -1,5 +1,6 @@
 from typing import Union
 from collections import defaultdict
+from infinite_rl.utils.parser_utils import extract_tag
 import pycld2 as cld2
 from cantonesedetect import CantoneseDetector
 from .reward_function import RewardFunction, RewardFunctionScore
@@ -43,12 +44,17 @@ class LangConsistencyRewardFunction(RewardFunction):
         self,
         model_output: str,
         expected_output: Union[str, int, float, None],
+        target_tag: str = None,
     ) -> RewardFunctionScore:
         # Ensure initialized
         if not self.initialized:
             self.initialize()
 
         content = model_output.strip()
+
+        if target_tag:
+            content = extract_tag(model_output, tag=target_tag)
+
         norm_expected = expected_output.lower().strip()
 
         # Determine expected language code or dialect
@@ -57,7 +63,7 @@ class LangConsistencyRewardFunction(RewardFunction):
             return RewardFunctionScore(
                 score=0.0,
                 error_msg={
-                    "lang_consistency": "Expected output must be a language code like 'en', 'zh', 'zh-Hant', or 'yue'."
+                    "lang_consistency": f"Expected output must be a language code like 'en', 'zh', 'zh-Hant', or 'yue'. Received: {norm_expected}"
                 },
             )
 
@@ -69,7 +75,7 @@ class LangConsistencyRewardFunction(RewardFunction):
             return RewardFunctionScore(
                 score=0.0,
                 error_msg={
-                    "lang_consistency": "Failed to detect language of the response."
+                    "lang_consistency": f"Failed to detect language of the response inside <{target_tag}>."
                 },
             )
 
@@ -87,8 +93,6 @@ class LangConsistencyRewardFunction(RewardFunction):
                 c = code.lower()
                 lang_ratio[c] += b / total_bytes
         lang_ratio["yue"] = max(y_ratio, lang_ratio["yue"])
-        print(lang_ratio[norm_expected], lang_ratio[norm_detected])
-
         final_score = lang_ratio[norm_expected]
 
         return RewardFunctionScore(

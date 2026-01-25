@@ -1,5 +1,6 @@
 from .math import MathRewardFunction
 from .coding import PythonRewardFunction, JavascriptRewardFunction
+from .puzzle import PuzzleRewardFunction
 from .lang_consistency import LangConsistencyRewardFunction
 from .reasoning_steps import ReasoningStepsRewardFunction
 from .repetition import RepetitionRewardFunction
@@ -12,6 +13,7 @@ def get_reward_functions(timeout: int = 10):
         "math": MathRewardFunction("math", timeout=timeout),
         "python": PythonRewardFunction("python", timeout=timeout),
         "javascript": JavascriptRewardFunction("javascript", timeout=timeout),
+        "puzzle": PuzzleRewardFunction("puzzle", timeout=timeout),
         # New standardized name
         "lang_consistency": LangConsistencyRewardFunction(
             "lang_consistency", timeout=timeout

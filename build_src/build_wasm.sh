@@ -141,15 +141,16 @@ EOF
     echo "✓ Javy downloaded and validated locally to $BUILD_SRC"
 fi
 
-# --- 3. Build JS Runner ---
-echo "[1/2] Compiling JS Runner..."
-"$LOCAL_JAVY" build "$BUILD_SRC/runner.js" -o "$RUNTIME_DIR/universal_js.wasm"
+# --- 3. Bundle JS Runner ---
+echo "[1/3] Bundling JS Runner..."
+esbuild "$BUILD_SRC/runner.js" --bundle --outfile="$BUILD_SRC/bundled_runner.js" --format=esm
 
-# --- 4. Fetch MicroPython ---
-echo "[2/2] Fetching MicroPython WASI..."
-if [ ! -f "$RUNTIME_DIR/micropython.wasm" ]; then
-    curl -L "$MICROPYTHON_URL" -o "$RUNTIME_DIR/micropython.wasm"
-fi
+# --- 4. Build JS Runner ---
+echo "[2/3] Compiling JS Runner..."
+"$LOCAL_JAVY" build "$BUILD_SRC/bundled_runner.js" -o "$RUNTIME_DIR/puzzle_js.wasm"
+
+# --- 5. Fetch MicroPython ---
+echo "[3/3] Skipping MicroPython (no longer needed for puzzles)"
 
 echo "--- All Runtimes Ready in $RUNTIME_DIR ---"
 ls -lh "$RUNTIME_DIR"

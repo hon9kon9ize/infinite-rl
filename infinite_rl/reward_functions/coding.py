@@ -36,9 +36,12 @@ class CodeRewardFunction(RewardFunction):
         self,
         model_output: str,
         expected_output: Union[str, int, float, None],
+        target_tag: str = None,
     ) -> RewardFunctionScore:
         if not self.initialized:
             self.initialize()
+
+        target_tag = target_tag if target_tag is not None else self.answer_tag
 
         # Handle expected_output being a JSON string (unwrap if necessary)
         if isinstance(expected_output, str):
@@ -55,13 +58,13 @@ class CodeRewardFunction(RewardFunction):
                     pass
 
         # 1. Format Objective: Check for tags using configured answer tag
-        content_to_parse = extract_tag(model_output, tag=self.answer_tag)
+        content_to_parse = extract_tag(model_output, tag=target_tag)
 
         if not content_to_parse:
             return RewardFunctionScore(
                 score=0.0,
                 error_msg={
-                    "coding": "Missing <answer> tags in response. Ensure the code is wrapped in <answer> and </answer>."
+                    "coding": f"Missing <{target_tag}> tags in response. Ensure the code is wrapped in <{target_tag}> and </{target_tag}>."
                 },
             )
 

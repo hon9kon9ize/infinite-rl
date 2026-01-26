@@ -290,7 +290,7 @@ def sol(inputs):
     def test_valid_python_float_decimal(self):
         model_output = """<answer>
 ```python
-def sol(inputs):
+def sol(v, d):
     return 0.5
 ```
 </answer>"""

@@ -78,6 +78,7 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     package_data={"infinite_rl.runtimes": ["*.wasm", "puzzles.json"]},
+    python_requires=">=3.11",
     install_requires=[
         "wasmtime",
         "sympy",

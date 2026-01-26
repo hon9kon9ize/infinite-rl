@@ -69,35 +69,10 @@ class PuzzlePrompts:
         if not puzzle_data:
             return None
 
-        # Construct the prompt from the puzzle data
-        docstring = puzzle_data.get("docstring", "")
-        sat = puzzle_data.get("sat", "")
-        sol = puzzle_data.get("sol", "")
-        ans_type = puzzle_data.get("ans_type", "")
+        if "prompt" not in puzzle_data:
+            return None
 
-        prompt = f"""Solve the following {language} programming puzzle. Your task is to implement the sol function, to make it return a value that makes the sat function return True.
-
-# {puzzle_name}
-
-{docstring}
-
-## Sat function
-
-```{"javascript" if language == "javascript" else "python"}
-{sat}
-```
-
-## Answer return value type
-
-{ans_type}
-
-## Sol header
-
-```{"javascript" if language == "javascript" else "python"}
-{sol}
-```"""
-
-        return prompt
+        return puzzle_data["prompt"]
 
     def get_available_puzzles(self, language: str = "javascript") -> list:
         """

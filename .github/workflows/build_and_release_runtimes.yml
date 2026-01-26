@@ -30,6 +30,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y curl gzip jq zip
 
+      # Install Node.js for esbuild
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Install esbuild
+        run: npm install -g esbuild
+
       # 4. Versioning and Release Logic (Existing)
       - name: Determine package version
         id: get_version
@@ -79,7 +88,7 @@ jobs:
         if: steps.check_release.outputs.release_exists == 'false'
         run: chmod +x build_src/build_wasm.sh
 
-      - name: Run runtime build (JS + MicroPython)
+      - name: Run runtime build
         if: steps.check_release.outputs.release_exists == 'false'
         run: |
           # Inject SIMD optimization into the environment for the build script

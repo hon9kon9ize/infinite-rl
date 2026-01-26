@@ -9,6 +9,8 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
   2. `generator.py` calls system prompts in `infinite_rl/prompts.py` and parses model outputs with `infinite_rl/parser.py`.
   3. Generated samples are evaluated by reward functions in `infinite_rl/reward_functions/` (currently `puzzle`, `math`, and others).
   4. Puzzle evaluation uses WASM runtimes for JavaScript via `infinite_rl/executor.py` (uses `wasmtime` and `puzzle_js.wasm`) and local Python execution via `infinite_rl/runner.py`.
+  5. Math evaluation uses symbolic computation with `sympy` and can reference the included `math.json` dataset for task examples.
+- Programming puzzles include difficulty ratings (1-5 scale) generated using Gemini 2.5 Flash model.
 
 ## What to know before changing code
 - Samples must follow the strict 3-head format: `[PROMPT]`, `[ANSWER]`, `[RESPONSE]` and the final content must be wrapped in `<answer>` tags (see `prompts.py`).
@@ -61,6 +63,7 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
   print('Contents:', sorted(os.listdir(runtimes_dir)) if os.path.exists(runtimes_dir) else '<missing>')
   PY
   ```
+  Expected contents: `math.json`, `puzzle_js.wasm`, `puzzles.json`
 
 - CI specifics: `.github/workflows/ci.yml` installs `nodejs`, `openjdk-17`, `g++` and runs the example suite, then `unittest` discovery.
 
@@ -90,7 +93,7 @@ pip install git+https://github.com/owner/repo@runtimes-v1.2.3
 # Or using the environment helper
 RUNTIME_RELEASE_TAG=v1.2.3 RUNTIME_GITHUB_REPO=owner/repo python -m pip install .
 ```
-- Math reward: `sympy` is used for symbolic checks.
+- Math reward: `sympy` is used for symbolic checks. The `math.json` dataset (downloaded during installation) contains math task examples for reference or testing.
 - CI installs some language toolchains (Node, Java, g++) even though project currently focuses on Python/JS/TypeScript and math; update CI if you remove language support.
 
 ## Quick checks agents should run before PRs

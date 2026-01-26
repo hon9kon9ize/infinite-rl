@@ -191,6 +191,18 @@ def generate_puzzle_assets(output_dir="assets"):
     """
     os.makedirs(output_dir, exist_ok=True)
 
+    # Load ratings
+    ratings_file = project_root / "build_src" / "puzzle_ratings.json"
+    ratings = {}
+    if ratings_file.exists():
+        with open(ratings_file, "r", encoding="utf-8") as f:
+            ratings_data = json.load(f)
+            for item in ratings_data:
+                ratings[item["puzzle_name"]] = item["rating"]
+        print(f"Loaded ratings for {len(ratings)} puzzles")
+    else:
+        print("Warning: puzzle_ratings.json not found, ratings will be None")
+
     languages = ["javascript", "python"]
     all_puzzles = {"javascript": {}, "python": {}}
 
@@ -238,6 +250,7 @@ def generate_puzzle_assets(output_dir="assets"):
                             "sat": info["sat"],
                             "sol": info["sol"],
                             "ans_type": ans_type,
+                            "rating": ratings.get(puzzle_name, None),
                         }
                         print(f"Processed {language}/{puzzle_name}")
                         break
@@ -254,6 +267,7 @@ def generate_puzzle_assets(output_dir="assets"):
                                 "sat": info["sat"],
                                 "sol": info["sol"],
                                 "ans_type": info["ans_type"],
+                                "rating": ratings.get(puzzle_name, None),
                             }
                             break
 

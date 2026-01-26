@@ -7,7 +7,7 @@ from setuptools.command.build_py import build_py as _build_py
 
 # Configuration
 RUNTIME_FILES = ["puzzle_js.wasm"]
-PUZZLE_FILES = ["puzzles.json"]
+PUZZLE_FILES = ["puzzles.json", "math.json"]
 GITHUB_REPO = os.environ.get("RUNTIME_GITHUB_REPO", "hon9kon9ize/infinite-rl")
 # Use a known-good tag if the version-specific one fails
 FALLBACK_TAG = "runtimes-v0.1.17"
@@ -77,7 +77,7 @@ setup(
     version=PACKAGE_VERSION,
     packages=find_packages(),
     include_package_data=True,
-    package_data={"infinite_rl.runtimes": ["*.wasm", "puzzles.json"]},
+    package_data={"infinite_rl.runtimes": ["*.wasm", "puzzles.json", "math.json"]},
     python_requires=">=3.11",
     install_requires=[
         "wasmtime",

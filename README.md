@@ -2,6 +2,8 @@
 
 Infinite-RL is a reward functions toolbox for LLM Reinforcement Learning. It provides modular reward functions for evaluating programming puzzles, mathematical problems, language detection, and auxiliary metrics like length and repetition penalties. The toolbox includes utilities for model response evaluation and optional dataset generation for synthetic RLHF samples via the Gemini API.
 
+The package includes pre-built datasets for math tasks (`math.json`) and programming puzzles (`puzzles.json`), along with WASM runtimes for secure JavaScript execution.
+
 ## Installation
 
 ### Option 1: Clone and Install Locally
@@ -96,6 +98,7 @@ Evaluates LLM-generated solutions to programming puzzles across multiple languag
 - Support for various puzzle types (algebra, basic math, etc.)
 - Secure execution environments (WASM for JS, local subprocess for Python)
 - Detailed error reporting
+- Difficulty ratings: Each programming puzzle has been rated for difficulty (1-5 scale) using Gemini 2.5 Flash model
 
 **Example:**
 ```python

@@ -149,8 +149,10 @@ esbuild "$BUILD_SRC/runner.js" --bundle --outfile="$BUILD_SRC/bundled_runner.js"
 echo "[2/3] Compiling JS Runner..."
 "$LOCAL_JAVY" build "$BUILD_SRC/bundled_runner.js" -o "$RUNTIME_DIR/puzzle_js.wasm"
 
-# --- 5. Fetch MicroPython ---
-echo "[3/3] Skipping MicroPython (no longer needed for puzzles)"
+# --- 5. Generate Puzzle Assets ---
+echo "[4/4] Generating puzzle assets..."
+python3 "$BUILD_SRC/puzzle_prompt.py"
 
-echo "--- All Runtimes Ready in $RUNTIME_DIR ---"
+echo "--- All Assets Ready ---"
 ls -lh "$RUNTIME_DIR"
+ls -lh assets/

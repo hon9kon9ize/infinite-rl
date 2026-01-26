@@ -15,8 +15,7 @@ import sys
 from urllib.request import urlopen, urlretrieve
 
 RUNTIME_FILES = [
-    "universal_js.wasm",
-    "micropython.wasm",
+    "puzzle_js.wasm",
 ]
 DEFAULT_REPO = os.environ.get("RUNTIME_GITHUB_REPO", "hon9kon9ize/infinite-rl")
 

@@ -9,14 +9,14 @@ from typing import List
 # Add the project root to the path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from infinite_rl.generator import DatasetGenerator
+from infinite_rl.puzzle_generator import PuzzleDatasetGenerator
 
 
 def generate_dataset(
     num_samples: int, out_dir: str, task_dist: List[float], debug: bool = False
 ):
     """Generate a dataset of RLHF samples."""
-    generator = DatasetGenerator()
+    generator = PuzzleDatasetGenerator()
     samples = generator.generate_dataset(num_samples, task_dist)
 
     # For now, just print the samples

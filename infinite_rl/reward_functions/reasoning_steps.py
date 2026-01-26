@@ -10,8 +10,7 @@ class ReasoningStepsRewardFunction(RewardFunction):
 
     The function looks for a <think> tag and checks for presence of common
     step/analysis indicators ("first", "second", "finally", "therefore", etc.).
-    It returns a small encouragement bonus (0.1 or 0.2) as correctness_score while
-    using format_score to indicate whether a <think> block was present.
+    It returns a small encouragement bonus (0.1 or 0.2) as score.
     """
 
     def __init__(

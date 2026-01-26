@@ -133,7 +133,7 @@ export class AllQuadraticRoots extends PuzzleGenerator {
 }
 
 export class CubicRoot extends PuzzleGenerator {
-	static docstring = "See [cubic equation](https://en.wikipedia.org/wiki/Cubic_formula).";
+	static docstring = "Find any (real) solution to: a x^3 + b x^2 + c x + d where coeffs = [a, b, c, d]\nFor example, since (x-1)(x-2)(x-3) = x^3 - 6x^2 + 11x - 6, sat(x = 1., coeffs = [-6., 11., -6.]) is True.";
 	static tags = [Tags.math, Tags.famous];
 
 	constructor(seed = null) {
@@ -174,7 +174,7 @@ export class CubicRoot extends PuzzleGenerator {
 }
 
 export class AllCubicRoots extends PuzzleGenerator {
-	static docstring = "See [cubic equation](https://en.wikipedia.org/wiki/Cubic_formula).";
+	static docstring = "Find all 3 distinct real roots of x^3 + a x^2 + b x + c, i.e., factor into (x-r1)(x-r2)(x-r3).\ncoeffs = [a, b, c]. For example, since (x-1)(x-2)(x-3) = x^3 - 6x^2 + 11x - 6,\nsat(roots = [1., 2., 3.], coeffs = [-6., 11., -6.]) is True.";
 	static tags = [Tags.math, Tags.famous];
 
 	constructor(seed = null) {

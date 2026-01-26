@@ -82,37 +82,6 @@ python -m pytest tests/test_reward_functions.py -v
 python -m pytest tests/test_puzzle_reward_function.py -v
 ```
 
-
-## Reward Orchestrator 🔧
-A convenience utility that loads available reward functions and (optionally) registers auxiliary rewards such as `repetition` and `length`. The orchestrator can compute a main task reward and aggregate auxiliary signals into an `AggregatedReward`.
-
-- Compute usage:
-
-```python
-# Compute a task reward using the orchestrator (returns an AggregatedReward)
-score = orch.compute("<answer>42</answer>", "42", task="math")
-print(score.format_score, score.correctness_score)  # main task scores (format & correctness)
-
-# Request auxiliary aggregation by providing a language target. When `lang` is given,
-# the orchestrator will include registered auxiliary rewards and return an AggregatedReward
-# whose `aux_score` is the aggregated auxiliary signal.
-agg = orch.compute("<answer>Hello world</answer>", "", task="python", lang="en")
-print(agg.aux_score)  # combined aux signals (lang_consistency + length + repetition when registered)
-```
-
-- Access individual auxiliaries:
-
-```python
-# You can call specific reward functions directly if you need per-reward details
-lang_score = orch.get_fn('lang_consistency').compute_reward("<answer>Hello</answer>", 'en')
-length_score = orch.get_fn('length').compute_reward("<answer>short</answer>", 2, is_correct=True)
-repetition_score = orch.get_fn('repetition').compute_reward("<answer>hi hi hi</answer>", None)
-```
-
-Notes:
-- `include_repetition` and `include_length` control whether those auxiliary reward functions are registered with the orchestrator.
-- The orchestrator preserves the main task's `format_score` and `correctness_score` (accessible on the aggregated return) and uses `aux_score` to surface auxiliary metrics (e.g., repetition penalty, length signal, language consistency).
-
 ## Supported Tasks
 
 ### 1. Puzzle Task
@@ -142,6 +111,30 @@ result = puzzle_fn.compute_reward(
     expected_output={"puzzle": "SumOfDigits", "inputs": {"s": 10}, "language": "python"}
 )
 print(f"Score: {result.score}")
+```
+
+**Getting Puzzle Prompts:**
+You can access the puzzle prompts programmatically to understand what problems are available or to inspect puzzle specifications:
+
+```python
+from infinite_rl.puzzles import get_puzzle_prompt, get_available_puzzles
+
+# Get all available JavaScript puzzles
+js_puzzles = get_available_puzzles("javascript")
+print(f"Available JS puzzles: {len(js_puzzles)}")
+print(f"First few: {js_puzzles[:5]}")
+
+# Get all available Python puzzles
+py_puzzles = get_available_puzzles("python")
+print(f"Available Python puzzles: {len(py_puzzles)}")
+
+# Get a specific puzzle prompt
+prompt = get_puzzle_prompt("QuadraticRoot", "javascript")
+if prompt:
+    print("QuadraticRoot puzzle prompt:")
+    print(prompt[:200] + "..." if len(prompt) > 200 else prompt)
+else:
+    print("Puzzle not found")
 ```
 
 ### 2. Math Task
@@ -237,8 +230,7 @@ result = python_fn.compute_reward(
     expected_output="4"
 )
 print(f"Reward Result: {result}")
-print(f"Format Score: {result.format_score}")
-print(f"Correctness Score: {result.correctness_score}")
+print(f"Correctness Score: {result.score}")
 ```
 
 

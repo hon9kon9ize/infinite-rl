@@ -13,7 +13,7 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 ## What to know before changing code
 - Samples must follow the strict 3-head format: `[PROMPT]`, `[ANSWER]`, `[RESPONSE]` and the final content must be wrapped in `<answer>` tags (see `prompts.py`).
 - `PuzzleRewardFunction` expects the answer to contain a code block (triple-backtick) inside `<answer>`; it executes JavaScript puzzles via WASM and Python puzzles via local subprocess.
-- Reward functions return a `RewardFunctionScore(format_score, correctness_score, error_msg, aux_score)`—the `aux_score` is used for auxiliary metrics like repetition, length, or language-consistency signals.
+- Reward functions return a `RewardFunctionScore(score, error_msg)`—the `aux_score` is used for auxiliary metrics like repetition, length, or language-consistency signals.
 - `generate_dataset()` is idempotent and resumable: it reads/writes `dataset.csv` and appends failures to `failed_dataset.csv` immediately.
 - `--task_dist` format is a comma-separated list of floats; current parsing expects values for available task types (see `generator.py`).
 - Generator has a rectification loop: low-quality outputs are retried and passed through a `RECTIFY_PROMPT` before being retried; be careful modifying retry logic or thresholds.

@@ -9,6 +9,9 @@ def extract_tag(text: str, tag: Optional[str] = "answer") -> str:
       their contents are joined with newlines.
     """
 
+    if tag is None or tag is "":
+        return text
+
     tag_start = f"<{tag}>"
     tag_end = f"</{tag}>"
 

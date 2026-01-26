@@ -5,7 +5,6 @@ import os
 import sys
 from typing import Union
 from .reward_function import RewardFunction, RewardFunctionScore
-from ..executor import Executor
 from ..utils.parser_utils import extract_tag
 
 
@@ -26,12 +25,10 @@ class PuzzleRewardFunction(RewardFunction):
         super().__init__(
             task_name, timeout=timeout, answer_tag=answer_tag, think_tag=think_tag
         )
-        self.executor = None
         self.language = language.lower()  # e.g., 'python' or 'javascript'
 
     def initialize(self):
-        """Initialize the executor for running code."""
-        self.executor = Executor(timeout=self.timeout)
+        """Initialize the reward function."""
         self.initialized = True
 
     def compute_reward(
@@ -95,78 +92,48 @@ class PuzzleRewardFunction(RewardFunction):
                 score=0.0, error_msg={"puzzle": "Code must define a sol function"}
             )
 
-        # 3. Evaluate based on language
-        if language == "javascript":
-            # Use WASM puzzle evaluation
-            puzzle_input = json.dumps(
-                {"puzzle": puzzle_name, "inputs": inputs, "code": code_content}
+        # 3. Evaluate using runner.py for both languages
+        runner_path = os.path.join(os.path.dirname(__file__), "..", "runner.py")
+        puzzle_data = json.dumps(
+            {
+                "puzzle": puzzle_name,
+                "inputs": inputs,
+                "code": code_content,
+                "language": language,
+            }
+        )
+        try:
+            result = subprocess.run(
+                [sys.executable, runner_path],
+                input=puzzle_data,
+                text=True,
+                capture_output=True,
+                timeout=self.timeout,
             )
-            try:
-                stdout, stderr = self.executor.run_single(puzzle_input, language)
-                if stderr:
-                    return RewardFunctionScore(
-                        score=0.0, error_msg={"puzzle": f"Execution error: {stderr}"}
-                    )
-                result = json.loads(stdout)
-                if "error" in result:
-                    return RewardFunctionScore(
-                        score=0.0,
-                        error_msg={"puzzle": f"Evaluation error: {result['error']}"},
-                    )
-                is_correct = result.get("isCorrect", False)
-                if is_correct:
-                    return RewardFunctionScore(score=1.0)
-                else:
-                    return RewardFunctionScore(
-                        score=0.0,
-                        error_msg={"puzzle": f"Puzzle check failed"},
-                    )
-            except Exception as e:
+            if result.returncode != 0 or result.stderr:
                 return RewardFunctionScore(
-                    score=0.0, error_msg={"puzzle": f"Evaluation failed: {str(e)}"}
+                    score=0.0,
+                    error_msg={"puzzle": f"Execution error: {result.stderr}"},
                 )
-        elif language == "python":
-            # Use local runner.py for Python puzzles
-            runner_path = os.path.join(os.path.dirname(__file__), "..", "runner.py")
-            puzzle_data = json.dumps(
-                {"puzzle": puzzle_name, "inputs": inputs, "code": code_content}
-            )
-            try:
-                result = subprocess.run(
-                    [sys.executable, runner_path],
-                    input=puzzle_data,
-                    text=True,
-                    capture_output=True,
-                    timeout=self.timeout,
-                )
-                if result.returncode != 0 or result.stderr:
-                    return RewardFunctionScore(
-                        score=0.0,
-                        error_msg={"puzzle": f"Execution error: {result.stderr}"},
-                    )
-                output = json.loads(result.stdout.strip())
-                if "error" in output:
-                    return RewardFunctionScore(
-                        score=0.0,
-                        error_msg={"puzzle": f"Evaluation error: {output['error']}"},
-                    )
-                is_correct = output.get("isCorrect", False)
-                if is_correct:
-                    return RewardFunctionScore(score=1.0)
-                else:
-                    return RewardFunctionScore(
-                        score=0.0,
-                        error_msg={"puzzle": f"Puzzle check failed"},
-                    )
-            except subprocess.TimeoutExpired:
+            output = json.loads(result.stdout.strip())
+            if "error" in output:
                 return RewardFunctionScore(
-                    score=0.0, error_msg={"puzzle": "Execution timed out"}
+                    score=0.0,
+                    error_msg={"puzzle": f"Evaluation error: {output['error']}"},
                 )
-            except Exception as e:
+            is_correct = output.get("isCorrect", False)
+            if is_correct:
+                return RewardFunctionScore(score=1.0)
+            else:
                 return RewardFunctionScore(
-                    score=0.0, error_msg={"puzzle": f"Evaluation failed: {str(e)}"}
+                    score=0.0,
+                    error_msg={"puzzle": f"Puzzle check failed"},
                 )
-        else:
+        except subprocess.TimeoutExpired:
             return RewardFunctionScore(
-                score=0.0, error_msg={"puzzle": f"Unsupported language: {language}"}
+                score=0.0, error_msg={"puzzle": "Execution timed out"}
+            )
+        except Exception as e:
+            return RewardFunctionScore(
+                score=0.0, error_msg={"puzzle": f"Evaluation failed: {str(e)}"}
             )

@@ -97,24 +97,24 @@ jobs:
           release_name: "Runtimes ${{ steps.get_version.outputs.version }}"
           body: "Automated Build: Includes WASM Runtimes."
 
-      - name: Upload universal_js.wasm
+      - name: Upload puzzle_js.wasm
         if: steps.check_release.outputs.release_exists == 'false'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: infinite_rl/runtimes/universal_js.wasm
-          asset_name: universal_js.wasm
+          asset_path: infinite_rl/runtimes/puzzle_js.wasm
+          asset_name: puzzle_js.wasm
           asset_content_type: application/wasm
 
-      - name: Upload micropython.wasm
+      - name: Upload puzzles.json
         if: steps.check_release.outputs.release_exists == 'false'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: infinite_rl/runtimes/micropython.wasm
-          asset_name: micropython.wasm
-          asset_content_type: application/wasm
+          asset_path: assets/puzzles.json
+          asset_name: puzzles.json
+          asset_content_type: application/json

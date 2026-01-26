@@ -10,6 +10,7 @@ sys.path.append(os.path.dirname(__file__))
 
 # Import PuzzleGenerator for type checking
 from python_puzzles.puzzle_generator import PuzzleGenerator
+from executor import Executor
 
 # Dynamically import all puzzle classes
 puzzles = {}
@@ -29,16 +30,42 @@ for module_name in dir(gen_pkg):
             # Skip modules that can't be imported
             pass
 
+# Initialize executor for JavaScript
+executor = Executor()
 
-def evalPuzzle(puzzle, code, inputs):
+
+def evalPuzzle(puzzle, code, inputs, language="python"):
     try:
-        # Exec the user's code to define sol
-        exec(code, globals())
+        result = None
 
-        # Call sol with inputs
-        result = sol(inputs)
+        if language.lower() == "javascript":
+            # Execute JavaScript code using WASM
+            puzzle_input = json.dumps(
+                {
+                    "puzzle": puzzle,
+                    "code": code,
+                    "inputs": inputs,
+                }
+            )
+            stdout, stderr = executor.run_single(puzzle_input, "javascript")
+            if stderr:
+                return {"error": stderr}
+            try:
+                js_result = json.loads(stdout)
+                if "error" in js_result:
+                    return js_result
+                result = js_result["result"]
+            except json.JSONDecodeError:
+                return {"error": f"Invalid JSON output from JavaScript: {stdout}"}
+        else:
+            # Execute Python code
+            # Exec the user's code to define sol
+            exec(code, globals())
 
-        # Check against sat
+            # Call sol with inputs unpacked
+            result = sol(*inputs.values())
+
+        # Check against Python sat function
         isCorrect = False
         if puzzle in puzzles:
             isCorrect = puzzles[puzzle].sat(result, *inputs.values())
@@ -56,8 +83,9 @@ data = json.loads(input_data)
 puzzle = data["puzzle"]
 code = data["code"]
 inputs = data["inputs"]
+language = data.get("language", "python")
 
-result = evalPuzzle(puzzle, code, inputs)
+result = evalPuzzle(puzzle, code, inputs, language)
 print(json.dumps(result))
 
 sys.stdout.flush()

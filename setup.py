@@ -6,10 +6,11 @@ from setuptools import setup, find_packages
 from setuptools.command.build_py import build_py as _build_py
 
 # Configuration
-RUNTIME_FILES = ["universal_js.wasm", "micropython.wasm"]
+RUNTIME_FILES = ["puzzle_js.wasm"]
+PUZZLE_FILES = ["puzzles.json"]
 GITHUB_REPO = os.environ.get("RUNTIME_GITHUB_REPO", "hon9kon9ize/infinite-rl")
 # Use a known-good tag if the version-specific one fails
-FALLBACK_TAG = "runtimes-v0.1.16"
+FALLBACK_TAG = "runtimes-v0.1.17"
 
 
 def get_version():
@@ -17,7 +18,7 @@ def get_version():
         with open("VERSION.txt", "r") as f:
             return f.read().strip()
     except:
-        return "0.1.16"
+        return "0.1.17"
 
 
 PACKAGE_VERSION = get_version()
@@ -32,9 +33,11 @@ def download_assets(target_dir):
 
     for tag in tags_to_try:
         success = True
-        print(f"--> [Action] Attempting to download runtimes from tag: {tag}")
+        print(f"--> [Action] Attempting to download assets from tag: {tag}")
 
-        for fname in RUNTIME_FILES:
+        all_files = RUNTIME_FILES + PUZZLE_FILES
+
+        for fname in all_files:
             # Direct Download URL format (doesn't require API/tokens)
             url = f"https://github.com/{GITHUB_REPO}/releases/download/{tag}/{fname}"
             dest = os.path.join(target_dir, fname)
@@ -53,11 +56,11 @@ def download_assets(target_dir):
                 break
 
         if success:
-            print(f"--> [Success] All runtimes downloaded from {tag}")
+            print(f"--> [Success] All assets downloaded from {tag}")
             return
 
     raise RuntimeError(
-        "Could not download runtimes from any known tags. Check your release tag names."
+        "Could not download assets from any known tags. Check your release tag names."
     )
 
 
@@ -74,7 +77,7 @@ setup(
     version=PACKAGE_VERSION,
     packages=find_packages(),
     include_package_data=True,
-    package_data={"infinite_rl.runtimes": ["*.wasm"]},
+    package_data={"infinite_rl.runtimes": ["*.wasm", "puzzles.json"]},
     install_requires=[
         "wasmtime",
         "sympy",

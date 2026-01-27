@@ -102,7 +102,11 @@ class TestCurriculumLearning(unittest.TestCase):
                     self.assertEqual(len(cl.recent_tasks), 0)
 
     def test_get_rewards_correct_answer(self):
+<<<<<<< HEAD
         """Test compute_reward with correct answer."""
+=======
+        """Test get_rewards with correct answer."""
+>>>>>>> bc2c951724ca2da9ae370e1cf173e4ae8d3db9e1
         cl = CurriculumLearning()
 
         # Mock reward function to return correct score
@@ -113,14 +117,22 @@ class TestCurriculumLearning(unittest.TestCase):
             mock_result.score = 1.0
             mock_compute.return_value = mock_result
 
+<<<<<<< HEAD
             reward = cl.compute_reward("math", "<answer>4</answer>", "4", "test_task")
+=======
+            reward = cl.get_rewards("math", "<answer>4</answer>", "4", "test_task")
+>>>>>>> bc2c951724ca2da9ae370e1cf173e4ae8d3db9e1
 
             self.assertEqual(reward, 1.0)
             self.assertEqual(cl.task_counters["math"], 1)
             self.assertEqual(len(cl.failed_tasks), 0)
 
     def test_get_rewards_wrong_answer(self):
+<<<<<<< HEAD
         """Test compute_reward with wrong answer."""
+=======
+        """Test get_rewards with wrong answer."""
+>>>>>>> bc2c951724ca2da9ae370e1cf173e4ae8d3db9e1
         cl = CurriculumLearning(
             use_format=False,
             use_repetition=False,
@@ -137,7 +149,11 @@ class TestCurriculumLearning(unittest.TestCase):
             mock_result.score = 0.0
             mock_compute.return_value = mock_result
 
+<<<<<<< HEAD
             reward = cl.compute_reward("math", "<answer>5</answer>", "4", "test_task")
+=======
+            reward = cl.get_rewards("math", "<answer>5</answer>", "4", "test_task")
+>>>>>>> bc2c951724ca2da9ae370e1cf173e4ae8d3db9e1
 
             self.assertEqual(reward, 0.0)
             self.assertEqual(cl.task_counters["math"], -1)
@@ -152,7 +168,11 @@ class TestCurriculumLearning(unittest.TestCase):
         # Simulate good performance
         cl.task_counters = {"math": 5, "puzzle": 5}  # High positive scores
 
+<<<<<<< HEAD
         # Manually trigger level update (normally called in compute_reward)
+=======
+        # Manually trigger level update (normally called in get_rewards)
+>>>>>>> bc2c951724ca2da9ae370e1cf173e4ae8d3db9e1
         cl._update_level()
 
         # Should advance to level 2
@@ -373,7 +393,11 @@ class TestCurriculumLearning(unittest.TestCase):
                 mock_aux_scores.return_value = {"format": 0.8}
 
                 response = "<answer>42</answer>"
+<<<<<<< HEAD
                 reward = cl.compute_reward("math", response, "42", "test_task")
+=======
+                reward = cl.get_rewards("math", response, "42", "test_task")
+>>>>>>> bc2c951724ca2da9ae370e1cf173e4ae8d3db9e1
 
                 # Combined score should be 70% primary + 30% auxiliary average
                 # 0.7 * 1.0 + 0.3 * 0.8 = 0.7 + 0.24 = 0.94

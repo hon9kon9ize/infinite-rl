@@ -87,6 +87,7 @@ jobs:
         if: steps.check_release.outputs.release_exists == 'false'
         run: |
           pip install datasets pandas
+          mkdir -p assets
           python -c "
           from datasets import load_dataset
           import json
@@ -94,8 +95,10 @@ jobs:
           df = ds['train'].to_pandas()
           df_math = df[df['task'] == 'math']
           df_math['rating'] = 1
+          records = df_math.to_dict(orient='records')
           with open('assets/math.json', 'w') as f:
-              f.write(df_math.to_json(orient='records'))
+              json.dump(records, f)
+          print(f'Successfully wrote {len(records)} math problems to assets/math.json')
           "
 
       # 5. Build WASM Runtimes - only run when we need to create release

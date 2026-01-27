@@ -83,6 +83,21 @@ jobs:
           echo "Release runtimes-${{ steps.get_version.outputs.version }} already exists. Skipping export/build and upload."
           exit 0
 
+      - name: Download math dataset
+        if: steps.check_release.outputs.release_exists == 'false'
+        run: |
+          pip install datasets pandas
+          python -c "
+          from datasets import load_dataset
+          import json
+          ds = load_dataset('hon9kon9ize/infinite-rl')
+          df = ds['train'].to_pandas()
+          df_math = df[df['task'] == 'math']
+          df_math['rating'] = 1
+          with open('assets/math.json', 'w') as f:
+              f.write(df_math.to_json(orient='records'))
+          "
+
       # 5. Build WASM Runtimes - only run when we need to create release
       - name: Make build script executable
         if: steps.check_release.outputs.release_exists == 'false'
@@ -113,7 +128,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: infinite_rl/runtimes/puzzle_js.wasm
+          asset_path: assets/puzzle_js.wasm
           asset_name: puzzle_js.wasm
           asset_content_type: application/wasm
 
@@ -126,4 +141,15 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: assets/puzzles.json
           asset_name: puzzles.json
+          asset_content_type: application/json
+
+      - name: Upload math.json
+        if: steps.check_release.outputs.release_exists == 'false'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: assets/math.json
+          asset_name: math.json
           asset_content_type: application/json

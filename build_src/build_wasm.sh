@@ -2,14 +2,14 @@
 
 # Configuration - Update these paths if necessary
 JAVY_VERSION="v8.0.0" # Check GitHub for latest
-RUNTIME_DIR="infinite_rl/runtimes"
+ASSET_DIR="assets"
 BUILD_SRC="build_src"
 MICROPYTHON_URL="https://github.com/vmware-labs/webassembly-language-runtimes/releases/download/python%2F3.12.0%2B20231211-040d5a6/python-3.12.0.wasm"
 # Local path for the javy binary
 LOCAL_JAVY="$BUILD_SRC/javy"
 
 # Ensure directories exist
-mkdir -p "$RUNTIME_DIR"
+mkdir -p "$ASSET_DIR"
 mkdir -p "$BUILD_SRC"
 
 # --- 1. Detect Architecture for Javy ---
@@ -147,12 +147,11 @@ esbuild "$BUILD_SRC/runner.js" --bundle --outfile="$BUILD_SRC/bundled_runner.js"
 
 # --- 4. Build JS Runner ---
 echo "[2/3] Compiling JS Runner..."
-"$LOCAL_JAVY" build "$BUILD_SRC/bundled_runner.js" -o "$RUNTIME_DIR/puzzle_js.wasm"
+"$LOCAL_JAVY" build "$BUILD_SRC/bundled_runner.js" -o "$ASSET_DIR/puzzle_js.wasm"
 
 # --- 5. Generate Puzzle Assets ---
 echo "[4/4] Generating puzzle assets..."
 python3 "$BUILD_SRC/puzzle_prompt.py"
 
 echo "--- All Assets Ready ---"
-ls -lh "$RUNTIME_DIR"
-ls -lh assets/
+ls -lh "$ASSET_DIR"

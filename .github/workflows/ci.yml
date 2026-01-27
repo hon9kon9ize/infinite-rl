@@ -104,20 +104,6 @@ jobs:
           pip install git+https://github.com/${{ github.repository }}@runtimes-${{ needs.version-check.outputs.version }}
           pip install pytest
 
-      - name: Download math dataset
-        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
-        run: |
-          pip install datasets
-          python -c "
-          from datasets import load_dataset
-          import pandas as pd
-          ds = load_dataset('hon9kon9ize/infinite-rl')
-          df = ds['train'].to_pandas()
-          df_math = df[df['task'] == 'math']
-          df_math['rating'] = 1
-          df_math.to_json('infinite_rl/runtimes/math.json', orient='records')
-          "
-
       - name: Run unit tests
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         run: |

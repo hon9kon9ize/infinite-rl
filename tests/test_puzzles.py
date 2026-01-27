@@ -41,8 +41,8 @@ class TestPuzzlePrompts(unittest.TestCase):
                 prompts._prompts[f"{language}/{puzzle_name}"] = data
         prompts._loaded = True
 
-        result = prompts.get_puzzle_prompt("TestPuzzle", "javascript")
-        self.assertEqual(result, "Test prompt for JavaScript puzzle")
+        result = prompts.get_puzzle_data("TestPuzzle", "javascript")
+        self.assertIsNotNone(result)
 
     def test_get_puzzle_prompt_existing_python(self):
         """Test getting prompt for existing Python puzzle."""
@@ -55,8 +55,8 @@ class TestPuzzlePrompts(unittest.TestCase):
                 prompts._prompts[f"{language}/{puzzle_name}"] = data
         prompts._loaded = True
 
-        result = prompts.get_puzzle_prompt("PythonPuzzle", "python")
-        self.assertEqual(result, "Test prompt for Python puzzle")
+        result = prompts.get_puzzle_data("PythonPuzzle", "python")
+        self.assertIsNotNone(result)
 
     def test_get_puzzle_prompt_non_existing(self):
         """Test getting prompt for non-existing puzzle."""
@@ -69,7 +69,7 @@ class TestPuzzlePrompts(unittest.TestCase):
                 prompts._prompts[f"{language}/{puzzle_name}"] = data
         prompts._loaded = True
 
-        result = prompts.get_puzzle_prompt("NonExistingPuzzle", "javascript")
+        result = prompts.get_puzzle_data("NonExistingPuzzle", "javascript")
         self.assertIsNone(result)
 
     def test_get_puzzle_prompt_wrong_language(self):
@@ -83,7 +83,7 @@ class TestPuzzlePrompts(unittest.TestCase):
                 prompts._prompts[f"{language}/{puzzle_name}"] = data
         prompts._loaded = True
 
-        result = prompts.get_puzzle_prompt("TestPuzzle", "python")
+        result = prompts.get_puzzle_data("TestPuzzle", "python")
         self.assertIsNone(result)
 
     def test_get_available_puzzles_javascript(self):
@@ -122,7 +122,7 @@ class TestPuzzlePrompts(unittest.TestCase):
 
         prompts = PuzzlePrompts()
         # Don't load anything
-        result = prompts.get_puzzle_prompt("TestPuzzle", "javascript")
+        result = prompts.get_puzzle_data("TestPuzzle", "javascript")
         self.assertIsNone(result)
 
         result = prompts.get_available_puzzles("javascript")

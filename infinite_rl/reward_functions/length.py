@@ -108,8 +108,8 @@ class LengthRewardFunction(RewardFunction):
         self,
         model_output: str,
         expected_output: Union[str, int, float, None] = None,
-        target_tag: str = None,
         is_correct: bool = False,
+        **kwargs,
     ) -> RewardFunctionScore:
         """Compute length reward.
 
@@ -122,13 +122,12 @@ class LengthRewardFunction(RewardFunction):
         if not self.initialized:
             self.initialize()
 
-        target_tag = target_tag if target_tag is not None else self.think_tag
-        thought_content = extract_tag(model_output, tag=target_tag)
+        thought_content = self.extract_tag(model_output, **kwargs)
 
         if not thought_content:
             return RewardFunctionScore(
                 score=0.0,
-                error_msg={"length": f"Missing <{target_tag}> tags in response."},
+                error_msg={"length": f"No content found in the specified tag."},
             )
 
         length = len(thought_content.strip())

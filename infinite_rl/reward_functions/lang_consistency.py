@@ -44,18 +44,14 @@ class LangConsistencyRewardFunction(RewardFunction):
         self,
         model_output: str,
         expected_output: Union[str, int, float, None],
-        target_tag: str = None,
+        **kwargs,
     ) -> RewardFunctionScore:
         # Ensure initialized
         if not self.initialized:
             self.initialize()
 
-        content = model_output.strip()
-
-        if target_tag:
-            content = extract_tag(model_output, tag=target_tag)
-
-        norm_expected = expected_output.lower().strip()
+        content = self.extract_tag(model_output, **kwargs)
+        norm_expected = expected_output.lower()
 
         # Determine expected language code or dialect
         # expected_output is expected to be a short language target like 'en', 'zh', or 'yue'.

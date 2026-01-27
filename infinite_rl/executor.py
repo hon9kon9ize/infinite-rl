@@ -1,13 +1,13 @@
 import os
-import json
-import wasmtime
 import tempfile
 from importlib import resources
-from typing import Union, Tuple, List
+from typing import Union, List
 
 
 class Executor:
     def __init__(self, timeout=5):
+        import wasmtime  # import here to avoid hard dependency if Executor is not used
+
         self.timeout = timeout
         config = wasmtime.Config()
         config.wasm_simd = True  # enable SIMD extension

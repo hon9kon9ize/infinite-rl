@@ -23,6 +23,8 @@ class Executor:
         }
 
     def _load_wasm_module(self, filename):
+        import wasmtime
+
         # Local development check first
         local_path = os.path.join(os.path.dirname(__file__), "runtimes", filename)
         if os.path.exists(local_path):
@@ -38,6 +40,8 @@ class Executor:
     def _execute_wasm(
         self, lang: str, input: Union[str, tuple], argv: List[str] = None
     ):
+        import wasmtime
+
         module = self._modules.get(lang)
         if module is None:
             raise FileNotFoundError(f"No wasm module registered for language '{lang}'")

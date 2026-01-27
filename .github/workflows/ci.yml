@@ -114,8 +114,8 @@ jobs:
     if: ${{ needs.version-check.outputs.release_exists == 'false' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Wait 10 minutes
-        run: sleep 600
+      - name: Wait 5 minutes
+        run: sleep 300
 
       - name: Trigger CI workflow after delay
         env:

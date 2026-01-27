@@ -176,7 +176,7 @@ class TestPuzzleRewardFunctionPython(unittest.TestCase):
     def test_valid_python_puzzle_solution(self):
         model_output = """<answer>
 ```python
-def sol(inputs):
+def sol(s):
     return "19"
 ```
 </answer>"""
@@ -230,7 +230,7 @@ print("no sol function")
     def test_valid_python_quadratic_root(self):
         model_output = """<answer>
 ```python
-def sol(inputs):
+def sol(coeffs):
     return 1.0
 ```
 </answer>"""
@@ -260,7 +260,7 @@ def sol(inputs):
     def test_valid_python_all_quadratic_roots(self):
         model_output = """<answer>
 ```python
-def sol(inputs):
+def sol(coeffs):
     return [1.0, 2.0]
 ```
 </answer>"""

@@ -110,7 +110,7 @@ puzzle_fn = reward_fns["puzzle"]
 
 # Evaluate Python puzzle solution
 result = puzzle_fn.compute_reward(
-    model_output="<answer>\n```python\ndef sol(inputs):\n    return \"19\"\n```\n</answer>",
+    model_output="<answer>\n```python\ndef sol(s):\n    return \"19\"\n```\n</answer>",
     expected_output={"puzzle": "SumOfDigits", "inputs": {"s": 10}, "language": "python"}
 )
 print(f"Score: {result.score}")

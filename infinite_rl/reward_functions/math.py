@@ -1,11 +1,5 @@
 import re
 from typing import Union
-from sympy import simplify, parse_expr
-from sympy.parsing.sympy_parser import (
-    standard_transformations,
-    implicit_multiplication_application,
-)
-from sympy.parsing.latex import parse_latex
 from .reward_function import RewardFunction, RewardFunctionScore
 from ..utils.parser_utils import extract_tag
 
@@ -79,6 +73,13 @@ def _extract_number(s: str):
 
 
 def _to_sympy(text):
+    from sympy import parse_expr
+    from sympy.parsing.sympy_parser import (
+        standard_transformations,
+        implicit_multiplication_application,
+    )
+    from sympy.parsing.latex import parse_latex
+
     text = re.sub(r"\+?\s*[cC]$", "", text).strip()
     if "\\" in text or "{" in text:
         return parse_latex(text)
@@ -98,6 +99,8 @@ def _check_equality(predicted_str: str, expected_str: str) -> float:
     - If parsing fails on either side, return 0.0 (no credit).
     - This intentionally ignores textual annotations/units: numbers only.
     """
+    from sympy import simplify
+
     pred = predicted_str.strip()
     exp = expected_str.strip()
 

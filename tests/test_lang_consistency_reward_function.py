@@ -12,9 +12,9 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
 
     def test_language_mismatch(self):
         # Expected Cantonese, but response is Mandarin/Chinese inside <answer> ->
-        score = self.reward_fn.compute_reward("这是普通话。", "yue")
+        score = self.reward_fn.compute_reward("<answer>这是普通话。</answer>", "yue")
         self.assertAlmostEqual(score.score, 0.25, places=3)
 
     def test_language_match(self):
-        score = self.reward_fn.compute_reward("我愛你。", "yue")
+        score = self.reward_fn.compute_reward("<answer>我愛你。</answer>", "yue")
         self.assertAlmostEqual(score.score, 1.0, places=3)

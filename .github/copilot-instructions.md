@@ -4,22 +4,30 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 
 ## Big picture
 - The repo generates synthetic RLHF datasets by orchestrating an LLM (Gemini via the `google.genai` client) to produce task samples and uses *reward functions* to evaluate them.
+- **Supported task types**: 
+  - **Math**: Problem-solving using symbolic computation (SymPy)
+  - **Puzzle**: Programming challenges in Python (subprocess) and JavaScript (WASM runtime)
 - Key runtime flow:
   1. `scripts/generate.py` -> calls `generate_dataset()` in `infinite_rl/generator.py` to orchestrate sampling.
   2. `generator.py` calls system prompts in `infinite_rl/prompts.py` and parses model outputs with `infinite_rl/parser.py`.
-  3. Generated samples are evaluated by reward functions in `infinite_rl/reward_functions/` (currently `puzzle`, `math`, and others).
-  4. Puzzle evaluation uses WASM runtimes for JavaScript via `infinite_rl/executor.py` (uses `wasmtime` and `puzzle_js.wasm`) and local Python execution via `infinite_rl/runner.py`.
-  5. Math evaluation uses symbolic computation with `sympy` and can reference the included `math.json` dataset for task examples.
+  3. Generated samples are evaluated by specialized reward functions in `infinite_rl/reward_functions/`:
+     - `MathRewardFunction`: Validates mathematical solutions using symbolic equivalence
+     - `PuzzleRewardFunction`: Executes and validates code against puzzle specifications
+  4. Puzzle execution: JavaScript via WASM (`infinite_rl/executor.py` + `puzzle_js.wasm`), Python via subprocess (`infinite_rl/runner.py`)
+  5. Math evaluation: Uses `sympy` for symbolic computation, references `math.json` for task data
 - Programming puzzles include difficulty ratings (1-5 scale) generated using Gemini 2.5 Flash model.
+- `CurriculumLearning` class (`infinite_rl/curriculum.py`) provides adaptive difficulty progression based on model performance, starting from easy tasks and advancing to harder ones.
 
 ## What to know before changing code
 - Samples must follow the strict 3-head format: `[PROMPT]`, `[ANSWER]`, `[RESPONSE]` and the final content must be wrapped in `<answer>` tags (see `prompts.py`).
-- `PuzzleRewardFunction` expects the answer to contain a code block (triple-backtick) inside `<answer>`; it executes JavaScript puzzles via WASM and Python puzzles via local subprocess.
-- Reward functions return a `RewardFunctionScore(score, error_msg)`—the `aux_score` is used for auxiliary metrics like repetition, length, or language-consistency signals.
+- **Math tasks**: `MathRewardFunction` expects the answer tag to contain a numeric value or symbolic expression that can be parsed and compared symbolically.
+- **Puzzle tasks**: `PuzzleRewardFunction` expects the answer tag to contain a code block (triple-backtick) with valid Python or JavaScript code. The code is executed against the puzzle's SAT (satisfaction) function to determine correctness.
+- Reward functions return a `RewardFunctionScore(score, error_msg)` with score ranging from 0.0 to 1.0.
 - `generate_dataset()` is idempotent and resumable: it reads/writes `dataset.csv` and appends failures to `failed_dataset.csv` immediately.
-- `--task_dist` format is a comma-separated list of floats; current parsing expects values for available task types (see `generator.py`).
+- `--task_dist` format is a comma-separated list of floats for available task types (e.g., `0.5,0.5` for 50% math, 50% puzzle).
 - Generator has a rectification loop: low-quality outputs are retried and passed through a `RECTIFY_PROMPT` before being retried; be careful modifying retry logic or thresholds.
 - Concurrency uses `ThreadPoolExecutor` with explicit locks (`dataset_lock`, `failed_dataset_lock`, `save_lock`)—be precise when adding shared state.
+- Curriculum learning tracks task counters (+1 for correct, -1 for incorrect) and advances difficulty when total score exceeds threshold.
 
 ## Developer workflows & commands
 - Always activate the project's virtual environment before running CLI commands (required for consistent environments):
@@ -38,7 +46,7 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
   ```bash
   python scripts/generate.py --num_samples 100 --out_dir ./data --task_dist 0.5,0.5 --threads 4 --debug
   ```
-  Note: `--debug` saves raw prompts to `data/debug_prompts/` and `failed_dataset.csv` is appended on failure.
+  Note: `--task_dist 0.5,0.5` means 50% math, 50% puzzle. `--debug` saves raw prompts to `data/debug_prompts/` and `failed_dataset.csv` is appended on failure.
 
 - Run unit tests (CI uses unittest discover):
   ```bash
@@ -104,6 +112,14 @@ RUNTIME_RELEASE_TAG=v1.2.3 RUNTIME_GITHUB_REPO=owner/repo python -m pip install 
 - `infinite_rl/generator.py` — orchestration, retries/rectify, resume logic, `task_dist` parsing
 - `infinite_rl/prompts.py` — system prompts and task-specific seed hints
 - `infinite_rl/parser.py` — tag and markdown parsing logic
+- `infinite_rl/curriculum.py` — curriculum learning implementation and task difficulty progression
+- `infinite_rl/reward_functions/*.py` — reward function implementations and interfaces
+- `infinite_rl/executor.py` — how code is run securely (WASM path)
+- `infinite_rl/runner.py` — Python puzzle evaluation via local subprocess
+
+---
+If something here is unclear or you'd like a different focus (e.g., more examples, a checklist for adding a new task type), tell me what to add and I'll iterate. 👍
+- `infinite_rl/curriculum.py` — curriculum learning implementation and task difficulty progression
 - `infinite_rl/reward_functions/*.py` — reward function implementations and interfaces
 - `infinite_rl/executor.py` — how code is run securely (WASM path)
 - `infinite_rl/runner.py` — Python puzzle evaluation via local subprocess

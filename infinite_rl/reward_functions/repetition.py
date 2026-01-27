@@ -4,8 +4,8 @@ Detects n-gram repetitions and returns a penalty (negative float).
 """
 
 from collections import Counter
-from typing import Union
 import re
+from .reward_function import RewardFunction, RewardFunctionScore
 
 
 def _tokenize(text: str) -> list:
@@ -69,11 +69,6 @@ def ngram_repetition_reward(text: str, n: int = 3, weight: float = -0.1) -> floa
     return float(penalty)
 
 
-# New: RepetitionRewardFunction – a lightweight RewardFunction wrapper
-from .reward_function import RewardFunction, RewardFunctionScore
-from ..utils.parser_utils import extract_tag
-
-
 class RepetitionRewardFunction(RewardFunction):
     """Reward function that applies an n-gram repetition penalty as a lightweight reward.
 
@@ -101,8 +96,7 @@ class RepetitionRewardFunction(RewardFunction):
     def compute_reward(
         self,
         model_output: str,
-        expected_output: Union[str, int, None] = None,
-        target_tag: str = None,
+        **kwargs,
     ) -> RewardFunctionScore:
         if not self.initialized:
             self.initialize()
@@ -110,9 +104,14 @@ class RepetitionRewardFunction(RewardFunction):
         if not model_output:
             return RewardFunctionScore(score=0.0)
 
-        target_tag = target_tag if target_tag is not None else self.answer_tag
-        matches = extract_tag(model_output, tag=target_tag)
-        text = matches if matches else model_output
+        text = self.extract_tag(model_output, **kwargs)
+
+        if not text:
+            return RewardFunctionScore(
+                score=0.0,
+                error_msg={"repetition": "No content found in the specified tag."},
+            )
+
         penalty = ngram_repetition_reward(text, n=self.n, weight=self.weight)
         correctness = max(0.0, 1.0 + float(penalty))
 

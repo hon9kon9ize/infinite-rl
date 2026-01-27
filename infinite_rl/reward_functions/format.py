@@ -33,81 +33,46 @@ class FormatRewardFunction(RewardFunction):
     def compute_reward(
         self,
         model_output: str,
-        expected_output: Union[str, int, None] = None,
-        target_tag: str = None,
+        **kwargs,
     ) -> RewardFunctionScore:
         if not self.initialized:
             self.initialize()
 
-        target_tag = target_tag if target_tag is not None else self.answer_tag
+        # Use the answer_tag by default
+        target_tag = kwargs.get("target_tag", self.answer_tag)
+        content = self.extract_tag(model_output, target_tag=target_tag)
 
-        matches = extract_tag(model_output, tag=target_tag)
-        if not matches:
-            return RewardFunctionScore(
-                score=0.0, error_msg={"format": f"Missing <{target_tag}> tags"}
-            )
-
-        content = matches.strip()
-
-        # For tasks that encourage explicit reasoning, ensure a <think> block exists
-        if self.task_name == "reasoning_steps":
-            think_content = extract_tag(model_output, tag=self.think_tag)
-            if not think_content:
-                return RewardFunctionScore(
-                    score=0.0,
-                    error_msg={
-                        "format": f"Missing <{self.think_tag}> tags in response for reasoning task."
-                    },
-                )
-
-        # Code-like tasks
-        if self.task_name in ("python", "javascript", "coding"):
-            # Proper fenced block with language
-            pattern_lang = rf"```(?:{self.task_name})\b.*?```"
-            if re.search(pattern_lang, content, re.IGNORECASE | re.DOTALL):
-                return RewardFunctionScore(score=1.0)
-
-            # Any fenced block (closed)
-            if re.search(r"```.*?```", content, re.DOTALL):
-                # fenced but no language specified
-                return RewardFunctionScore(score=0.5)
-
-            # Malformed fenced block (unclosed backticks)
-            if "```" in content:
-                return RewardFunctionScore(
-                    score=0.0, error_msg={"format": "Malformed code block"}
-                )
-
-            # No fenced block but some code-like content
-            if any(
-                kw in content
-                for kw in ("def ", "class ", "import ", "console.log", "print(")
-            ):
-                return RewardFunctionScore(score=0.5)
-
-            # If <answer> tag present with non-empty content but no fenced block, give partial credit (0.5)
-            if content.strip():
-                return RewardFunctionScore(score=0.5)
-
+        if not content:
             return RewardFunctionScore(
                 score=0.0,
-                error_msg={"format": f"No code block found inside <{target_tag}>"},
+                error_msg={"format": f"No content found in the <{target_tag}> tag."},
             )
 
-        # Math tasks: expect a simple numeric value inside the tag (no backticks)
-        if self.task_name == "math":
-            # Disallow code fences for math answers
-            if "```" in content:
-                return RewardFunctionScore(
-                    score=0.0,
-                    error_msg={"format": f"Unexpected code fence in <{target_tag}>"},
-                )
+        # For code tasks (python/javascript), check for code blocks
+        if self.task_name in ["python", "javascript"]:
+            # Look for properly closed code blocks with language specification
+            code_block_pattern = r"```(\w+)\n(.*?)```"
+            matches = re.findall(code_block_pattern, content, re.DOTALL)
 
-            if content.strip():
+            if matches:
+                # Has properly closed code blocks with language tags
                 return RewardFunctionScore(score=1.0)
-            return RewardFunctionScore(
-                score=0.0, error_msg={"format": f"Empty <{target_tag}> tag"}
-            )
 
-        # Generic fallback
-        return RewardFunctionScore(score=1.0 if content else 0.0)
+            # Check for improperly formatted code blocks
+            if "```" in content:
+                # Has backticks but not properly closed
+                return RewardFunctionScore(score=0.0)
+
+            # No code block found
+            return RewardFunctionScore(score=0.0)
+        elif self.task_name == "math":
+            if re.search(r"```", content):
+                # Math shouldn't have code blocks
+                return RewardFunctionScore(score=0.0)
+            else:
+                # Simple value, no code blocks
+                return RewardFunctionScore(score=1.0)
+
+        # Generic fallback for other tasks
+        else:
+            return RewardFunctionScore(score=1.0 if content else 0.0)

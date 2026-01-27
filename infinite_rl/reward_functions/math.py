@@ -145,13 +145,12 @@ class MathRewardFunction(RewardFunction):
         self,
         model_output: str,
         expected_output: Union[str, int],
-        target_tag: str = None,
+        **kwargs,
     ) -> RewardFunctionScore:
         if not self.initialized:
             self.initialize()
 
-        target_tag = target_tag if target_tag is not None else self.answer_tag
-        predicted_str = extract_tag(model_output, tag=target_tag)
+        predicted_str = self.extract_tag(model_output, **kwargs)
 
         if "\\boxed" in predicted_str:
             predicted_str = _extract_boxed_answer(predicted_str)
@@ -159,7 +158,7 @@ class MathRewardFunction(RewardFunction):
         if not predicted_str:
             return RewardFunctionScore(
                 score=0.0,
-                error_msg={"math": f"Missing <{target_tag}> tags in response."},
+                error_msg={"math": f"No answer found in the specified tag."},
             )
 
         expected_str = str(expected_output).strip()

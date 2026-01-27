@@ -1,6 +1,8 @@
 from typing import Union, Callable, Dict
 from dataclasses import dataclass, field
 
+from infinite_rl.utils.parser_utils import extract_tag
+
 
 @dataclass
 class RewardFunctionScore:
@@ -26,11 +28,36 @@ class RewardFunction:
     def initialize(self):
         raise NotImplementedError("This method should be overridden by subclasses.")
 
+    def extract_tag(
+        self,
+        model_output: str,
+        target_tag: str = None,
+        **kwargs,
+    ) -> str:
+        """Extract target content from model output using specified tag.
+
+        Parameters
+        ----------
+        model_output:
+            Raw model response string.
+        target_tag:
+            Tag to extract from model output. If None, uses `self.answer_tag`.
+        Returns
+        -------
+        Extracted content as string.
+        """
+        content = extract_tag(
+            model_output,
+            tag=target_tag if target_tag is not None else self.answer_tag,
+        ).strip()
+        return content
+
     def compute_reward(
         self,
         model_output: str,
         expected_output: Union[str, int, float, None] = None,
         target_tag: str = None,
+        **kwargs,
     ) -> RewardFunctionScore:
         """Compute reward for given model output vs expected output.
 

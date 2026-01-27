@@ -181,6 +181,55 @@ print(f"Reasoning bonus: {score.score}")
 
 
 
+## Curriculum Learning
+
+The `CurriculumLearning` class provides adaptive task difficulty progression based on model performance. It starts with easy tasks (level 1) and gradually increases difficulty to hard tasks (level 5) as the model demonstrates competence.
+
+**Features:**
+- **Adaptive Difficulty**: Automatically advances difficulty level based on success/failure rates
+- **Task Tracking**: Maintains counters for each task type and stores failed tasks for reflective learning
+- **Weighted Selection**: Avoids recently trained tasks to promote variety
+- **Multi-Task Support**: Works with math problems and programming puzzles
+
+**Example Usage:**
+```python
+from infinite_rl import CurriculumLearning
+
+# Initialize curriculum learning with custom tags
+cl = CurriculumLearning(
+    timeout=10,
+    answer_tag="answer",
+    think_tag="think"
+)
+
+# Get a task appropriate for current skill level
+task = cl.get_prompt()
+print(f"Task type: {task['task_type']}, Difficulty level: {task['level']}")
+print(f"Prompt: {task['prompt']}")
+
+# Evaluate model response and update learning state
+model_response = "<answer>4</answer>"
+reward = cl.get_rewards(
+    task_type=task['task_type'],
+    model_output=model_response,
+    expected_output=task['expected_output'],
+    task_id=task['task_id']
+)
+
+print(f"Reward: {reward}")
+
+# Check learning progress
+stats = cl.get_learning_stats()
+print(f"Current level: {stats['current_level']}")
+print(f"Task counters: {stats['task_counters']}")
+```
+
+**Learning State:**
+- Tracks success/failure counters per task type
+- Stores failed tasks for potential reflective learning
+- Maintains a history of recently trained tasks
+- Automatically advances difficulty when performance is consistently good
+
 ## Testing
 
 ### Testing the RewardExecutor Locally
@@ -251,15 +300,42 @@ pytest
 
 ```
 infinite_rl/
-├── executor.py              # Multi-language code executor
+├── curriculum.py            # Curriculum learning with adaptive difficulty
+├── executor.py              # Multi-language code executor (WASM for JS)
 ├── generator.py             # LLM orchestration and resume logic
 ├── parser.py                # Robust tag extraction and markdown parsing
 ├── prompts.py               # Task-specific system instructions
-└── reward_functions/
-    ├── reward_function.py   # Base reward function class
-    ├── coding.py            # Coding (Python, JS) evaluator
-    └── math.py              # Symbolic Math evaluator
+├── runner.py                # Python puzzle execution via subprocess
+├── puzzles.py               # Puzzle data loading and utilities
+├── reward_functions/
+│   ├── reward_function.py   # Base reward function class
+│   ├── math.py              # Math task evaluator (symbolic computation)
+│   ├── puzzle.py            # Puzzle task evaluator (validates code execution)
+│   ├── reasoning_steps.py   # Chain-of-thought bonus reward
+│   ├── length.py            # Response length regularizer (cosine decay)
+│   ├── repetition.py        # N-gram repetition penalty
+│   ├── lang_consistency.py  # Language consistency detection
+│   └── format.py            # Format validation
+└── runtimes/
+    ├── math.json            # Math problem dataset with solutions
+    ├── puzzles.json         # Programming puzzle specifications
+    └── puzzle_js.wasm       # WASM runtime for JavaScript execution
 ```
+
+### Task Types
+
+**1. Math Tasks**
+- **Source**: `infinite_rl/runtimes/math.json`
+- **Evaluation**: Symbolic computation with SymPy
+- **Reward Function**: `MathRewardFunction`
+
+**2. Puzzle Tasks**
+- **Source**: `infinite_rl/runtimes/puzzles.json`
+- **Languages**: Python (subprocess execution) and JavaScript (WASM execution)
+- **Evaluation**: Code validation against SAT (satisfaction) functions
+- **Reward Function**: `PuzzleRewardFunction`
+- **Difficulty**: Rated 1-5 per puzzle
+
 
 ## Output
 

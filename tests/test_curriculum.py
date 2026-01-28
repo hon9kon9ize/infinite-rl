@@ -185,9 +185,7 @@ class TestSession(unittest.TestCase):
             ),
         ]
 
-        self.session.set_reward(
-            "task_001", rewards, 0.95, model_output="model response"
-        )
+        self.session.set_reward("task_001", rewards, model_output="model response")
 
         # Task should have rewards
         retrieved = self.session.get_task("task_001")
@@ -379,7 +377,9 @@ class TestCurriculumLearning(unittest.TestCase):
                     cl = CurriculumLearning()
 
                     # Check initial state
-                    self.assertEqual(cl.current_level, 0)
+                    self.assertEqual(
+                        cl.current_level, 0
+                    )  # Start at level 0 (math tasks only)
                     self.assertEqual(cl._get_task_counters(), {})
                     self.assertEqual(cl._get_failed_tasks(), {})
                     self.assertEqual(len(cl._get_recent_task_ids()), 0)
@@ -458,7 +458,8 @@ class TestCurriculumLearning(unittest.TestCase):
         cl.current_level = 0
 
         # Simulate good performance by adding successful tasks to the session
-        for i in range(5):
+        # Need at least 10 samples per task type due to min_samples constraint
+        for i in range(10):
             task = Task(
                 task_id=f"math_{i}",
                 task_name=f"Math Task {i}",
@@ -470,7 +471,7 @@ class TestCurriculumLearning(unittest.TestCase):
             task.is_correct = True  # Mark as correct
             cl.session.add_task(task)
 
-        for i in range(5):
+        for i in range(10):
             task = Task(
                 task_id=f"puzzle_{i}",
                 task_name=f"Puzzle Task {i}",
@@ -493,7 +494,7 @@ class TestCurriculumLearning(unittest.TestCase):
         # Create a minimal curriculum with mock data
         cl = CurriculumLearning()
 
-        # Manually set up tasks for level 0 (using real math.json format)
+        # Manually set up tasks for level 0 (curriculum starts at level 0 with math tasks)
         cl.tasks_by_level[0] = [
             {
                 "type": "math",
@@ -503,7 +504,7 @@ class TestCurriculumLearning(unittest.TestCase):
                     "lang": "en",
                     "rating": 1,
                 },
-                "rating": 0,
+                "rating": 1,
                 "id": "math_test",
             }
         ]
@@ -513,7 +514,7 @@ class TestCurriculumLearning(unittest.TestCase):
         self.assertIsNotNone(task)
         self.assertIsInstance(task, Task)
         self.assertEqual(task.task_type, "math")
-        self.assertEqual(task.level, 0)
+        self.assertEqual(task.level, 1)
         self.assertEqual(task.expected_answer, "4")
         self.assertEqual(task.language, "en")
         self.assertIn("What is 2+2?", task.prompt)
@@ -522,7 +523,7 @@ class TestCurriculumLearning(unittest.TestCase):
         """Test getting a puzzle task prompt as Task object."""
         cl = CurriculumLearning()
 
-        # Manually set up puzzle task
+        # Manually set up puzzle task at level 0 (curriculum starts at level 0)
         cl.tasks_by_level[0] = [
             {
                 "type": "puzzle",
@@ -555,53 +556,46 @@ class TestCurriculumLearning(unittest.TestCase):
         """Test that recent tasks are tracked and weighted."""
         cl = CurriculumLearning()
 
-        # Add some recent tasks (base task IDs without instance counter)
-        cl.recent_tasks = ["task1", "task2", "task1"]  # task1 appears twice
-
-        # Set up tasks including task1
+        # Set up tasks at level 0 (curriculum starts at level 0 with math tasks)
         cl.tasks_by_level[0] = [
             {
                 "type": "math",
-                "data": {"problem": "Q1", "solution": "A1", "rating": 1},
+                "data": {"prompt": "Q1", "response": "A1", "lang": "en", "rating": 1},
                 "rating": 1,
-                "id": "task1",
+                "id": "math_task1",
             },
             {
                 "type": "math",
-                "data": {"problem": "Q2", "solution": "A2", "rating": 1},
+                "data": {"prompt": "Q2", "response": "A2", "lang": "en", "rating": 1},
                 "rating": 1,
-                "id": "task2",
+                "id": "math_task2",
             },
             {
                 "type": "math",
-                "data": {"problem": "Q3", "solution": "A3", "rating": 1},
+                "data": {"prompt": "Q3", "response": "A3", "lang": "en", "rating": 1},
                 "rating": 1,
-                "id": "task3",
+                "id": "math_task3",
             },
         ]
 
-        # Get a prompt - should prefer task3 over task1 (which has been seen recently)
+        # Get a prompt - should return one of the available tasks
         task = cl.get_prompt()
 
         self.assertIsNotNone(task)
-        # Task ID should include a unique instance counter (e.g., "task1_0")
-        # Extract the base task ID for comparison
-        base_task_id = (
-            task.task_id.rsplit("_", 1)[0] if "_" in task.task_id else task.task_id
-        )
-        self.assertIn(base_task_id, ["task1", "task2", "task3"])
+        # Task should have math_taskX_0 format with instance counter
+        self.assertIn("math_task", task.task_id)
 
     def test_unique_task_ids_generated(self):
         """Test that each task instance gets a unique task_id."""
         cl = CurriculumLearning()
 
-        # Set up tasks
+        # Set up a single task at level 0
         cl.tasks_by_level[0] = [
             {
                 "type": "math",
-                "data": {"problem": "Q1", "solution": "A1", "rating": 1},
+                "data": {"prompt": "Q1", "response": "A1", "lang": "en", "rating": 1},
                 "rating": 1,
-                "id": "task1",
+                "id": "math_simple",
             },
         ]
 
@@ -614,10 +608,10 @@ class TestCurriculumLearning(unittest.TestCase):
         self.assertIsNotNone(task2)
         self.assertIsNotNone(task3)
 
-        # Unique IDs should be task1_0, task1_1, task1_2
-        self.assertEqual(task1.task_id, "task1_0")
-        self.assertEqual(task2.task_id, "task1_1")
-        self.assertEqual(task3.task_id, "task1_2")
+        # Unique IDs should increment counter (math_simple_0, math_simple_1, math_simple_2)
+        self.assertEqual(task1.task_id, "math_simple_0")
+        self.assertEqual(task2.task_id, "math_simple_1")
+        self.assertEqual(task3.task_id, "math_simple_2")
 
         # Task instance counter should be incremented
         self.assertEqual(cl.task_instance_counter, 3)
@@ -1190,6 +1184,387 @@ class TestCurriculumLearning(unittest.TestCase):
         self.assertEqual(log_entry["primary_score"], 1.0)
         self.assertEqual(log_entry["info"]["primary"], "logged")
         self.assertIsNotNone(log_entry["first_response_at"])
+
+    def test_reflective_learning_disabled(self):
+        """Test that reflective learning is disabled when rate is 0."""
+        cl = CurriculumLearning(reflective_learning_rate=0.0)
+
+        # Add a format failure task
+        task = Task(
+            task_id="format_fail",
+            task_name="Format Failure",
+            task_type="math",
+            level=1,
+            prompt="What is 2+2?",
+            expected_answer="4",
+            model_output="No answer tags here",
+        )
+        # Add format failure reward
+        format_reward = RewardFunctionScore(
+            score=0.0, reward_function_name="format", info="Missing answer tags"
+        )
+        task.add_reward(format_reward)
+        cl.session.add_task(task)
+
+        # Set up available tasks
+        cl.tasks_by_level[0] = [
+            {
+                "type": "math",
+                "data": {"problem": "Q1", "solution": "A1", "rating": 0},
+                "rating": 0,
+                "id": "normal_task",
+            }
+        ]
+
+        # Try to get prompt multiple times - should never return reflective
+        for _ in range(10):
+            task_prompt = cl.get_prompt()
+            self.assertIsNotNone(task_prompt)
+            # Should be normal task, not reflective
+            self.assertNotIn("reflective", task_prompt.task_id.lower())
+
+    def test_reflective_learning_enabled(self):
+        """Test that reflective learning returns format failure tasks."""
+        cl = CurriculumLearning(reflective_learning_rate=1.0)  # Always trigger
+
+        # Add a format failure task
+        format_fail_task = Task(
+            task_id="format_fail_1",
+            task_name="Format Failure Task",
+            task_type="math",
+            level=1,
+            prompt="What is 2+2?",
+            expected_answer="4",
+            model_output="My answer is five",
+        )
+        # Add format failure reward
+        format_reward = RewardFunctionScore(
+            score=0.0, reward_function_name="format", info="Missing answer tags"
+        )
+        format_fail_task.add_reward(format_reward)
+        cl.session.add_task(format_fail_task)
+
+        # Exit warmup
+        cl.global_step = cl.warmup_step
+
+        # Get prompt - should return reflective task
+        reflective_task = cl.get_prompt()
+
+        self.assertIsNotNone(reflective_task)
+        self.assertIn("reflective", reflective_task.task_id.lower())
+        self.assertIn("reflective", reflective_task.task_name.lower())
+        # Should include the original task info in the prompt
+        self.assertIn(
+            "You previously attempted this", reflective_task.prompt
+        )  # Works for both math and puzzle
+        self.assertIn("2+2", reflective_task.prompt)
+        self.assertIn("five", reflective_task.prompt)
+
+    def test_get_format_failure_tasks(self):
+        """Test extracting format failure tasks from session."""
+        cl = CurriculumLearning()
+
+        # Add tasks with different outcomes
+        # Task 1: Format failure
+        task1 = Task(
+            task_id="task_1",
+            task_name="Task 1",
+            task_type="math",
+            level=1,
+            prompt="Q1",
+            expected_answer="A1",
+        )
+        format_fail = RewardFunctionScore(
+            score=0.0, reward_function_name="format", info="Failed"
+        )
+        task1.add_reward(format_fail)
+        cl.session.add_task(task1)
+
+        # Task 2: Format success
+        task2 = Task(
+            task_id="task_2",
+            task_name="Task 2",
+            task_type="math",
+            level=1,
+            prompt="Q2",
+            expected_answer="A2",
+        )
+        format_success = RewardFunctionScore(
+            score=1.0, reward_function_name="format", info="Passed"
+        )
+        task2.add_reward(format_success)
+        cl.session.add_task(task2)
+
+        # Task 3: Format failure (different task)
+        task3 = Task(
+            task_id="task_3",
+            task_name="Task 3",
+            task_type="puzzle",
+            level=1,
+            prompt="Q3",
+            expected_answer="A3",
+        )
+        format_fail_2 = RewardFunctionScore(
+            score=0.0, reward_function_name="format", info="Failed"
+        )
+        task3.add_reward(format_fail_2)
+        cl.session.add_task(task3)
+
+        # Get format failures
+        failures = cl._get_format_failure_tasks()
+
+        # Should find 2 format failures
+        self.assertEqual(len(failures), 2)
+        failure_ids = [t.task_id for t in failures]
+        self.assertIn("task_1", failure_ids)
+        self.assertIn("task_3", failure_ids)
+        self.assertNotIn("task_2", failure_ids)
+
+    def test_create_reflective_prompt_includes_task_info(self):
+        """Test that reflective prompt includes all necessary task information."""
+        cl = CurriculumLearning()
+
+        # Create a task that failed format
+        original_task = Task(
+            task_id="math_001",
+            task_name="Addition Problem",
+            task_type="math",
+            level=2,
+            prompt="What is 23 + 17?",
+            expected_answer="40",
+            model_output="The answer is 40 but I didn't use tags",
+        )
+
+        # Create reflective prompt
+        reflective_prompt = cl._create_reflective_prompt(original_task)
+
+        # Check that it includes key components
+        self.assertIn("previously attempted", reflective_prompt.lower())
+        self.assertIn("format", reflective_prompt.lower())
+        self.assertIn("23 + 17", reflective_prompt)  # Original problem
+        self.assertIn("40 but I didn't use tags", reflective_prompt)  # Previous attempt
+        self.assertIn("<answer>", reflective_prompt)  # Format instruction
+        self.assertIn("guidelines", reflective_prompt.lower())
+
+    def test_reflective_task_preserves_metadata(self):
+        """Test that reflective task preserves original task metadata."""
+        cl = CurriculumLearning(reflective_learning_rate=1.0)
+
+        # Create a puzzle task with format failure
+        puzzle_task = Task(
+            task_id="puzzle_js_001",
+            task_name="JavaScript Puzzle",
+            task_type="puzzle",
+            level=3,
+            prompt="Write a function...",
+            expected_answer={"puzzle": "TestPuzzle", "inputs": {}},
+            language="javascript",
+            model_output="function test() { }",
+        )
+        format_fail = RewardFunctionScore(score=0.0, reward_function_name="format")
+        puzzle_task.add_reward(format_fail)
+        cl.session.add_task(puzzle_task)
+
+        # Exit warmup to allow reflective learning
+        cl.global_step = cl.warmup_step
+
+        # Get reflective task
+        reflective = cl._get_reflective_prompt()
+
+        self.assertIsNotNone(reflective)
+        # Should preserve metadata
+        self.assertEqual(reflective.task_type, "puzzle")
+        self.assertEqual(reflective.level, 3)
+        self.assertEqual(reflective.language, "javascript")
+        self.assertEqual(reflective.expected_answer, puzzle_task.expected_answer)
+
+    def test_no_format_failures_returns_none(self):
+        """Test that get_reflective_prompt returns None when no format failures exist."""
+        cl = CurriculumLearning(reflective_learning_rate=1.0)
+
+        # Add tasks without format failures
+        for i in range(3):
+            task = Task(
+                task_id=f"good_task_{i}",
+                task_name=f"Good Task {i}",
+                task_type="math",
+                level=1,
+                prompt="Q",
+                expected_answer="A",
+            )
+            # Success reward
+            success = RewardFunctionScore(score=1.0, reward_function_name="primary")
+            task.add_reward(success)
+            cl.session.add_task(task)
+
+        # Try to get reflective task - should return None
+        reflective = cl._get_reflective_prompt()
+        self.assertIsNone(reflective)
+
+    def test_reflective_learning_during_warmup(self):
+        """Test that reflective learning doesn't trigger during warmup phase."""
+        cl = CurriculumLearning(
+            reflective_learning_rate=1.0, warmup_step=100
+        )  # Long warmup
+
+        # Add format failure
+        task = Task(
+            task_id="format_fail",
+            task_name="Fail",
+            task_type="math",
+            level=1,
+            prompt="Q",
+            expected_answer="A",
+        )
+        fail = RewardFunctionScore(score=0.0, reward_function_name="format")
+        task.add_reward(fail)
+        cl.session.add_task(task)
+
+        # Set up normal tasks
+        cl.tasks_by_level[0] = [
+            {
+                "type": "math",
+                "data": {"problem": "Q", "solution": "A", "rating": 0},
+                "rating": 0,
+                "id": "normal",
+            }
+        ]
+
+        # During warmup (global_step < warmup_step), reflective should not trigger
+        cl.global_step = 10  # Still in warmup
+
+        task_prompt = cl.get_prompt()
+
+        # Should be normal task, not reflective
+        self.assertIsNotNone(task_prompt)
+        self.assertNotIn("reflective", task_prompt.task_id.lower())
+
+    def test_reflective_task_added_to_session(self):
+        """Test that reflective tasks are properly added to the session."""
+        cl = CurriculumLearning(reflective_learning_rate=1.0)
+
+        # Add format failure
+        orig = Task(
+            task_id="orig_1",
+            task_name="Original",
+            task_type="math",
+            level=1,
+            prompt="Q",
+            expected_answer="A",
+        )
+        fail = RewardFunctionScore(score=0.0, reward_function_name="format")
+        orig.add_reward(fail)
+        cl.session.add_task(orig)
+
+        session_size_before = len(cl.session.tasks)
+
+        # Get reflective task
+        cl.global_step = cl.warmup_step
+        reflective = cl._get_reflective_prompt()
+
+        # Should have added a new task to session
+        self.assertGreater(len(cl.session.tasks), session_size_before)
+        self.assertIn(reflective.task_id, cl.session.tasks)
+
+    def test_reflective_learning_rate_parameter(self):
+        """Test that reflective_learning_rate parameter is configurable."""
+        cl1 = CurriculumLearning(reflective_learning_rate=0.0)
+        cl2 = CurriculumLearning(reflective_learning_rate=0.5)
+        cl3 = CurriculumLearning(reflective_learning_rate=1.0)
+
+        self.assertEqual(cl1.reflective_learning_rate, 0.0)
+        self.assertEqual(cl2.reflective_learning_rate, 0.5)
+        self.assertEqual(cl3.reflective_learning_rate, 1.0)
+
+    def test_reflective_tasks_not_used_for_reflective(self):
+        """Test that reflective tasks are NOT used to create further reflective tasks."""
+        cl = CurriculumLearning(reflective_learning_rate=1.0)
+
+        # Add an original task with format failure
+        original_task = Task(
+            task_id="original_001",
+            task_name="Original Task",
+            task_type="math",
+            level=1,
+            prompt="What is 2+2?",
+            expected_answer="4",
+            model_output="Wrong answer",
+        )
+        format_reward = RewardFunctionScore(
+            score=0.0, reward_function_name="format", info="Failed"
+        )
+        original_task.add_reward(format_reward)
+        cl.session.add_task(original_task)
+
+        # Exit warmup to allow reflective learning
+        cl.global_step = cl.warmup_step
+
+        # Get first reflective version
+        reflective_1 = cl._get_reflective_prompt()
+        self.assertIsNotNone(reflective_1)
+        self.assertEqual(reflective_1.task_id, "original_001_reflective_0")
+        self.assertEqual(reflective_1.task_name, "Original Task (reflective attempt 1)")
+
+        # Now mark the reflective task as having a format failure
+        reflective_format_reward = RewardFunctionScore(
+            score=0.0, reward_function_name="format", info="Failed"
+        )
+        reflective_1.add_reward(reflective_format_reward)
+
+        # Try to get another reflective task
+        # Should NOT select the reflective_1 task, but should select original_001 again
+        reflective_2 = cl._get_reflective_prompt()
+
+        # Should create a NEW reflective version of the original task, not from reflective_1
+        self.assertIsNotNone(reflective_2)
+        # Should be _reflective_1, not _reflective_0_reflective
+        self.assertEqual(reflective_2.task_id, "original_001_reflective_1")
+        self.assertEqual(reflective_2.task_name, "Original Task (reflective attempt 2)")
+
+    def test_original_task_unlimited_reflective_attempts(self):
+        """Test that the same original task can be used for reflective learning unlimited times."""
+        cl = CurriculumLearning(reflective_learning_rate=1.0)
+
+        # Add a single original task with format failure
+        original_task = Task(
+            task_id="problem_xyz",
+            task_name="Problem XYZ",
+            task_type="puzzle",
+            level=2,
+            prompt="Solve the puzzle",
+            expected_answer={"code": "solution"},
+            language="python",
+            model_output="bad code",
+        )
+        format_reward = RewardFunctionScore(
+            score=0.0, reward_function_name="format", info="Failed"
+        )
+        original_task.add_reward(format_reward)
+        cl.session.add_task(original_task)
+
+        # Exit warmup
+        cl.global_step = cl.warmup_step
+
+        # Generate multiple reflective versions of the same task
+        reflective_tasks = []
+        for i in range(5):
+            reflective = cl._get_reflective_prompt()
+            self.assertIsNotNone(reflective)
+            reflective_tasks.append(reflective)
+
+            # Mark it as failed to allow next iteration
+            fail_reward = RewardFunctionScore(
+                score=0.0, reward_function_name="format", info="Still failed"
+            )
+            reflective.add_reward(fail_reward)
+
+        # Verify all came from the same original task with different counters
+        for i, task in enumerate(reflective_tasks):
+            self.assertEqual(task.task_id, f"problem_xyz_reflective_{i}")
+            self.assertEqual(
+                task.task_name, f"Problem XYZ (reflective attempt {i + 1})"
+            )
+            self.assertIn("Solve the puzzle", task.prompt)  # Original prompt included
 
 
 if __name__ == "__main__":

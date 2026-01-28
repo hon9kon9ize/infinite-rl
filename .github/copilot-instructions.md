@@ -5,8 +5,8 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 ## Big picture
 - The repo generates synthetic RLHF datasets by orchestrating an LLM (Gemini via the `google.genai` client) to produce task samples and uses *reward functions* to evaluate them.
 - **Supported task types**: 
-  - **Math**: Problem-solving using symbolic computation (SymPy)
-  - **Puzzle**: Programming challenges in Python (subprocess) and JavaScript (WASM runtime)
+  - **Math** (Level 0): Problem-solving using symbolic computation (SymPy). All math tasks are at level 0, sourced from GSM8K filtered for easy mathematical problems.
+  - **Puzzle** (Levels 1-5): Programming challenges in Python (subprocess) and JavaScript (WASM runtime). Difficulty rated 1-5 using Gemini 3 Flash model.
 - Key runtime flow:
   1. `scripts/generate.py` -> calls `generate_dataset()` in `infinite_rl/generator.py` to orchestrate sampling.
   2. `generator.py` parses model outputs with `infinite_rl/parser.py`.
@@ -14,9 +14,11 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
      - `MathRewardFunction`: Validates mathematical solutions using symbolic equivalence
      - `PuzzleRewardFunction`: Executes and validates code against puzzle specifications
   4. Puzzle execution: JavaScript via WASM (`infinite_rl/executor.py` + `puzzle_js.wasm`), Python via subprocess (`infinite_rl/runner.py`)
-  5. Math evaluation: Uses `sympy` for symbolic computation, references `math.json` for task data
-- Programming puzzles include difficulty ratings (1-5 scale) generated using Gemini 2.5 Flash model.
+  5. Math evaluation: Uses `sympy` for symbolic computation, references `math.json` for task data (all tasks at level 0)
+- Programming puzzles include difficulty ratings (1-5 scale) generated using Gemini 3 Flash model.
 - `CurriculumLearning` class (`infinite_rl/curriculum.py`) provides adaptive difficulty progression using **sliding window success rates**:
+  - Starts at level 0 (math tasks only)
+  - Progresses through levels 1-5 (programming puzzles) based on success rates
   - Tracks last N episodes (default: 50) of success/failure per task type
   - Advances difficulty when success rate > 80% AND variance < 0.05 (configurable)
   - Ensures agent has truly mastered current level, not just "catching up"

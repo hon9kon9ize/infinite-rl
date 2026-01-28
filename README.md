@@ -127,7 +127,8 @@ Evaluates LLM-generated solutions to programming puzzles across multiple languag
 - Support for various puzzle types (algebra, basic math, etc.)
 - Secure execution environments (WASM for JS, local subprocess for Python)
 - Detailed error reporting
-- Difficulty ratings: Each programming puzzle has been rated for difficulty (1-5 scale) using Gemini 2.5 Flash model
+- Difficulty ratings: Each programming puzzle has been rated for difficulty (1-5 scale) using Gemini 3 Flash model.
+- Math tasks are drawn from GSM8K, filtered for easy mathematical problems (level 0)
 
 **Example:**
 ```python
@@ -212,7 +213,7 @@ print(f"Reasoning bonus: {score.score}")
 
 ## Curriculum Learning
 
-The `CurriculumLearning` class provides adaptive task difficulty progression based on model performance using a **sliding window success rate** mechanism. It starts with easy tasks (level 1) and gradually increases difficulty to hard tasks (level 5) as the model demonstrates competence.
+The `CurriculumLearning` class provides adaptive task difficulty progression based on model performance using a **sliding window success rate** mechanism. It starts with math tasks (level 0) and progressively includes programming puzzles with increasing difficulty (levels 1-5) as the model demonstrates competence.
 
 **Features:**
 - **Sliding Window Tracking**: Tracks the last N episodes (default: 50) of success/failure per task type

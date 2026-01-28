@@ -17,12 +17,14 @@ class LangConsistencyRewardFunction(RewardFunction):
     def __init__(
         self,
         task_name: str = "lang_consistency",
+        answer_tag_excluded=True,
         **kwargs,
     ):
         from cantonesedetect import CantoneseDetector
 
         super().__init__(task_name, **kwargs)
         self.yue_detector = CantoneseDetector(split_seg=True, get_analysis=True)
+        self.answer_tag_excluded = answer_tag_excluded
 
     def initialize(self):
         self.initialized = True
@@ -44,6 +46,7 @@ class LangConsistencyRewardFunction(RewardFunction):
         **kwargs,
     ) -> RewardFunctionScore:
         import pycld2 as cld2
+        from ..utils.parser_utils import extract_tag as extract_tag_util
 
         # Ensure initialized
         if not self.initialized:
@@ -52,7 +55,12 @@ class LangConsistencyRewardFunction(RewardFunction):
         # Get expected language from task
         expected_output = task.language
 
-        content = self.extract_tag(task.model_output or "")
+        # Extract content using answer_tag_excluded parameter
+        content = extract_tag_util(
+            task.model_output or "",
+            tag=self.target_tag,
+            exclude=self.answer_tag_excluded,
+        ).strip()
 
         if not content:
             return RewardFunctionScore(

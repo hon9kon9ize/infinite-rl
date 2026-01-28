@@ -116,7 +116,7 @@ class RepetitionRewardFunction(RewardFunction):
         if not text:
             return RewardFunctionScore(
                 score=0.0,
-                info="No content found in the specified tag.",
+                info=f"No content found in the <{self.target_tag}> tag.",
             )
 
         penalty = ngram_repetition_reward(text, n=self.n, weight=self.weight)

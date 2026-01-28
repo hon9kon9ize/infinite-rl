@@ -17,7 +17,12 @@ from .reward_functions import get_reward_functions, RewardFunctionScore
 from .session import Session
 from .task import Task
 from .utils.param_extractor import extract_puzzle_inputs
-from .prompt_templates import format_math_prompt, format_puzzle_prompt
+from .prompt_templates import (
+    format_math_prompt,
+    format_puzzle_prompt,
+    format_reflective_math_prompt,
+    format_reflective_puzzle_prompt,
+)
 
 
 class CurriculumLearning:
@@ -44,6 +49,8 @@ class CurriculumLearning:
         variance_threshold: float = 0.05,
         demote_threshold: float = 0.4,
         warmup_step: int = 32,
+        reflective_learning_rate: float = 0.2,
+        level_change_cooldown: int = 5,
     ):
         """
         Initialize curriculum learning.
@@ -69,6 +76,8 @@ class CurriculumLearning:
             variance_threshold: Maximum variance for success rate stability (default: 0.05)
             demote_threshold: Success rate threshold for difficulty decrease (default: 0.4 = 40%)
             warmup_step: Number of initial steps to only use level 0 tasks (default: 32)
+            reflective_learning_rate: Probability of triggering reflective learning on format failures (default: 0.1). Set to 0 to disable.
+            level_change_cooldown: int = 5, Minimum steps between level changes to prevent rapid fluctuations
         """
         self.timeout = timeout
         self.answer_tag = answer_tag
@@ -95,12 +104,15 @@ class CurriculumLearning:
         self._initialize_aux_reward_functions()
 
         # Learning state
-        self.current_level = 0  # Start at easiest level
+        self.current_level = 0  # Start at level 0 (math tasks only)
         self.task_instance_counter: int = 0  # Counter for unique task IDs
 
         # Warmup stage configuration
         self.warmup_step = warmup_step
         self.global_step: int = 0  # Counter for total steps
+
+        # Reflective learning configuration
+        self.reflective_learning_rate = reflective_learning_rate
 
         # Session management
         self.session = Session()
@@ -113,6 +125,10 @@ class CurriculumLearning:
         self.demote_threshold = demote_threshold
         # Deques to track success/failure per task type
         self.success_windows: Dict[str, deque] = {}  # Maps task_type -> deque of 0s/1s
+
+        # Level change cooldown: prevent successive advancements too quickly
+        self.last_level_change_step: int = -999  # Track when last level change occurred
+        self.level_change_cooldown: int = level_change_cooldown
 
         # Load available tasks
         self._load_available_tasks()
@@ -259,6 +275,25 @@ class CurriculumLearning:
         for level in range(0, 6):
             print(f"  Level {level}: {len(self.tasks_by_level[level])} tasks")
 
+    def _get_format_failure_tasks(self) -> List[Task]:
+        """Get list of tasks that failed format validation.
+
+        Returns:
+            List of Task objects where format reward score is 0.
+        """
+        format_failures = []
+        for task in self.session.tasks.values():
+            # Skip tasks that are already reflective (to avoid reflective of reflective)
+            if "_reflective" in task.task_id:
+                continue
+
+            # Look for format reward in task_rewards
+            for reward in task.task_rewards:
+                if reward.reward_function_name == "format" and reward.score == 0:
+                    format_failures.append(task)
+                    break  # Only add once per task
+        return format_failures
+
     def _get_recent_task_ids(self) -> List[str]:
         """Get recent task base IDs from session history."""
         return [
@@ -295,6 +330,98 @@ class CurriculumLearning:
             for task_id, task in self.session.tasks.items()
             if task.is_correct is False
         }
+
+    def _get_format_failure_tasks(self) -> List[Task]:
+        """Get list of tasks that failed format validation (excluding already-reflective tasks).
+
+        Reflective tasks are excluded to prevent cascading reflective prompts.
+        Original tasks can be used for reflective learning unlimited times,
+        but reflective tasks themselves should not generate further reflective versions.
+
+        Returns:
+            List of Task objects where format reward score is 0 and task is not already reflective.
+        """
+        format_failures = []
+        for task in self.session.tasks.values():
+            # Skip tasks that are already reflective (to avoid reflective of reflective)
+            if "_reflective" in task.task_id:
+                continue
+
+            # Look for format reward in task_rewards
+            for reward in task.task_rewards:
+                if reward.reward_function_name == "format" and reward.score == 0:
+                    format_failures.append(task)
+                    break  # Only add once per task
+        return format_failures
+
+    def _create_reflective_prompt(self, task: Task) -> str:
+        """Create a reflective learning prompt from a failed task.
+
+        Uses task-type-specific formatting (math vs puzzle).
+
+        Args:
+            task: The task that failed format validation
+
+        Returns:
+            A reflective prompt that guides the model to retry with proper formatting
+        """
+        if task.task_type == "math":
+            return format_reflective_math_prompt(
+                original_prompt=task.prompt,
+                previous_attempt=task.model_output,
+                answer_tag=self.answer_tag,
+                think_tag=self.think_tag,
+            )
+        else:  # puzzle
+            return format_reflective_puzzle_prompt(
+                original_prompt=task.prompt,
+                previous_attempt=task.model_output,
+                language=task.language or "python",
+                answer_tag=self.answer_tag,
+                think_tag=self.think_tag,
+            )
+
+    def _get_reflective_prompt(self) -> Optional[Task]:
+        """Get a format-failure task wrapped with reflective prompt.
+
+        Key behaviors:
+        - Only selects from original (non-reflective) tasks that failed format validation
+        - Creates a NEW reflective version each time with an incrementing counter
+        - This allows unlimited reflective attempts on the same original task
+        - But prevents reflective tasks themselves from generating reflective versions
+
+        Returns:
+            A task with reflective prompt if available, None otherwise.
+        """
+        format_failures = self._get_format_failure_tasks()
+        if not format_failures:
+            return None
+
+        # Select a random format failure task (guaranteed to be non-reflective)
+        selected_task = random.choice(format_failures)
+
+        # Count how many reflective versions already exist for this original task
+        reflective_count = sum(
+            1
+            for task in self.session.tasks.values()
+            if task.task_id.startswith(f"{selected_task.task_id}_reflective")
+        )
+
+        # Create a reflective version with incrementing counter
+        # This allows unlimited reflective attempts on the same original task
+        reflective_task = Task(
+            task_id=f"{selected_task.task_id}_reflective_{reflective_count}",
+            task_name=f"{selected_task.task_name} (reflective attempt {reflective_count + 1})",
+            task_type=selected_task.task_type,
+            level=selected_task.level,
+            prompt=self._create_reflective_prompt(selected_task),
+            expected_answer=selected_task.expected_answer,
+            language=selected_task.language,
+        )
+
+        # Add to session
+        self.session.add_task(reflective_task)
+        return reflective_task
 
     def compute_reward(
         self,
@@ -373,9 +500,7 @@ class CurriculumLearning:
         self._update_level()
 
         # Save rewards to session
-        self.session.set_reward(
-            task_id, task_rewards, combined_score, model_output=model_output
-        )
+        self.session.set_reward(task_id, task_rewards, model_output=model_output)
 
         # Log evaluation if configured
         if self.log_file is not None:
@@ -408,10 +533,19 @@ class CurriculumLearning:
         - Advance if success_rate > threshold (80%) AND variance < variance_threshold (0.05)
         - Demote if success_rate < demote_threshold (40%) AND variance < variance_threshold
 
+        Enforces cooldown period to prevent cascading level changes - at least N steps
+        must pass between consecutive level changes.
+
         This ensures the level follows the agent's actual performance trend rather than
         remaining at an unsuitable difficulty.
         """
         self._ensure_success_windows_from_session()
+
+        # Check if we're in cooldown period (prevent consecutive advancements)
+        steps_since_change = self.global_step - self.last_level_change_step
+        if steps_since_change < self.level_change_cooldown:
+            return False  # Still in cooldown, don't change level
+
         # Minimum samples required before considering level changes (prevents cascading jumps)
         min_samples = 10
 
@@ -448,6 +582,7 @@ class CurriculumLearning:
                         f"success_rate={mean_success_rate:.1%}, variance={variance:.4f}"
                     )
                     self.current_level = min(self.current_level + 1, 5)
+                    self.last_level_change_step = self.global_step  # Record the change
                     return True
 
             # Check if we should demote (low success rate with stability)
@@ -461,6 +596,7 @@ class CurriculumLearning:
                         f"success_rate={mean_success_rate:.1%}, variance={variance:.4f}"
                     )
                     self.current_level = max(self.current_level - 1, 1)
+                    self.last_level_change_step = self.global_step  # Record the change
                     return True
 
         return False
@@ -561,15 +697,30 @@ class CurriculumLearning:
         """
         Get a task prompt appropriate for current difficulty level.
 
-        During warmup stage (first warmup_step iterations), only level 0 tasks are used.
-        After warmup, normal curriculum learning applies.
+        With probability reflective_learning_rate (default 0.1), returns a format-failure
+        task wrapped in a reflective prompt to help the model learn proper formatting.
+        Otherwise, returns a new task based on current difficulty level.
+
+        During warmup stage (first warmup_step iterations), only level 1 tasks are used
+        (unless reflective learning is triggered).
 
         Returns:
             Task object with prompt, expected output, etc., or None if no tasks available.
         """
+        # Check for reflective learning trigger (only if not disabled and not in warmup)
+        if (
+            self.reflective_learning_rate > 0
+            and random.random() > (1.0 - self.reflective_learning_rate)
+            and not self.is_warmup()
+        ):
+            reflective_task = self._get_reflective_prompt()
+            if reflective_task is not None:
+                return reflective_task
+
+        # Normal task selection logic
         # Determine which level to use
         if self.is_warmup():
-            # Warmup stage: force level 0
+            # Warmup stage: use level 0 (math tasks only)
             selected_level = 0
         else:
             # Normal curriculum: use current level
@@ -616,7 +767,9 @@ class CurriculumLearning:
             task_name = f"math_{math_data.get('prompt', '')[:30]}"
             problem_statement = math_data.get("prompt", "")
             language = math_data.get("lang", "en")
-            prompt = format_math_prompt(problem_statement, self.answer_tag, language)
+            prompt = format_math_prompt(
+                problem_statement, self.answer_tag, language, self.think_tag
+            )
             expected_output = math_data.get("response", "")
 
             task_obj = Task(
@@ -641,7 +794,9 @@ class CurriculumLearning:
 
             task_name = selected_task["puzzle_name"]
             language = selected_task["language"]  # javascript or python
-            prompt = format_puzzle_prompt(puzzle_data, language, self.answer_tag)
+            prompt = format_puzzle_prompt(
+                puzzle_data, language, self.answer_tag, self.think_tag
+            )
             puzzle_inputs = extract_puzzle_inputs(puzzle_data, language)
             expected_output = {
                 "puzzle": selected_task["puzzle_name"],

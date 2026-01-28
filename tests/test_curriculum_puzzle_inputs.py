@@ -23,8 +23,14 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
         """Puzzle tasks must include extracted inputs, not empty dict."""
         cl = CurriculumLearning()
 
-        # Manually set up a puzzle task with parameters in sat()
-        cl.tasks_by_level[0] = [
+        # Clear all levels except 1 to ensure we get only our mock puzzle task
+        # Note: Puzzles start at level 1; level 0 is reserved for math tasks
+        for level in range(0, 6):
+            if level != 1:
+                cl.tasks_by_level[level] = []
+
+        # Manually set up a puzzle task with parameters in sat() at level 1
+        cl.tasks_by_level[1] = [
             {
                 "type": "puzzle",
                 "language": "javascript",
@@ -67,7 +73,12 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
         """Python puzzle tasks must also have extracted inputs."""
         cl = CurriculumLearning()
 
-        cl.tasks_by_level[0] = [
+        # Clear all levels except 1 to ensure we get only our mock task
+        for level in range(0, 6):
+            if level != 1:
+                cl.tasks_by_level[level] = []
+
+        cl.tasks_by_level[1] = [
             {
                 "type": "puzzle",
                 "language": "python",
@@ -96,7 +107,12 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
         """Puzzle with no default parameters should have empty inputs dict."""
         cl = CurriculumLearning()
 
-        cl.tasks_by_level[0] = [
+        # Clear all levels except 1 to ensure we get only our mock task
+        for level in range(0, 6):
+            if level != 1:
+                cl.tasks_by_level[level] = []
+
+        cl.tasks_by_level[1] = [
             {
                 "type": "puzzle",
                 "language": "javascript",
@@ -152,7 +168,12 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
             with self.subTest(puzzle=tc["name"]):
                 cl = CurriculumLearning()
 
-                cl.tasks_by_level[0] = [
+                # Clear all levels except 1 to ensure we get only our mock task
+                for level in range(0, 6):
+                    if level != 1:
+                        cl.tasks_by_level[level] = []
+
+                cl.tasks_by_level[1] = [
                     {
                         "type": "puzzle",
                         "language": tc["language"],
@@ -183,7 +204,12 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
         """Test extraction of complex default values (objects, arrays)."""
         cl = CurriculumLearning()
 
-        cl.tasks_by_level[0] = [
+        # Clear all levels except 1 to ensure we get only our mock task
+        for level in range(0, 6):
+            if level != 1:
+                cl.tasks_by_level[level] = []
+
+        cl.tasks_by_level[1] = [
             {
                 "type": "puzzle",
                 "language": "javascript",
@@ -214,7 +240,12 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
         """Verify expected_answer has correct structure with inputs."""
         cl = CurriculumLearning()
 
-        cl.tasks_by_level[0] = [
+        # Clear all levels except 1 to ensure we get only our mock task
+        for level in range(0, 6):
+            if level != 1:
+                cl.tasks_by_level[level] = []
+
+        cl.tasks_by_level[1] = [
             {
                 "type": "puzzle",
                 "language": "javascript",

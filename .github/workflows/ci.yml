@@ -113,20 +113,25 @@ jobs:
       - name: Set coverage status check
         if: ${{ needs.version-check.outputs.release_exists == 'true' && always() }}
         run: |
-          # Extract coverage percentage from coverage.xml
-          COVERAGE=$(python -c "
-          import xml.etree.ElementTree as ET
-          import re
-          tree = ET.parse('coverage.xml')
-          root = tree.getroot()
-          coverage_elem = root.find('.//coverage')
-          if coverage_elem is not None:
-              line_rate = coverage_elem.get('line-rate', '0')
-              percentage = round(float(line_rate) * 100)
-              print(percentage)
-          else:
-              print('0')
-          ")
+          # Extract coverage percentage from coverage.xml if it exists
+          if [ -f coverage.xml ]; then
+            COVERAGE=$(python -c "
+            import xml.etree.ElementTree as ET
+            import re
+            tree = ET.parse('coverage.xml')
+            root = tree.getroot()
+            coverage_elem = root.find('.//coverage')
+            if coverage_elem is not None:
+                line_rate = coverage_elem.get('line-rate', '0')
+                percentage = round(float(line_rate) * 100)
+                print(percentage)
+            else:
+                print('0')
+            ")
+          else
+            # If coverage.xml doesn't exist, tests failed
+            COVERAGE="0"
+          fi
 
           # Set GitHub status check
           if [ \"$COVERAGE\" -ge 80 ]; then

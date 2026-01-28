@@ -26,7 +26,6 @@ class Session:
         self,
         task_id: str,
         task_rewards: List[RewardFunctionScore],
-        combined_score: float,
         model_output: Optional[str] = None,
     ) -> None:
         """Set rewards for a task."""

@@ -275,14 +275,6 @@ print(f"JS Result: {stdout}")
 # Note: Python puzzles are executed via subprocess in the reward function, not directly through executor
 ```
 
-# Test JavaScript
-stdout, stderr = executor.run_single("console.log('Hello, World!')", "javascript")
-print(f"JavaScript: {stdout}")  # Output: Hello, World!
-
-# Embedding-based similarity can be tested if you provide an embeddings runtime.
-
-```
-
 ### Testing in Google Colab
 
 Install and test in Colab with this notebook:

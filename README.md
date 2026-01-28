@@ -4,7 +4,7 @@
 
 Infinite-RL is a reward functions toolbox for LLM Reinforcement Learning. It provides modular reward functions for evaluating programming puzzles, mathematical problems, language detection, and auxiliary metrics like length and repetition penalties. The toolbox is designed to integrate with fine-tuning frameworks like Tunix for model training and optimization.
 
-The package includes pre-built datasets for math tasks (`math.json` compiled from [OpenAI's GSM8K](https://huggingface.co/datasets/openai/gsm8k)) and programming puzzles (`puzzles.json` compiled from Microsoft's Python Programming Puzzles), along with WASM runtimes for secure JavaScript execution.
+The package includes pre-built datasets for math tasks (`math.json` compiled from [OpenAI's GSM8K](https://huggingface.co/datasets/openai/gsm8k)) and programming puzzles (`puzzles.json` compiled from [Microsoft's Python Programming Puzzles](https://github.com/microsoft/PythonProgrammingPuzzles)), along with WASM runtimes for secure JavaScript execution.
 
 ## Installation
 

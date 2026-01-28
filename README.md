@@ -2,7 +2,7 @@
 ![code coverage](https://img.shields.io/badge/code%20coverage-87%25-green)
 
 
-Infinite-RL is a reward functions toolbox for LLM Reinforcement Learning. It provides modular reward functions for evaluating programming puzzles, mathematical problems, language detection, and auxiliary metrics like length and repetition penalties. The toolbox includes utilities for model response evaluation and optional dataset generation for synthetic RLHF samples via the Gemini API.
+Infinite-RL is a reward functions toolbox for LLM Reinforcement Learning. It provides modular reward functions for evaluating programming puzzles, mathematical problems, language detection, and auxiliary metrics like length and repetition penalties. The toolbox is designed to integrate with fine-tuning frameworks like Tunix for model training and optimization.
 
 The package includes pre-built datasets for math tasks (`math.json`) and programming puzzles (`puzzles.json`), along with WASM runtimes for secure JavaScript execution.
 
@@ -29,48 +29,23 @@ pip install git+https://github.com/hon9kon9ize/infinite-rl.git
    - **Linux**: Uses apt-get to install Node.js and ts-node
    - **Windows**: Provides links for manual installation, ts-node installation via npm if available
 
-2. Set up your Gemini API key:
-   ```shell
-   export GEMINI_API_KEY=your_api_key_here
-   ```
-
-3. (Optional) Activate the Python virtual environment before using the CLI:
+2. (Optional) Activate the Python virtual environment before using the CLI:
    ```bash
-   source .ven/bin/activate
+   source .venv/bin/activate
    ```
 
-4. Runtimes (WASM)
+3. Runtimes (WASM)
    - The JS runtime is built by `build_src/build_wasm.sh`.
    - A GitHub Actions workflow (`.github/workflows/build_and_release_runtimes.yml`) runs the build and uploads `puzzle_js.wasm` to a GitHub Release.
    - During installation, `setup.py` will try to download these runtimes automatically from the latest release (or use the `RUNTIME_RELEASE_TAG` environment variable to pin a release). If you prefer to build locally, run `./build_src/build_wasm.sh` and the generated files will be placed in `infinite_rl/runtimes/`.
 
 ## Usage
 
-You can generate a synthetic dataset using the provided script. The generator is designed to be **idempotent and resumable**—if a `dataset.csv` already exists in the output directory, the script will calculate the delta needed to reach your target `--num_samples` while maintaining the requested task distribution.
-
-```bash
-python scripts/generate.py --num_samples 100 --out_dir ./my_dataset --threads 4
-```
-
-Arguments:
-- `--num_samples`: **Target total** number of samples for the dataset (default: 10).
-- `--model_name`: Gemini model to use (default: `gemini-2.0-flash-exp`).
-- `--out_dir`: Directory to save the `dataset.csv` (default: `data`).
-- `--save_every`: Save progress to CSV every N successful samples (default: 1).
-- `--threads`: Number of parallel generation threads (default: 1).
-- `--max_retries`: Maximum consecutive failed attempts per task type before stopping (default: 5).
-- `--timeout`: Timeout (in seconds) for reward function execution (default: 5).
-- `--task_dist`: Task distribution as comma-separated floats for available task types (default: `0.5,0.5`).
-- `--debug`: Enable verbose logging and save raw LLM responses to `data/debug_prompts`.
-
-**Example for generating only math tasks:**
-```bash
-python scripts/generate.py --num_samples 10 --task_dist 0,1 --out_dir ./math_only
-```
+Infinite-RL provides modular reward functions for evaluating model responses across different task types. Use the package to integrate reward evaluation into fine-tuning frameworks like Tunix.
 
 ## Testing & Verification
 
-Infinite RL includes a comprehensive testing suite and verification tools to ensure the generator and reward functions are working correctly.
+Infinite RL includes a comprehensive testing suite for reward functions and evaluation.
 
 ### Run Unit Tests
 Use `pytest` to run the unit tests for reward functions and the parser:
@@ -281,9 +256,6 @@ print(f"Variance: {stats['sliding_window_stats']['mean_variance']:.4f}")
 - Advances to next difficulty level when success rate and consistency thresholds are both met
 - Provides detailed statistics to monitor curriculum progression
 
-**Documentation:**
-See [SLIDING_WINDOW_CURRICULUM.md](SLIDING_WINDOW_CURRICULUM.md) for comprehensive documentation including configuration guide, example scenarios, and debugging tips. See [QUICK_REFERENCE.md](QUICK_REFERENCE.md) for a quick start guide.
-
 ## Testing
 
 ### Testing the RewardExecutor Locally
@@ -390,13 +362,6 @@ infinite_rl/
 - **Reward Function**: `PuzzleRewardFunction`
 - **Difficulty**: Rated 1-5 per puzzle
 
-
-## Output
-
-- `data/dataset.csv`: The primary output containing successful samples (Prompt, Answer, Response, Scores).
-- `data/failed_dataset.csv`: Detailed log of failed attempts and rectification errors for troubleshooting.
-- `data/debug_prompts/`: Raw system and user prompts sent to the LLM (enabled via `--debug`).
-
 ## Architecture
 
 ### Standardized Format
@@ -484,4 +449,31 @@ print("Repetition penalty (n=2):", penalty)
 
 Notes:
 - Combine this penalty with the base correctness score (e.g., final_score = max(0.0, base_correctness + penalty)).
+
+## References
+
+**GSM8K Dataset** (Math tasks source):
+```bibtex
+@article{cobbe2021gsm8k,
+  title={Training Verifiers to Solve Math Word Problems},
+  author={Cobbe, Karl and Kosaraju, Vineet and Bavarian, Mohammad and Chen, Mark and Jun, Heewoo and Kaiser, Lukasz and Plappert, Matthias and Tworek, Jerry and Hilton, Jacob and Nakano, Reiichiro and Hesse, Christopher and Schulman, John},
+  journal={arXiv preprint arXiv:2110.14168},
+  year={2021}
+}
+```
+
+**Programming Puzzles** (Puzzle tasks source):
+```bibtex
+@inproceedings{
+schuster2021programming,
+title={Programming Puzzles},
+author={Tal Schuster and Ashwin Kalyan and Alex Polozov and Adam Tauman Kalai},
+booktitle={Thirty-fifth Conference on Neural Information Processing Systems Datasets and Benchmarks Track},
+year={2021},
+url={https://arxiv.org/abs/2106.05784}
+}
+```
+
+**Python Programming Puzzles Repository** (Implementation source):
+We borrowed puzzle implementation code from [Microsoft's Python Programming Puzzles](https://github.com/microsoft/PythonProgrammingPuzzles) repository and implemented a JavaScript version for WASM-based execution.
 

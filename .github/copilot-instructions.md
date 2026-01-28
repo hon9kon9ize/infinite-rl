@@ -3,36 +3,30 @@
 Purpose: Short, actionable guidance to help AI coding agents be productive in this repository.
 
 ## Big picture
-- The repo generates synthetic RLHF datasets by orchestrating an LLM (Gemini via the `google.genai` client) to produce task samples and uses *reward functions* to evaluate them.
+- The repo provides a modular **reward functions toolbox** for LLM Reinforcement Learning and fine-tuning frameworks like Tunix.
 - **Supported task types**: 
   - **Math** (Level 0): Problem-solving using symbolic computation (SymPy). All math tasks are at level 0, sourced from GSM8K filtered for easy mathematical problems.
-  - **Puzzle** (Levels 1-5): Programming challenges in Python (subprocess) and JavaScript (WASM runtime). Difficulty rated 1-5 using Gemini 3 Flash model.
-- Key runtime flow:
-  1. `scripts/generate.py` -> calls `generate_dataset()` in `infinite_rl/generator.py` to orchestrate sampling.
-  2. `generator.py` parses model outputs with `infinite_rl/parser.py`.
-  3. Generated samples are evaluated by specialized reward functions in `infinite_rl/reward_functions/`:
+  - **Puzzle** (Levels 1-5): Programming challenges in Python (subprocess) and JavaScript (WASM runtime). Difficulty rated 1-5 scale.
+- Key components:
+  1. **Reward functions** in `infinite_rl/reward_functions/`:
      - `MathRewardFunction`: Validates mathematical solutions using symbolic equivalence
      - `PuzzleRewardFunction`: Executes and validates code against puzzle specifications
-  4. Puzzle execution: JavaScript via WASM (`infinite_rl/executor.py` + `puzzle_js.wasm`), Python via subprocess (`infinite_rl/runner.py`)
-  5. Math evaluation: Uses `sympy` for symbolic computation, references `math.json` for task data (all tasks at level 0)
-- Programming puzzles include difficulty ratings (1-5 scale) generated using Gemini 3 Flash model.
-- `CurriculumLearning` class (`infinite_rl/curriculum.py`) provides adaptive difficulty progression using **sliding window success rates**:
-  - Starts at level 0 (math tasks only)
-  - Progresses through levels 1-5 (programming puzzles) based on success rates
-  - Tracks last N episodes (default: 50) of success/failure per task type
-  - Advances difficulty when success rate > 80% AND variance < 0.05 (configurable)
-  - Ensures agent has truly mastered current level, not just "catching up"
-  - Per-task-type windows allow independent progression for math and puzzles
+  2. **Execution engines**:
+     - Puzzle execution: JavaScript via WASM (`infinite_rl/executor.py` + `puzzle_js.wasm`), Python via subprocess (`infinite_rl/runner.py`)
+     - Math evaluation: Uses `sympy` for symbolic computation, references `math.json` for task data (all tasks at level 0)
+  3. **Curriculum learning** (`infinite_rl/curriculum.py`): Adaptive difficulty progression using **sliding window success rates**:
+     - Starts at level 0 (math tasks only)
+     - Progresses through levels 1-5 (programming puzzles) based on success rates
+     - Tracks last N episodes (default: 50) of success/failure per task type
+     - Advances difficulty when success rate > 80% AND variance < 0.05 (configurable)
+     - Ensures agent has truly mastered current level, not just "catching up"
+     - Per-task-type windows allow independent progression for math and puzzles
 
 ## What to know before changing code
-- Samples must follow the strict 3-head format: `[PROMPT]`, `[ANSWER]`, `[RESPONSE]` and the final content must be wrapped in `<answer>` tags.
+- Reward functions are designed to integrate with fine-tuning frameworks (e.g., Tunix).
 - **Math tasks**: `MathRewardFunction` expects the answer tag to contain a numeric value or symbolic expression that can be parsed and compared symbolically.
 - **Puzzle tasks**: `PuzzleRewardFunction` expects the answer tag to contain a code block (triple-backtick) with valid Python or JavaScript code. The code is executed against the puzzle's SAT (satisfaction) function to determine correctness.
 - Reward functions return a `RewardFunctionScore(score, info)` with score ranging from 0.0 to 1.0 and `info` holding diagnostic text.
-- `generate_dataset()` is idempotent and resumable: it reads/writes `dataset.csv` and appends failures to `failed_dataset.csv` immediately.
-- `--task_dist` format is a comma-separated list of floats for available task types (e.g., `0.5,0.5` for 50% math, 50% puzzle).
-- Generator has a rectification loop: low-quality outputs are retried and passed through a `RECTIFY_PROMPT` before being retried; be careful modifying retry logic or thresholds.
-- Concurrency uses `ThreadPoolExecutor` with explicit locks (`dataset_lock`, `failed_dataset_lock`, `save_lock`)—be precise when adding shared state.
 - **Curriculum learning** uses sliding window success rates:
   - `_track_success()` records 1 (success) or 0 (failure) per task type
   - `_update_level()` checks: success_rate > threshold AND variance < variance_threshold for advancement, or success_rate < demote_threshold AND variance < variance_threshold for demotion
@@ -55,12 +49,6 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 - NOTE FOR AGENTS: Every time you run shell commands or tests, ensure `.venv/bin/activate` is applied in the session first.
 
 - Tip: install and test with `wasmtime` in your environment when running runtime-dependent tests or executing WASM-based examples.
-
-- Generate dataset locally:
-  ```bash
-  python scripts/generate.py --num_samples 100 --out_dir ./data --task_dist 0.5,0.5 --threads 4 --debug
-  ```
-  Note: `--task_dist 0.5,0.5` means 50% math, 50% puzzle. `--debug` saves raw prompts to `data/debug_prompts/` and `failed_dataset.csv` is appended on failure.
 
 - Run unit tests (CI uses unittest discover):
   ```bash
@@ -93,10 +81,8 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 - Strict output format: the parser looks for `[PROMPT]/[ANSWER]/[RESPONSE]` headers and `<answer>` tags; changing parsing requires updating `infinite_rl/parser.py` and tests.
 - When adding a new task type:
   - Add a reward function class under `infinite_rl/reward_functions/` and expose it in `get_reward_functions()`.
-- Keep `generate_dataset` interfaces stable: many parts (resume logic, distribution, retry/rectify) depend on its signature.
 
 ## Integration points & dependencies
-- LLM: `google.genai` (Gemini). `GEMINI_API_KEY` must be set for generation to work.
 - Code execution: `wasmtime` + packaged WASM runtimes (`puzzle_js.wasm`) in `infinite_rl/runtimes`. The `Executor` exposes `javascript` for puzzles; Python puzzles use local subprocess execution via `infinite_rl/runner.py`.
   - Runtimes are built by the `build_src/build_wasm.sh` script and an automated GitHub Actions workflow (`.github/workflows/build_and_release_runtimes.yml`) uploads them to GitHub Releases.
   - Installation & CI notes:
@@ -122,19 +108,37 @@ RUNTIME_RELEASE_TAG=v1.2.3 RUNTIME_GITHUB_REPO=owner/repo python -m pip install 
 - Update CI if you change system dependencies (runtimes, Node/Java/g++ requirements).
 
 ## Files to inspect when debugging a change
-- `infinite_rl/generator.py` — orchestration, retries/rectify, resume logic, `task_dist` parsing
-- `infinite_rl/parser.py` — tag and markdown parsing logic
 - `infinite_rl/curriculum.py` — curriculum learning implementation and task difficulty progression
 - `infinite_rl/reward_functions/*.py` — reward function implementations and interfaces
 - `infinite_rl/executor.py` — how code is run securely (WASM path)
 - `infinite_rl/runner.py` — Python puzzle evaluation via local subprocess
 
----
-If something here is unclear or you'd like a different focus (e.g., more examples, a checklist for adding a new task type), tell me what to add and I'll iterate. 👍
-- `infinite_rl/curriculum.py` — curriculum learning implementation and task difficulty progression
-- `infinite_rl/reward_functions/*.py` — reward function implementations and interfaces
-- `infinite_rl/executor.py` — how code is run securely (WASM path)
-- `infinite_rl/runner.py` — Python puzzle evaluation via local subprocess
+## References
+
+**GSM8K Dataset** (Math tasks source):
+```bibtex
+@article{cobbe2021gsm8k,
+  title={Training Verifiers to Solve Math Word Problems},
+  author={Cobbe, Karl and Kosaraju, Vineet and Bavarian, Mohammad and Chen, Mark and Jun, Heewoo and Kaiser, Lukasz and Plappert, Matthias and Tworek, Jerry and Hilton, Jacob and Nakano, Reiichiro and Hesse, Christopher and Schulman, John},
+  journal={arXiv preprint arXiv:2110.14168},
+  year={2021}
+}
+```
+
+**Programming Puzzles** (Puzzle tasks source):
+```bibtex
+@inproceedings{
+schuster2021programming,
+title={Programming Puzzles},
+author={Tal Schuster and Ashwin Kalyan and Alex Polozov and Adam Tauman Kalai},
+booktitle={Thirty-fifth Conference on Neural Information Processing Systems Datasets and Benchmarks Track},
+year={2021},
+url={https://arxiv.org/abs/2106.05784}
+}
+```
+
+**Python Programming Puzzles Repository** (Implementation source):
+We borrowed puzzle implementation code from [Microsoft's Python Programming Puzzles](https://github.com/microsoft/PythonProgrammingPuzzles) repository and implemented a JavaScript version for WASM-based execution.
 
 ---
 If something here is unclear or you'd like a different focus (e.g., more examples, a checklist for adding a new task type), tell me what to add and I'll iterate. 👍

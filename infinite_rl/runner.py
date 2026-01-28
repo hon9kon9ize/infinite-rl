@@ -36,6 +36,10 @@ executor = Executor()
 
 def evalPuzzle(puzzle, code, inputs, language="python"):
     try:
+        # Check if puzzle exists first
+        if language.lower() != "javascript" and puzzle not in puzzles:
+            return {"error": f"Unknown puzzle: {puzzle}"}
+
         result = None
 
         if language.lower() == "javascript":
@@ -77,15 +81,16 @@ def evalPuzzle(puzzle, code, inputs, language="python"):
         return {"error": str(err), "stack": traceback.format_exc()}
 
 
-# Read input from stdin
-input_data = sys.stdin.read()
-data = json.loads(input_data)
-puzzle = data["puzzle"]
-code = data["code"]
-inputs = data["inputs"]
-language = data.get("language", "python")
+if __name__ == "__main__":
+    # Read input from stdin
+    input_data = sys.stdin.read()
+    data = json.loads(input_data)
+    puzzle = data["puzzle"]
+    code = data["code"]
+    inputs = data["inputs"]
+    language = data.get("language", "python")
 
-result = evalPuzzle(puzzle, code, inputs, language)
-print(json.dumps(result))
+    result = evalPuzzle(puzzle, code, inputs, language)
+    print(json.dumps(result))
 
-sys.stdout.flush()
+    sys.stdout.flush()

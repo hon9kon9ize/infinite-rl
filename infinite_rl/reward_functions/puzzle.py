@@ -3,9 +3,11 @@ import re
 import subprocess
 import os
 import sys
-from typing import Union
+from typing import Union, TYPE_CHECKING
 from .reward_function import RewardFunction, RewardFunctionScore
-from ..utils.parser_utils import extract_tag
+
+if TYPE_CHECKING:
+    from ..task import Task
 
 
 class PuzzleRewardFunction(RewardFunction):
@@ -33,22 +35,20 @@ class PuzzleRewardFunction(RewardFunction):
 
     def compute_reward(
         self,
-        model_output: str,
-        expected_output: Union[str, dict],
-        target_tag: str = None,
+        task: "Task",
+        **kwargs,
     ) -> RewardFunctionScore:
         if not self.initialized:
             self.initialize()
 
-        target_tag = target_tag if target_tag is not None else self.answer_tag
-
-        # Parse expected_output
+        # Parse expected_output from task
+        expected_output = task.expected_answer
         if isinstance(expected_output, str):
             try:
                 expected_output = json.loads(expected_output)
             except:
                 return RewardFunctionScore(
-                    score=0.0, error_msg={"puzzle": "Invalid expected_output format"}
+                    score=0.0, info="Invalid expected_output format"
                 )
 
         puzzle_name = expected_output.get("puzzle")
@@ -58,28 +58,43 @@ class PuzzleRewardFunction(RewardFunction):
         if not puzzle_name:
             return RewardFunctionScore(
                 score=0.0,
-                error_msg={"puzzle": "Missing puzzle name in expected_output"},
+                info="Missing puzzle name in expected_output",
             )
 
         # 1. Format Objective: Check for tags
-        content_to_parse = extract_tag(model_output, tag=target_tag)
-
-        if not content_to_parse:
+        # First, check if raw answer tags exist
+        tag_start = f"<{self.target_tag}>"
+        tag_end = f"</{self.target_tag}>"
+        if tag_start not in task.model_output or tag_end not in task.model_output:
             return RewardFunctionScore(
                 score=0.0,
-                error_msg={"puzzle": f"Missing <{target_tag}> tags in response."},
+                info=f"Missing <{self.target_tag}> tags in response.",
             )
 
-        # 1. Format Objective: Extract code from markdown block inside <answer>
+        # Extract raw content (with backticks still intact) to check format
+        import re as re_module
+
+        pattern = f"{re_module.escape(tag_start)}(.*?){re_module.escape(tag_end)}"
+        raw_matches = re_module.findall(pattern, task.model_output, re_module.DOTALL)
+
+        if not raw_matches:
+            return RewardFunctionScore(
+                score=0.0,
+                info=f"Missing content in <{self.target_tag}> tags.",
+            )
+
+        raw_content = raw_matches[0]
+
+        # Check for code block with language specifier in raw content
         lang_pattern = rf"```(?:{language})\b\s*(.*?)```"
-        match = re.search(lang_pattern, content_to_parse, re.DOTALL | re.IGNORECASE)
+        match = re_module.search(
+            lang_pattern, raw_content, re_module.DOTALL | re_module.IGNORECASE
+        )
 
         if not match:
             return RewardFunctionScore(
                 score=0.0,
-                error_msg={
-                    "puzzle": f"Missing code block with language '{language}' inside <{target_tag}> tags."
-                },
+                info=f"Missing code block with language '{language}' inside <{self.target_tag}> tags.",
             )
 
         # 2. Extract sol function
@@ -89,7 +104,7 @@ class PuzzleRewardFunction(RewardFunction):
         sol_pattern = r"def sol\(|function sol\("
         if not re.search(sol_pattern, code_content):
             return RewardFunctionScore(
-                score=0.0, error_msg={"puzzle": "Code must define a sol function"}
+                score=0.0, info="Code must define a sol function"
             )
 
         # 3. Evaluate using runner.py for both languages
@@ -113,13 +128,13 @@ class PuzzleRewardFunction(RewardFunction):
             if result.returncode != 0 or result.stderr:
                 return RewardFunctionScore(
                     score=0.0,
-                    error_msg={"puzzle": f"Execution error: {result.stderr}"},
+                    info=f"Execution error: {result.stderr}",
                 )
             output = json.loads(result.stdout.strip())
             if "error" in output:
                 return RewardFunctionScore(
                     score=0.0,
-                    error_msg={"puzzle": f"Evaluation error: {output['error']}"},
+                    info=f"Evaluation error: {output['error']}",
                 )
             is_correct = output.get("isCorrect", False)
             if is_correct:
@@ -127,13 +142,9 @@ class PuzzleRewardFunction(RewardFunction):
             else:
                 return RewardFunctionScore(
                     score=0.0,
-                    error_msg={"puzzle": f"Puzzle check failed"},
+                    info="Puzzle check failed",
                 )
         except subprocess.TimeoutExpired:
-            return RewardFunctionScore(
-                score=0.0, error_msg={"puzzle": "Execution timed out"}
-            )
+            return RewardFunctionScore(score=0.0, info="Execution timed out")
         except Exception as e:
-            return RewardFunctionScore(
-                score=0.0, error_msg={"puzzle": f"Evaluation failed: {str(e)}"}
-            )
+            return RewardFunctionScore(score=0.0, info=f"Evaluation failed: {str(e)}")

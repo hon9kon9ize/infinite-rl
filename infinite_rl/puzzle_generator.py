@@ -2,7 +2,6 @@ import json
 import random
 import inspect
 from typing import Dict, List, Any
-from .prompts import SYNTHESIS_SYSTEM_PROMPT, TASK_SYSTEM_PROMPTS, TYPE_PROMPTS
 
 # Add current directory to path for imports like runner.py does
 import sys
@@ -137,31 +136,61 @@ class PuzzleDatasetGenerator:
         puzzle_info = self.load_puzzle(puzzle_name)
         inputs = random.choice(puzzle_info["examples"])
 
-        # Format the prompt according to PROMPT.md
-        prompt = f"""Solve the following python programming puzzle. Your task is continue implement the sol function, to make it returns a value that makes the sat function return True.
+        # Format the prompt with enhanced instructions
+        param_instructions = ""
+        if arg_names and len(arg_names) > 1:
+            param_list = ", ".join(arg_names[1:])
+            param_instructions = f"""
+## Function Parameters
+
+Your sol() function must accept these parameters (in order):
+- Parameters: {param_list}
+- Do NOT include default values in your function signature.
+- The order of parameters MUST match the sat() function signature (after the answer parameter).
+"""
+
+        prompt = f"""Solve the following python programming puzzle. Your task is to implement the sol function, which should return a value that makes the sat function return True.
 
 # {puzzle_name}
 
 {docstring}
 
-## Sat function
+## Sat Function (Reference Only)
+
+The sat function validates your solution. Study it to understand:
+1. What the answer/result should be
+2. What parameters sol() must accept
+3. What type of value to return
 
 ```python
 {sat_src}
 ```
 
-## Answer return value type
+## Answer Return Type
 
-{ans_type}
+Expected return type: {ans_type}
 
-## Sol header
+{param_instructions}
+
+## Your Implementation
+
+Write a function with this signature:
 
 ```python
 {sol_header}
-```"""
+    # Your implementation here
+    pass
+```
+
+## Instructions
+
+1. Analyze the sat() function to understand what sol() needs to return
+2. Extract the parameter list from sat() (all parameters except the first/answer parameter)
+3. Implement sol() to return the correct answer type
+4. Do NOT add default values to your sol() parameters
+5. Wrap your final code in <answer> tags with triple backticks"""
 
         # Try to get the correct answer and sol source
-        answer = None
         sol_src = None
         try:
             # Look for sol methods
@@ -209,6 +238,9 @@ class PuzzleDatasetGenerator:
         # For now, only puzzle tasks
         samples = []
         puzzle_names = self.available_puzzles()
+
+        if not puzzle_names:
+            return samples  # Return empty list if no puzzles available
 
         for _ in range(num_samples):
             puzzle_name = random.choice(puzzle_names)

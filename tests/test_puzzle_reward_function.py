@@ -1,5 +1,6 @@
 import unittest
 from infinite_rl.reward_functions.puzzle import PuzzleRewardFunction
+from infinite_rl.task import Task
 
 
 class TestPuzzleRewardFunction(unittest.TestCase):
@@ -22,7 +23,17 @@ function sol(inputs) {
             "inputs": {"s": 10},
             "language": "javascript",
         }
-        score = self.reward_fn.compute_reward(model_output, expected_output)
+        task = Task(
+            task_id="test_1",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="javascript",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 1.0)
 
     def test_invalid_js_puzzle_solution(self):
@@ -38,7 +49,17 @@ function sol(inputs) {
             "inputs": {"s": 10},
             "language": "javascript",
         }
-        score = self.reward_fn.compute_reward(model_output, expected_output)
+        task = Task(
+            task_id="test_2",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="javascript",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 0.0)
 
     def test_missing_code_block(self):
@@ -48,7 +69,17 @@ function sol(inputs) {
             "inputs": {"s": 10},
             "language": "javascript",
         }
-        score = self.reward_fn.compute_reward(model_output, expected_output)
+        task = Task(
+            task_id="test_3",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="javascript",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 0.0)
 
     def test_missing_sol_function(self):
@@ -62,7 +93,17 @@ console.log("no sol function");
             "inputs": {"s": 10},
             "language": "javascript",
         }
-        score = self.reward_fn.compute_reward(model_output, expected_output)
+        task = Task(
+            task_id="test_4",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="javascript",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 0.0)
 
     def test_invalid_expected_output(self):
@@ -71,8 +112,17 @@ console.log("no sol function");
 function sol(inputs) { return "19"; }
 ```
 </answer>"""
-        expected_output = "invalid json"
-        score = self.reward_fn.compute_reward(model_output, expected_output)
+        task = Task(
+            task_id="test_5",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer="invalid json",
+            language="javascript",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 0.0)
 
     def test_missing_puzzle_name(self):
@@ -82,7 +132,17 @@ function sol(inputs) { return "19"; }
 ```
 </answer>"""
         expected_output = {"inputs": {"s": 10}, "language": "javascript"}
-        score = self.reward_fn.compute_reward(model_output, expected_output)
+        task = Task(
+            task_id="test_6",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="javascript",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 0.0)
 
     def test_valid_js_quadratic_root(self):
@@ -98,7 +158,17 @@ function sol(inputs) {
             "inputs": {"coeffs": [1.0, -3.0, 2.0]},
             "language": "javascript",
         }
-        score = self.reward_fn.compute_reward(model_output, expected_output)
+        task = Task(
+            task_id="test_7",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="javascript",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 1.0)
 
     def test_invalid_js_quadratic_root(self):
@@ -114,7 +184,17 @@ function sol(inputs) {
             "inputs": {"coeffs": [1.0, -3.0, 2.0]},
             "language": "javascript",
         }
-        score = self.reward_fn.compute_reward(model_output, expected_output)
+        task = Task(
+            task_id="test_8",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="javascript",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 0.0)
 
     def test_valid_js_all_quadratic_roots(self):
@@ -130,7 +210,17 @@ function sol(inputs) {
             "inputs": {"coeffs": [-3.0, 2.0]},
             "language": "javascript",
         }
-        score = self.reward_fn.compute_reward(model_output, expected_output)
+        task = Task(
+            task_id="test_9",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="javascript",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 1.0)
 
     def test_invalid_js_all_quadratic_roots(self):
@@ -146,7 +236,17 @@ function sol(inputs) {
             "inputs": {"coeffs": [-3.0, 2.0]},
             "language": "javascript",
         }
-        score = self.reward_fn.compute_reward(model_output, expected_output)
+        task = Task(
+            task_id="test_10",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="javascript",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 0.0)
 
     def test_valid_js_float_decimal(self):
@@ -162,7 +262,17 @@ function sol(inputs) {
             "inputs": {"v": 5, "d": 0.1},
             "language": "javascript",
         }
-        score = self.reward_fn.compute_reward(model_output, expected_output)
+        task = Task(
+            task_id="test_11",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="javascript",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 1.0)
 
 
@@ -185,7 +295,17 @@ def sol(s):
             "inputs": {"s": 10},
             "language": "python",
         }
-        score = self.reward_fn.compute_reward(model_output, expected_output)
+        task = Task(
+            task_id="test_12",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="python",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 1.0)
 
     def test_invalid_python_puzzle_solution(self):
@@ -200,7 +320,17 @@ def sol(inputs):
             "inputs": {"s": 10},
             "language": "python",
         }
-        score = self.reward_fn.compute_reward(model_output, expected_output)
+        task = Task(
+            task_id="test_13",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="python",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 0.0)
 
     def test_missing_code_block_python(self):
@@ -210,7 +340,17 @@ def sol(inputs):
             "inputs": {"s": 10},
             "language": "python",
         }
-        score = self.reward_fn.compute_reward(model_output, expected_output)
+        task = Task(
+            task_id="test_14",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="python",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 0.0)
 
     def test_missing_sol_function_python(self):
@@ -224,7 +364,17 @@ print("no sol function")
             "inputs": {"s": 10},
             "language": "python",
         }
-        score = self.reward_fn.compute_reward(model_output, expected_output)
+        task = Task(
+            task_id="test_15",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="python",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 0.0)
 
     def test_valid_python_quadratic_root(self):
@@ -239,7 +389,17 @@ def sol(coeffs):
             "inputs": {"coeffs": [1.0, -3.0, 2.0]},
             "language": "python",
         }
-        score = self.reward_fn.compute_reward(model_output, expected_output)
+        task = Task(
+            task_id="test_16",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="python",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 1.0)
 
     def test_invalid_python_quadratic_root(self):
@@ -254,7 +414,17 @@ def sol(inputs):
             "inputs": {"coeffs": [1.0, -3.0, 2.0]},
             "language": "python",
         }
-        score = self.reward_fn.compute_reward(model_output, expected_output)
+        task = Task(
+            task_id="test_17",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="python",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 0.0)
 
     def test_valid_python_all_quadratic_roots(self):
@@ -269,7 +439,17 @@ def sol(coeffs):
             "inputs": {"coeffs": [-3.0, 2.0]},
             "language": "python",
         }
-        score = self.reward_fn.compute_reward(model_output, expected_output)
+        task = Task(
+            task_id="test_18",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="python",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 1.0)
 
     def test_invalid_python_all_quadratic_roots(self):
@@ -284,7 +464,17 @@ def sol(inputs):
             "inputs": {"coeffs": [-3.0, 2.0]},
             "language": "python",
         }
-        score = self.reward_fn.compute_reward(model_output, expected_output)
+        task = Task(
+            task_id="test_19",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="python",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 0.0)
 
     def test_valid_python_float_decimal(self):
@@ -299,7 +489,17 @@ def sol(v, d):
             "inputs": {"v": 5, "d": 0.1},
             "language": "python",
         }
-        score = self.reward_fn.compute_reward(model_output, expected_output)
+        task = Task(
+            task_id="test_20",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="python",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 1.0)
 
 

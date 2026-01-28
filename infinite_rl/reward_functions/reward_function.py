@@ -1,13 +1,17 @@
-from typing import Union, Callable, Dict
+from typing import Union, Callable, Dict, TYPE_CHECKING
 from dataclasses import dataclass, field
 
-from infinite_rl.utils.parser_utils import extract_tag
+from ..utils.parser_utils import extract_tag
+
+if TYPE_CHECKING:
+    from ..task import Task
 
 
 @dataclass
 class RewardFunctionScore:
     score: float
-    error_msg: Dict[str, str] = field(default_factory=dict)
+    reward_function_name: str = ""
+    info: str = ""
 
 
 class RewardFunction:
@@ -17,6 +21,7 @@ class RewardFunction:
         timeout: int = 5,
         answer_tag: str = "answer",
         think_tag: str = "think",
+        target_tag: str = None,
     ):
         self.task_name = task_name
         self.timeout = timeout
@@ -24,6 +29,7 @@ class RewardFunction:
         # Default tags for parsing structured answers and reasoning hints
         self.answer_tag = answer_tag
         self.think_tag = think_tag
+        self.target_tag = target_tag if target_tag is not None else answer_tag
 
     def initialize(self):
         raise NotImplementedError("This method should be overridden by subclasses.")
@@ -31,8 +37,6 @@ class RewardFunction:
     def extract_tag(
         self,
         model_output: str,
-        target_tag: str = None,
-        **kwargs,
     ) -> str:
         """Extract target content from model output using specified tag.
 
@@ -48,27 +52,21 @@ class RewardFunction:
         """
         content = extract_tag(
             model_output,
-            tag=target_tag if target_tag is not None else self.answer_tag,
+            tag=self.target_tag,
         ).strip()
         return content
 
     def compute_reward(
         self,
-        model_output: str,
-        expected_output: Union[str, int, float, None] = None,
-        target_tag: str = None,
+        task: "Task",
         **kwargs,
     ) -> RewardFunctionScore:
         """Compute reward for given model output vs expected output.
 
         Parameters
         ----------
-        model_output:
-            Raw model response string.
-        expected_output:
-            Task-specific expected value (string, numeric, or validator). May be None.
-        target_tag:
-            Optional tag to extract from model output for evaluation.
+        task:
+            Task object containing expected_answer, language, and other metadata
 
         Notes
         -----

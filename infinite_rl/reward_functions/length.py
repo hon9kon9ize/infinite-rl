@@ -6,7 +6,11 @@ whether the model was correct.
 
 import math
 from typing import Optional
-from ..utils.parser_utils import extract_tag
+from typing import Union, TYPE_CHECKING
+from .reward_function import RewardFunction, RewardFunctionScore
+
+if TYPE_CHECKING:
+    from ..task import Task
 
 
 def cosine_length_reward(
@@ -70,12 +74,6 @@ def cosine_length_reward(
         return float((1.0 - math.cos(math.pi * x)) / 2.0)
 
 
-# New: LengthRewardFunction – wraps cosine_length_reward into a RewardFunction
-from typing import Union
-from .reward_function import RewardFunction, RewardFunctionScore
-from ..utils.parser_utils import extract_tag
-
-
 class LengthRewardFunction(RewardFunction):
     """Reward function that scores response length using `cosine_length_reward`.
 
@@ -91,12 +89,9 @@ class LengthRewardFunction(RewardFunction):
         min_len: int = 1,
         max_len: int = 1000,
         target_len: Optional[int] = None,
-        answer_tag: str = "answer",
-        think_tag: str = "think",
+        **kwargs,
     ):
-        super().__init__(
-            task_name, timeout=timeout, answer_tag=answer_tag, think_tag=think_tag
-        )
+        super().__init__(task_name, timeout=timeout, **kwargs)
         self.min_len = min_len
         self.max_len = max_len
         self.target_len = target_len
@@ -106,15 +101,14 @@ class LengthRewardFunction(RewardFunction):
 
     def compute_reward(
         self,
-        model_output: str,
-        expected_output: Union[str, int, float, None] = None,
+        task: "Task",
         is_correct: bool = False,
         **kwargs,
     ) -> RewardFunctionScore:
         """Compute length reward.
 
         Parameters:
-          - expected_output: optional numeric target length (int), else uses configured target.
+          - task: Task object containing metadata about the task (including model_output).
           - is_correct: optional boolean indicating whether the main task was correct. If None,
             defaults to True. When True, shorter answers are preferred; when False,
             longer answers are preferred.
@@ -122,12 +116,12 @@ class LengthRewardFunction(RewardFunction):
         if not self.initialized:
             self.initialize()
 
-        thought_content = self.extract_tag(model_output, **kwargs)
+        thought_content = self.extract_tag(task.model_output or "")
 
         if not thought_content:
             return RewardFunctionScore(
                 score=0.0,
-                error_msg={"length": f"No content found in the specified tag."},
+                info=f"No content found in the <{self.target_tag}> tag.",
             )
 
         length = len(thought_content.strip())

@@ -1,0 +1,4 @@
+[run]
+omit =
+    infinite_rl/python_puzzles/*
+    infinite_rl/runtimes/*

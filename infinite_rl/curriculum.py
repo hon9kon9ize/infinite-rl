@@ -2,23 +2,25 @@
 Curriculum Learning for Infinite RL.
 
 This module provides curriculum learning functionality that progressively
-increases task difficulty based on model performance.
+increases task difficulty based on model performance using a sliding window
+success rate with variance tracking.
 """
 
 import json
 import random
+from collections import deque
 from typing import Dict, List, Optional, Union, Any
 from pathlib import Path
-from .reward_functions import get_reward_functions
-from .puzzles import get_available_puzzles, get_puzzle_data
+import datetime
+import statistics
+from .reward_functions import get_reward_functions, RewardFunctionScore
+from .session import Session
+from .task import Task
+from .utils.param_extractor import extract_puzzle_inputs
+from .prompt_templates import format_math_prompt, format_puzzle_prompt
 
 
 class CurriculumLearning:
-    """
-    Curriculum learning system that manages task difficulty progression.
-
-    Tracks model performance and adjusts task difficulty from level 1 (easy) to 5 (hard).
-    """
 
     def __init__(
         self,
@@ -36,6 +38,11 @@ class CurriculumLearning:
         format_kwargs: Optional[Dict[str, Any]] = None,
         reasoning_steps_kwargs: Optional[Dict[str, Any]] = None,
         length_kwargs: Optional[Dict[str, Any]] = None,
+        log_file: Optional[str] = None,
+        window_size: int = 50,
+        success_rate_threshold: float = 0.8,
+        variance_threshold: float = 0.05,
+        warmup_step: int = 32,
     ):
         """
         Initialize curriculum learning.
@@ -55,6 +62,11 @@ class CurriculumLearning:
             format_kwargs: Keyword arguments for FormatRewardFunction
             reasoning_steps_kwargs: Keyword arguments for ReasoningStepsRewardFunction
             length_kwargs: Keyword arguments for LengthRewardFunction
+            log_file: Path to the logging file (JSON Lines format). If None, defaults to 'curriculum_log.jsonl' in the module directory.
+            window_size: Size of the sliding window for success rate tracking (default: 50)
+            success_rate_threshold: Required success rate for difficulty increase (default: 0.8 = 80%)
+            variance_threshold: Maximum variance for success rate stability (default: 0.05)
+            warmup_step: Number of initial steps to only use level 0 tasks (default: 32)
         """
         self.timeout = timeout
         self.answer_tag = answer_tag
@@ -81,11 +93,23 @@ class CurriculumLearning:
         self._initialize_aux_reward_functions()
 
         # Learning state
-        self.current_level = 1  # Start at easiest level
-        self.task_counters: Dict[str, int] = {}  # {"math": 1, "puzzle": -1, ...}
-        self.failed_tasks: Dict[str, str] = {}  # {"task_name": "model_response", ...}
-        self.recent_tasks: List[str] = []  # Recently trained tasks for weighting
-        self.max_recent_tasks = 50  # Maximum recent tasks to track
+        self.current_level = 0  # Start at easiest level
+        self.task_instance_counter: int = 0  # Counter for unique task IDs
+
+        # Warmup stage configuration
+        self.warmup_step = warmup_step
+        self.global_step: int = 0  # Counter for total steps
+
+        # Session management
+        self.session = Session()
+        self.log_file = Path(log_file) if log_file is not None else None
+
+        # Sliding window tracking for success rate
+        self.window_size = window_size
+        self.success_rate_threshold = success_rate_threshold
+        self.variance_threshold = variance_threshold
+        # Deques to track success/failure per task type
+        self.success_windows: Dict[str, deque] = {}  # Maps task_type -> deque of 0s/1s
 
         # Load available tasks
         self._load_available_tasks()
@@ -172,12 +196,11 @@ class CurriculumLearning:
 
     def _load_available_tasks(self):
         """Load all available tasks and their ratings."""
-        print("DEBUG: Starting task loading")
         self.tasks_by_level: Dict[int, List[Dict[str, Any]]] = {
-            i: [] for i in range(1, 6)
+            i: [] for i in range(0, 6)  # 0-5 level
         }
 
-        # Load math tasks
+        # Load math tasks (downloaded via setup.py into runtimes/)
         math_file = Path(__file__).parent / "runtimes" / "math.json"
         if math_file.exists():
             try:
@@ -197,32 +220,20 @@ class CurriculumLearning:
 
         # Load puzzle tasks directly from JSON
         puzzles_file = Path(__file__).parent / "runtimes" / "puzzles.json"
-        print(f"DEBUG: Looking for puzzles at: {puzzles_file}")
-        print(f"DEBUG: File exists: {puzzles_file.exists()}")
         if puzzles_file.exists():
             try:
                 with open(puzzles_file, "r", encoding="utf-8") as f:
                     puzzles_data = json.load(f)
 
-                print(
-                    f"DEBUG: Loaded puzzle data with keys: {list(puzzles_data.keys())}"
-                )
                 for lang in ["javascript", "python"]:
                     if lang in puzzles_data:
                         puzzles_list = puzzles_data[lang]
-                        print(f"DEBUG: {lang} has {len(puzzles_list)} puzzles")
                         puzzle_count = 0
                         for puzzle_name, puzzle_info in puzzles_list.items():
-                            print(
-                                f"DEBUG: Checking puzzle {puzzle_name}: {type(puzzle_info)}"
-                            )
                             if (
                                 isinstance(puzzle_info, dict)
                                 and "rating" in puzzle_info
                             ):
-                                print(
-                                    f"DEBUG: Adding {puzzle_name} with rating {puzzle_info.get('rating')}"
-                                )
                                 task_info = {
                                     "type": "puzzle",
                                     "language": lang,
@@ -234,45 +245,80 @@ class CurriculumLearning:
                                 level = min(task_info["rating"], 5)
                                 self.tasks_by_level[level].append(task_info)
                                 puzzle_count += 1
-                            else:
-                                print(
-                                    f"DEBUG: Skipping {puzzle_name} - no rating or not dict"
-                                )
             except Exception as e:
-                print(f"DEBUG: Error loading puzzles: {e}")
-                import traceback
-
-                traceback.print_exc()
-        else:
-            print(f"DEBUG: Puzzles file not found at {puzzles_file}")
+                print(f"Warning: Could not load puzzle tasks: {e}")
 
         # Print summary
         total_tasks = sum(len(tasks) for tasks in self.tasks_by_level.values())
         print(
             f"Loaded {total_tasks} tasks across {len(self.tasks_by_level)} difficulty levels"
         )
-        for level in range(1, 6):
+        for level in range(0, 6):
             print(f"  Level {level}: {len(self.tasks_by_level[level])} tasks")
+
+    def _get_recent_task_ids(self) -> List[str]:
+        """Get recent task base IDs from session history."""
+        return [
+            tid.rsplit("_", 1)[0] if "_" in tid else tid
+            for tid in self.session.task_history
+        ]
+
+    def _get_task_counters(self) -> Dict[str, int]:
+        """Compute task counters from session data.
+
+        Returns dict mapping task_type to success count:
+        +1 for correct tasks (is_correct=True), -1 for failures.
+        """
+        counters: Dict[str, int] = {}
+        for task in self.session.tasks.values():
+            task_type = task.task_type
+            if task_type not in counters:
+                counters[task_type] = 0
+
+            if task.is_correct:
+                counters[task_type] += 1
+            else:
+                counters[task_type] -= 1
+
+        return counters
+
+    def _get_failed_tasks(self) -> Dict[str, str]:
+        """Get failed tasks from session data.
+
+        Returns dict mapping task_id to task_name for tasks with is_correct=False.
+        """
+        return {
+            task_id: task.task_name
+            for task_id, task in self.session.tasks.items()
+            if task.is_correct is False
+        }
 
     def compute_reward(
         self,
-        task_type: str,
+        task_id: str,
         model_output: str,
-        expected_output: Union[str, dict],
-        task_id: Optional[str] = None,
     ) -> float:
         """
         Evaluate model output and update learning state.
 
         Args:
-            task_type: Type of task ("math", "puzzle", "python", "javascript")
+            task_id: Task identifier
             model_output: Raw model response
-            expected_output: Expected answer
-            task_id: Optional task identifier for tracking
 
         Returns:
             Reward score combining primary correctness and auxiliary metrics
         """
+        # Get task from session
+        task = self.session.get_task(task_id)
+        if task is None:
+            raise ValueError(f"Unknown task_id: {task_id}")
+
+        task_type = task.task_type
+        expected_output = task.expected_answer
+
+        # Store model_output in task for reward functions
+        task.model_output = model_output
+
         # Get appropriate reward function
         if task_type not in self.reward_functions:
             raise ValueError(f"Unknown task type: {task_type}")
@@ -280,76 +326,258 @@ class CurriculumLearning:
         reward_fn = self.reward_functions[task_type]
 
         # Compute primary reward
-        result = reward_fn.compute_reward(model_output, expected_output)
+        result = reward_fn.compute_reward(task)
         score = result.score
+        primary_info = result.info
+
+        # Create primary reward
+        primary_reward = RewardFunctionScore(
+            score=score,
+            reward_function_name="primary",
+            info=primary_info or "",
+        )
+        task_rewards = [primary_reward]
 
         # Compute auxiliary rewards and combine them
-        is_correct = score >= 0.5  # Threshold for success
+        is_correct = score == 1  # Threshold for success
         aux_score_dict = self.get_aux_reward_scores(
-            model_output, expected_output, is_correct=is_correct
+            model_output, task, is_correct=is_correct
         )
-        aux_scores = [(name, score) for name, score in aux_score_dict.items()]
+
+        # Add auxiliary rewards to task_rewards
+        for name, data in aux_score_dict.items():
+            aux_reward = RewardFunctionScore(
+                score=data["score"],
+                reward_function_name=name,
+                info=data["info"] or "",
+            )
+            task_rewards.append(aux_reward)
+
+        aux_scores = [(name, data["score"]) for name, data in aux_score_dict.items()]
 
         # Combine scores (primary + auxiliary)
-        # For now, use a simple average; can be customized
         if aux_scores:
             aux_avg = sum(s for _, s in aux_scores) / len(aux_scores)
-            # Combine primary and auxiliary rewards using configurable weight
             primary_weight = 1.0 - self.aux_weight
             combined_score = primary_weight * score + self.aux_weight * aux_avg
         else:
             combined_score = score
 
-        # Update counters using the combined score
-        if task_type not in self.task_counters:
-            self.task_counters[task_type] = 0
-
-        if combined_score >= 0.5:  # Threshold for success
-            self.task_counters[task_type] += 1
-        else:  # Incorrect
-            self.task_counters[task_type] -= 1
-            # Store failed task for reflective learning
-            if task_id:
-                self.failed_tasks[task_id] = model_output
-        # Update recent tasks
-        if task_id:
-            self.recent_tasks.append(task_id)
-            if len(self.recent_tasks) > self.max_recent_tasks:
-                self.recent_tasks.pop(0)
+        # Track success in sliding window for curriculum progression
+        self._track_success(task_type, is_correct)
 
         # Check if we should advance level
         self._update_level()
 
+        # Save rewards to session
+        self.session.set_reward(
+            task_id, task_rewards, combined_score, model_output=model_output
+        )
+
+        # Log evaluation if configured
+        if self.log_file is not None:
+            log_entry = task.to_dict()
+            log_entry["timestamp"] = datetime.datetime.now().isoformat()
+            log_entry["primary_score"] = primary_reward.score
+            log_entry["aux_scores"] = {
+                name: data["score"] for name, data in aux_score_dict.items()
+            }
+            log_entry["combined_score"] = combined_score
+            log_entry["info"] = {
+                "primary": primary_reward.info,
+                **{
+                    f"aux_{name}": data["info"] for name, data in aux_score_dict.items()
+                },
+            }
+            with open(self.log_file, "a", encoding="utf-8") as f:
+                json.dump(log_entry, f, ensure_ascii=False)
+                f.write("\n")
+
+        # Increment step counter for warmup tracking
+        self.global_step += 1
+
         return combined_score
 
     def _update_level(self):
-        """Update current difficulty level based on performance."""
-        # Simple progression logic: advance if mostly successful
-        total_score = sum(self.task_counters.values())
-        task_types_count = len([c for c in self.task_counters.values() if c != 0])
+        """Update current difficulty level based on sliding window success rate and variance.
 
-        if (
-            task_types_count > 0 and total_score > task_types_count * 2
-        ):  # More successes than failures
-            self.current_level = min(self.current_level + 1, 5)
+        Can advance or demote based on trend:
+        - Advance if success_rate > threshold (80%) AND variance < variance_threshold (0.05)
+        - Demote if success_rate < demote_threshold (40%) AND variance < variance_threshold
 
-        # Could regress if too many failures, but for now keep it simple
-        # if total_score < -task_types_count * 2:
-        #     self.current_level = max(self.current_level - 1, 1)
+        This ensures the level follows the agent's actual performance trend rather than
+        remaining at an unsuitable difficulty.
+        """
+        self._ensure_success_windows_from_session()
+        # Collect all success rates from tracked task types
+        success_rates = []
+        for task_type, window in self.success_windows.items():
+            if len(window) > 0:
+                avg_success = sum(window) / len(window)
+                success_rates.append(avg_success)
 
-    def get_prompt(self) -> Optional[Dict[str, Any]]:
+        # If we have enough data, check conditions for advancing or demoting
+        if success_rates:
+            mean_success_rate = sum(success_rates) / len(success_rates)
+
+            # Calculate variance across tracked windows
+            if len(success_rates) > 1:
+                variance = statistics.variance(success_rates)
+            else:
+                # Single window - check its internal variance
+                window = list(self.success_windows.values())[0]
+                if len(window) >= 2:
+                    variance = statistics.variance(window)
+                else:
+                    variance = 0.0
+
+            # Define thresholds
+            demote_threshold = 0.4  # 40% - demote if success rate falls below this
+
+            # Check if we should advance (high success rate with stability)
+            if (
+                mean_success_rate > self.success_rate_threshold
+                and variance < self.variance_threshold
+            ):
+                if self.current_level < 5:
+                    print(
+                        f"🚀 Advancing to level {self.current_level + 1}: "
+                        f"success_rate={mean_success_rate:.1%}, variance={variance:.4f}"
+                    )
+                    self.current_level = min(self.current_level + 1, 5)
+                    return True
+
+            # Check if we should demote (low success rate with stability)
+            elif (
+                mean_success_rate < demote_threshold
+                and variance < self.variance_threshold
+            ):
+                if self.current_level > 1:
+                    print(
+                        f"📉 Demoting to level {self.current_level - 1}: "
+                        f"success_rate={mean_success_rate:.1%}, variance={variance:.4f}"
+                    )
+                    self.current_level = max(self.current_level - 1, 1)
+                    return True
+
+        return False
+
+    def _track_success(self, task_type: str, is_correct: bool) -> None:
+        """Track success/failure in sliding window for a task type.
+
+        Args:
+            task_type: Type of task (e.g., 'math', 'puzzle')
+            is_correct: Whether the task was solved correctly
+        """
+        if task_type not in self.success_windows:
+            self.success_windows[task_type] = deque(maxlen=self.window_size)
+
+        # Add 1 for success, 0 for failure
+        self.success_windows[task_type].append(1 if is_correct else 0)
+
+    def _ensure_success_windows_from_session(self) -> None:
+        """Seed success windows from session history when no tracking data exists."""
+        if any(len(window) > 0 for window in self.success_windows.values()):
+            return
+
+        for task in self.session.tasks.values():
+            if task.is_correct is None:
+                continue
+
+            window = self.success_windows.setdefault(
+                task.task_type, deque(maxlen=self.window_size)
+            )
+            window.append(1 if task.is_correct else 0)
+
+    def get_success_rate(self, task_type: Optional[str] = None) -> Dict[str, Any]:
+        """Get success rate statistics for task type(s).
+
+        Args:
+            task_type: Specific task type to query. If None, returns aggregated stats.
+
+        Returns:
+            Dictionary with success_rate, variance, window_size, and samples_count.
+        """
+        if task_type is not None:
+            # Return stats for specific task type
+            window = self.success_windows.get(task_type, deque())
+            if len(window) == 0:
+                return {
+                    "task_type": task_type,
+                    "success_rate": 0.0,
+                    "variance": 0.0,
+                    "samples": 0,
+                    "window_size": self.window_size,
+                }
+
+            success_rate = sum(window) / len(window)
+            variance = statistics.variance(window) if len(window) > 1 else 0.0
+
+            return {
+                "task_type": task_type,
+                "success_rate": success_rate,
+                "variance": variance,
+                "samples": len(window),
+                "window_size": self.window_size,
+            }
+        else:
+            # Return aggregated stats across all task types
+            all_stats = []
+            for task_type, window in self.success_windows.items():
+                if len(window) > 0:
+                    success_rate = sum(window) / len(window)
+                    variance = statistics.variance(window) if len(window) > 1 else 0.0
+                    all_stats.append(
+                        {
+                            "task_type": task_type,
+                            "success_rate": success_rate,
+                            "variance": variance,
+                            "samples": len(window),
+                        }
+                    )
+
+            if all_stats:
+                mean_success = sum(s["success_rate"] for s in all_stats) / len(
+                    all_stats
+                )
+                mean_variance = sum(s["variance"] for s in all_stats) / len(all_stats)
+            else:
+                mean_success = 0.0
+                mean_variance = 0.0
+
+            return {
+                "mean_success_rate": mean_success,
+                "mean_variance": mean_variance,
+                "threshold_success_rate": self.success_rate_threshold,
+                "threshold_variance": self.variance_threshold,
+                "samples": sum(s["samples"] for s in all_stats),
+                "by_task_type": all_stats,
+            }
+
+    def get_prompt(self) -> Optional[Task]:
         """
         Get a task prompt appropriate for current difficulty level.
 
+        During warmup stage (first warmup_step iterations), only level 0 tasks are used.
+        After warmup, normal curriculum learning applies.
+
         Returns:
-            Task information dict with prompt, expected output, etc.
+            Task object with prompt, expected output, etc., or None if no tasks available.
         """
-        # Get available tasks for current level
-        available_tasks = self.tasks_by_level.get(self.current_level, [])
+        # Determine which level to use
+        if self.is_warmup():
+            # Warmup stage: force level 0
+            selected_level = 0
+        else:
+            # Normal curriculum: use current level
+            selected_level = self.current_level
+
+        # Get available tasks for selected level
+        available_tasks = self.tasks_by_level.get(selected_level, [])
 
         if not available_tasks:
             # Fallback to any available tasks
-            for level in range(1, 6):
+            for level in range(0, 6):
                 if self.tasks_by_level[level]:
                     available_tasks = self.tasks_by_level[level]
                     break
@@ -358,13 +586,14 @@ class CurriculumLearning:
             return None
 
         # Weight against recent tasks
+        recent_task_ids = self._get_recent_task_ids()
         weights = []
         for task in available_tasks:
             weight = 1.0
-            if task["id"] in self.recent_tasks:
+            if task["id"] in recent_task_ids:
                 # Reduce weight for recent tasks
-                recency_penalty = self.recent_tasks.count(task["id"]) / len(
-                    self.recent_tasks
+                recency_penalty = recent_task_ids.count(task["id"]) / max(
+                    len(recent_task_ids), 1
                 )
                 weight = max(0.1, 1.0 - recency_penalty)
             weights.append(weight)
@@ -376,107 +605,110 @@ class CurriculumLearning:
         if selected_task["type"] == "math":
             # Math task
             math_data = selected_task["data"]
-            return {
-                "task_type": "math",
-                "task_id": selected_task["id"],
-                "prompt": math_data.get("problem", ""),
-                "expected_output": math_data.get("solution", ""),
-                "level": selected_task["rating"],
-                "data": math_data,
-            }
+            base_task_id = selected_task["id"]
+            # Generate unique task_id for this instance
+            unique_task_id = f"{base_task_id}_{self.task_instance_counter}"
+            self.task_instance_counter += 1
+
+            task_name = f"math_{math_data.get('prompt', '')[:30]}"
+            problem_statement = math_data.get("prompt", "")
+            language = math_data.get("lang", "en")
+            prompt = format_math_prompt(problem_statement, self.answer_tag, language)
+            expected_output = math_data.get("response", "")
+
+            task_obj = Task(
+                task_id=unique_task_id,
+                task_name=task_name,
+                task_type="math",
+                level=selected_task["rating"],
+                prompt=prompt,
+                expected_answer=expected_output,
+                language=language,
+            )
+            self.session.add_task(task_obj)
+            return task_obj
 
         elif selected_task["type"] == "puzzle":
             # Puzzle task
             puzzle_data = selected_task["data"]
-            prompt = self._format_puzzle_prompt(puzzle_data, selected_task["language"])
+            base_task_id = selected_task["id"]
+            # Generate unique task_id for this instance
+            unique_task_id = f"{base_task_id}_{self.task_instance_counter}"
+            self.task_instance_counter += 1
 
-            return {
-                "task_type": "puzzle",
-                "task_id": selected_task["id"],
-                "prompt": prompt,
-                "expected_output": {
-                    "puzzle": selected_task["puzzle_name"],
-                    "inputs": {},  # Would need to generate specific inputs
-                    "language": selected_task["language"],
-                },
-                "level": selected_task["rating"],
-                "data": puzzle_data,
+            task_name = selected_task["puzzle_name"]
+            language = selected_task["language"]  # javascript or python
+            prompt = format_puzzle_prompt(puzzle_data, language, self.answer_tag)
+            puzzle_inputs = extract_puzzle_inputs(puzzle_data, language)
+            expected_output = {
+                "puzzle": selected_task["puzzle_name"],
+                "inputs": puzzle_inputs,
+                "language": language,
             }
+
+            task_obj = Task(
+                task_id=unique_task_id,
+                task_name=task_name,
+                task_type="puzzle",
+                level=selected_task["rating"],
+                prompt=prompt,
+                expected_answer=expected_output,
+                language=language,
+            )
+            self.session.add_task(task_obj)
+            return task_obj
 
         return None
 
-    def _format_puzzle_prompt(self, puzzle_data: Dict[str, Any], language: str) -> str:
-        """Format a puzzle prompt for the model."""
-        name = puzzle_data.get("name", "")
-        docstring = puzzle_data.get("docstring", "")
-        sat_func = puzzle_data.get("sat", "")
-        sol_func = puzzle_data.get("sol", "")
-        output_format = ""
-
-        if self.answer_tag is not None and self.answer_tag.startswith("```"):
-            output_format = (
-                f"\nProvide your solution in markdown code blocks: {self.answer_tag}."
-            )
-        elif self.answer_tag is not None:
-            output_format = f"\nProvide your solution in <{self.answer_tag}> tags."
-
-        prompt = f"""Solve this programming puzzle:
-
-# {name}
-
-{docstring}
-
-Write a function that satisfies the following condition:
-
-```javascript
-{sat_func}
-```
-
-Your solution should be a {language} function with this signature:
-
-```javascript
-{sol_func}
-```
-{output_format}"""
-
-        return prompt
-
     def get_learning_stats(self) -> Dict[str, Any]:
-        """Get current learning statistics."""
+        """Get current learning statistics including sliding window success rates."""
+        success_stats = self.get_success_rate()
         return {
             "current_level": self.current_level,
-            "task_counters": self.task_counters.copy(),
-            "failed_tasks_count": len(self.failed_tasks),
-            "recent_tasks_count": len(self.recent_tasks),
+            "task_counters": self._get_task_counters(),
+            "failed_tasks_count": len(self._get_failed_tasks()),
+            "recent_tasks_count": len(self._get_recent_task_ids()),
             "available_tasks_by_level": {
                 level: len(tasks) for level, tasks in self.tasks_by_level.items()
             },
             "aux_reward_functions": list(self.aux_reward_functions.keys()),
+            "sliding_window_stats": success_stats,
         }
 
     def get_aux_reward_scores(
         self,
         model_output: str,
-        expected_output: Union[str, dict],
+        task: "Task",
         is_correct: bool = False,
-    ) -> Dict[str, float]:
+    ) -> Dict[str, Dict[str, Any]]:
         """
         Compute all auxiliary reward scores for the given model output.
 
         Args:
-            model_output: Raw model response
-            expected_output: Expected answer
+            model_output: Raw model response (already stored in task.model_output)
+            task: The Task object (contains expected_answer, language, and model_output)
             is_correct: Whether the primary task was answered correctly
 
         Returns:
-            Dictionary mapping auxiliary reward function names to scores
+            Dictionary mapping auxiliary reward function names to dicts with 'score' and 'info'
         """
         aux_scores = {}
         for aux_name, aux_fn in self.aux_reward_functions.items():
             try:
-                aux_result = aux_fn.compute_reward(model_output, is_correct=is_correct)
-                aux_scores[aux_name] = aux_result.score
+                # All auxiliary functions now accept task as first parameter
+                aux_result = aux_fn.compute_reward(task, is_correct=is_correct)
+                aux_scores[aux_name] = {
+                    "score": aux_result.score,
+                    "info": aux_result.info,
+                }
             except Exception as e:
                 print(f"Warning: Auxiliary reward '{aux_name}' failed: {e}")
-                aux_scores[aux_name] = 0.0
+                aux_scores[aux_name] = {
+                    "score": 0.0,
+                    "info": str(e),
+                }
         return aux_scores
+
+    def is_warmup(self) -> bool:
+        """Check if currently in warmup stage."""
+        return self.global_step < self.warmup_step

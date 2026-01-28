@@ -1,4 +1,6 @@
 # Infinite-RL
+![code coverage](https://img.shields.io/badge/code%20coverage-87%25-green)
+
 
 Infinite-RL is a reward functions toolbox for LLM Reinforcement Learning. It provides modular reward functions for evaluating programming puzzles, mathematical problems, language detection, and auxiliary metrics like length and repetition penalties. The toolbox includes utilities for model response evaluation and optional dataset generation for synthetic RLHF samples via the Gemini API.
 
@@ -82,7 +84,34 @@ python -m pytest tests/test_reward_functions.py -v
 
 # Run puzzle reward function tests
 python -m pytest tests/test_puzzle_reward_function.py -v
+
+# Run tests with coverage report
+python -m pytest tests --cov=infinite_rl --cov-report=html --cov-report=term-missing
+
+# Or use the convenience script
+python tests/run_coverage.py run      # Run tests with coverage
+python tests/run_coverage.py view     # Opens HTML report in browser
+python tests/run_coverage.py badge    # Update coverage badge in README
+python tests/run_coverage.py all      # Run tests and update badge
+
+# View coverage report in browser
+open htmlcov/index.html
 ```
+
+### Code Coverage
+The project maintains >80% code coverage. Coverage reports are generated automatically in CI and can be viewed locally:
+
+- **HTML Report**: `htmlcov/index.html` - Interactive coverage report
+- **Terminal Report**: Shows missing lines in terminal output
+- **XML Report**: `coverage.xml` - For CI integration
+- **GitHub Status Checks**: Coverage percentage shown in PR/commit status
+- **Auto-updating Badges**: Coverage badges update automatically in README
+
+### CI/CD Features
+- **Coverage Enforcement**: Builds fail if coverage drops below 80%
+- **Status Checks**: GitHub shows coverage percentage for each commit
+- **Badge Updates**: README coverage badges update automatically on main branch
+- **Multiple Report Formats**: HTML, XML, and terminal reports generated
 
 ## Supported Tasks
 
@@ -183,24 +212,42 @@ print(f"Reasoning bonus: {score.score}")
 
 ## Curriculum Learning
 
-The `CurriculumLearning` class provides adaptive task difficulty progression based on model performance. It starts with easy tasks (level 1) and gradually increases difficulty to hard tasks (level 5) as the model demonstrates competence.
+The `CurriculumLearning` class provides adaptive task difficulty progression based on model performance using a **sliding window success rate** mechanism. It starts with easy tasks (level 1) and gradually increases difficulty to hard tasks (level 5) as the model demonstrates competence.
 
 **Features:**
-- **Adaptive Difficulty**: Automatically advances difficulty level based on success/failure rates
-- **Task Tracking**: Maintains counters for each task type and stores failed tasks for reflective learning
+- **Sliding Window Tracking**: Tracks the last N episodes (default: 50) of success/failure per task type
+- **Dual-Criterion Advancement**: Advances difficulty only when **both** conditions are met:
+  - Average success rate > 80% (configurable via `success_rate_threshold`)
+  - Variance < 0.05 (configurable via `variance_threshold`)
+- **Per-Task-Type Windows**: Maintains independent sliding windows for math and puzzle tasks
 - **Weighted Selection**: Avoids recently trained tasks to promote variety
 - **Multi-Task Support**: Works with math problems and programming puzzles
+
+This ensures the model has truly *mastered* a difficulty level rather than just "catching up" with lucky guesses.
+
+**Configuration:**
+```python
+from infinite_rl import CurriculumLearning
+
+# Initialize with default settings
+cl = CurriculumLearning()
+
+# Or customize thresholds
+cl = CurriculumLearning(
+    timeout=10,
+    answer_tag="answer",
+    think_tag="think",
+    window_size=50,              # Track last 50 episodes
+    success_rate_threshold=0.8,  # Require 80% success rate
+    variance_threshold=0.05,     # Require low variance for consistency
+)
+```
 
 **Example Usage:**
 ```python
 from infinite_rl import CurriculumLearning
 
-# Initialize curriculum learning with custom tags
-cl = CurriculumLearning(
-    timeout=10,
-    answer_tag="answer",
-    think_tag="think"
-)
+cl = CurriculumLearning()
 
 # Get a task appropriate for current skill level
 task = cl.get_prompt()
@@ -210,10 +257,8 @@ print(f"Prompt: {task['prompt']}")
 # Evaluate model response and update learning state
 model_response = "<answer>4</answer>"
 reward = cl.compute_reward(
-    task_type=task['task_type'],
-    model_output=model_response,
-    expected_output=task['expected_output'],
-    task_id=task['task_id']
+    task_id=task['task_id'],
+    model_output=model_response
 )
 
 print(f"Reward: {reward}")
@@ -221,14 +266,18 @@ print(f"Reward: {reward}")
 # Check learning progress
 stats = cl.get_learning_stats()
 print(f"Current level: {stats['current_level']}")
-print(f"Task counters: {stats['task_counters']}")
+print(f"Success rate: {stats['sliding_window_stats']['mean_success_rate']:.1%}")
+print(f"Variance: {stats['sliding_window_stats']['mean_variance']:.4f}")
 ```
 
-**Learning State:**
-- Tracks success/failure counters per task type
-- Stores failed tasks for potential reflective learning
-- Maintains a history of recently trained tasks
-- Automatically advances difficulty when performance is consistently good
+**Learning Progression:**
+- Maintains sliding windows of success/failure for each task type
+- Calculates mean success rate and variance for recent performance
+- Advances to next difficulty level when success rate and consistency thresholds are both met
+- Provides detailed statistics to monitor curriculum progression
+
+**Documentation:**
+See [SLIDING_WINDOW_CURRICULUM.md](SLIDING_WINDOW_CURRICULUM.md) for comprehensive documentation including configuration guide, example scenarios, and debugging tips. See [QUICK_REFERENCE.md](QUICK_REFERENCE.md) for a quick start guide.
 
 ## Testing
 

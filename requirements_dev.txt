@@ -4,3 +4,5 @@ pandas
 argparse
 tqdm
 pytest
+pytest-cov
+pytest-html

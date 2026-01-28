@@ -1,7 +1,9 @@
 import re
-from typing import Union
+from typing import Union, TYPE_CHECKING
 from .reward_function import RewardFunction, RewardFunctionScore
-from ..utils.parser_utils import extract_tag
+
+if TYPE_CHECKING:
+    from ..task import Task
 
 
 class ReasoningStepsRewardFunction(RewardFunction):
@@ -17,38 +19,34 @@ class ReasoningStepsRewardFunction(RewardFunction):
         self,
         task_name: str = "reasoning_steps",
         timeout: int = 5,
-        answer_tag: str = "answer",
-        think_tag: str = "think",
+        target_tag: str = "think",
+        **kwargs,
     ):
-        super().__init__(
-            task_name, timeout=timeout, answer_tag=answer_tag, think_tag=think_tag
-        )
+        super().__init__(task_name, timeout=timeout, target_tag=target_tag, **kwargs)
 
     def initialize(self):
         self.initialized = True
 
     def compute_reward(
         self,
-        model_output: str,
+        task: "Task",
         **kwargs,
     ) -> RewardFunctionScore:
         # Ensure initialized
         if not self.initialized:
             self.initialize()
 
-        if not model_output:
+        if not task.model_output:
             return RewardFunctionScore(score=0.0)
 
         # Extract think content using the think_tag
-        think_content = self.extract_tag(model_output, target_tag=self.think_tag)
+        think_content = self.extract_tag(task.model_output)
         if think_content:
             thinking_content = think_content.lower()
         else:
             return RewardFunctionScore(
                 score=0.0,
-                error_msg={
-                    "reasoning_steps": f"No <{self.think_tag}> tag content found."
-                },
+                info=f"No <{self.think_tag}> tag content found.",
             )
 
         indicators = [

@@ -1,7 +1,9 @@
 import re
-from typing import Union
+from typing import Union, TYPE_CHECKING
 from .reward_function import RewardFunction, RewardFunctionScore
-from ..utils.parser_utils import extract_tag
+
+if TYPE_CHECKING:
+    from ..task import Task
 
 
 def _last_boxed_only_string(string):
@@ -44,7 +46,7 @@ def _remove_boxed(s):
 
 def _extract_boxed_answer(s: str):
     """Extract the answer from inside a LaTeX \\boxed{} command"""
-    solution = _last_boxed_only_string(solution)
+    solution = _last_boxed_only_string(s)
     solution = _remove_boxed(solution)
     return solution
 
@@ -146,40 +148,36 @@ class MathRewardFunction(RewardFunction):
 
     def compute_reward(
         self,
-        model_output: str,
-        expected_output: Union[str, int],
+        task: "Task",
         **kwargs,
     ) -> RewardFunctionScore:
         if not self.initialized:
             self.initialize()
 
-        predicted_str = self.extract_tag(model_output, **kwargs)
+        expected_output = task.expected_answer
+        text = self.extract_tag(task.model_output or "")
 
-        if "\\boxed" in predicted_str:
-            predicted_str = _extract_boxed_answer(predicted_str)
-
-        if not predicted_str:
+        if not text:
             return RewardFunctionScore(
                 score=0.0,
-                error_msg={"math": f"No answer found in the specified tag."},
+                info=f"No answer found in the <{self.target_tag}> tag.",
             )
+
+        if "\\boxed" in text:
+            text = _extract_boxed_answer(text)
 
         expected_str = str(expected_output).strip()
 
         if "\\boxed" in expected_str:
             expected_str = _extract_boxed_answer(expected_str)
 
-        correctness = _check_equality(predicted_str, expected_str)
+        correctness = _check_equality(text, expected_str)
 
         return RewardFunctionScore(
             score=1.0 if correctness else 0.0,
-            error_msg=(
-                (
-                    (
-                        {}
-                        if correctness == 1.0
-                        else {"math": f"Mathematical mismatch. Expected {expected_str}"}
-                    ),
-                ),
+            info=(
+                ""
+                if correctness == 1.0
+                else f"Mathematical mismatch. Expected {expected_str}"
             ),
         )

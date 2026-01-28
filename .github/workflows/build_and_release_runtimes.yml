@@ -94,7 +94,7 @@ jobs:
           ds = load_dataset('hon9kon9ize/infinite-rl')
           df = ds['train'].to_pandas()
           df_math = df[df['task'] == 'math']
-          df_math['rating'] = 1
+          df_math['rating'] = 0
           records = df_math.to_dict(orient='records')
           with open('assets/math.json', 'w') as f:
               json.dump(records, f)

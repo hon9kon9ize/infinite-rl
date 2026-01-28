@@ -14,3 +14,7 @@ third_party
 *.gguf
 *.log
 assets
+# Coverage reports
+htmlcov/
+.coverage
+coverage.xml

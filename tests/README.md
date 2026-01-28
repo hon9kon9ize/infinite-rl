@@ -38,7 +38,19 @@ python -m pytest tests/test_coding_reward_function.py -v
 
 # Run with coverage
 python -m pytest tests/test_reward_functions.py --cov=infinite_rl.reward_functions
+
+# Run full coverage report
+python -m pytest --cov=infinite_rl --cov-report=html --cov-report=term-missing
 ```
+
+## Coverage Reports
+
+The project uses pytest-cov for code coverage analysis:
+
+- **HTML Report**: `htmlcov/index.html` - Interactive browser view
+- **Terminal Report**: Shows uncovered lines directly in terminal
+- **XML Report**: `coverage.xml` - For CI/CD integration
+- **Minimum Coverage**: 80% required for CI to pass
 
 ## Key Design Patterns
 
@@ -52,7 +64,7 @@ def compute_reward(
 ) -> RewardFunctionScore:
 ```
 
-Returns `RewardFunctionScore(score: float)` — per-reward functions return a unified `score`. The orchestrator returns an `AggregatedReward` with `score`, and `error_msg`.
+Returns `RewardFunctionScore(score: float)` — per-reward functions return a unified `score`. The orchestrator returns an `AggregatedReward` with `score`, and `info` containing diagnostic details.
 
 ### 2. Expected Output Types
 Different reward functions support different input types:

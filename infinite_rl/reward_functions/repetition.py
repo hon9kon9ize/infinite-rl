@@ -5,7 +5,11 @@ Detects n-gram repetitions and returns a penalty (negative float).
 
 from collections import Counter
 import re
+from typing import TYPE_CHECKING
 from .reward_function import RewardFunction, RewardFunctionScore
+
+if TYPE_CHECKING:
+    from ..task import Task
 
 
 def _tokenize(text: str) -> list:
@@ -81,12 +85,15 @@ class RepetitionRewardFunction(RewardFunction):
         timeout: int = 5,
         n: int = 3,
         weight: float = -0.1,
-        answer_tag: str = "answer",
-        think_tag: str = "think",
+        **kwargs,
     ):
-        super().__init__(
-            task_name, timeout=timeout, answer_tag=answer_tag, think_tag=think_tag
-        )
+
+        # Use think_tag as default target_tag, since there might have a task that would have repetition in answer
+        if "target_tag" not in kwargs:
+            think_tag = kwargs.get("think_tag", "think")
+            kwargs["target_tag"] = think_tag
+
+        super().__init__(task_name, timeout=timeout, **kwargs)
         self.n = n
         self.weight = weight
 
@@ -95,21 +102,21 @@ class RepetitionRewardFunction(RewardFunction):
 
     def compute_reward(
         self,
-        model_output: str,
+        task: "Task",
         **kwargs,
     ) -> RewardFunctionScore:
         if not self.initialized:
             self.initialize()
 
-        if not model_output:
+        if not task.model_output:
             return RewardFunctionScore(score=0.0)
 
-        text = self.extract_tag(model_output, **kwargs)
+        text = self.extract_tag(task.model_output)
 
         if not text:
             return RewardFunctionScore(
                 score=0.0,
-                error_msg={"repetition": "No content found in the specified tag."},
+                info="No content found in the specified tag.",
             )
 
         penalty = ngram_repetition_reward(text, n=self.n, weight=self.weight)

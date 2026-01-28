@@ -9,25 +9,34 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
   - **Puzzle**: Programming challenges in Python (subprocess) and JavaScript (WASM runtime)
 - Key runtime flow:
   1. `scripts/generate.py` -> calls `generate_dataset()` in `infinite_rl/generator.py` to orchestrate sampling.
-  2. `generator.py` calls system prompts in `infinite_rl/prompts.py` and parses model outputs with `infinite_rl/parser.py`.
+  2. `generator.py` parses model outputs with `infinite_rl/parser.py`.
   3. Generated samples are evaluated by specialized reward functions in `infinite_rl/reward_functions/`:
      - `MathRewardFunction`: Validates mathematical solutions using symbolic equivalence
      - `PuzzleRewardFunction`: Executes and validates code against puzzle specifications
   4. Puzzle execution: JavaScript via WASM (`infinite_rl/executor.py` + `puzzle_js.wasm`), Python via subprocess (`infinite_rl/runner.py`)
   5. Math evaluation: Uses `sympy` for symbolic computation, references `math.json` for task data
 - Programming puzzles include difficulty ratings (1-5 scale) generated using Gemini 2.5 Flash model.
-- `CurriculumLearning` class (`infinite_rl/curriculum.py`) provides adaptive difficulty progression based on model performance, starting from easy tasks and advancing to harder ones.
+- `CurriculumLearning` class (`infinite_rl/curriculum.py`) provides adaptive difficulty progression using **sliding window success rates**:
+  - Tracks last N episodes (default: 50) of success/failure per task type
+  - Advances difficulty when success rate > 80% AND variance < 0.05 (configurable)
+  - Ensures agent has truly mastered current level, not just "catching up"
+  - Per-task-type windows allow independent progression for math and puzzles
 
 ## What to know before changing code
-- Samples must follow the strict 3-head format: `[PROMPT]`, `[ANSWER]`, `[RESPONSE]` and the final content must be wrapped in `<answer>` tags (see `prompts.py`).
+- Samples must follow the strict 3-head format: `[PROMPT]`, `[ANSWER]`, `[RESPONSE]` and the final content must be wrapped in `<answer>` tags.
 - **Math tasks**: `MathRewardFunction` expects the answer tag to contain a numeric value or symbolic expression that can be parsed and compared symbolically.
 - **Puzzle tasks**: `PuzzleRewardFunction` expects the answer tag to contain a code block (triple-backtick) with valid Python or JavaScript code. The code is executed against the puzzle's SAT (satisfaction) function to determine correctness.
-- Reward functions return a `RewardFunctionScore(score, error_msg)` with score ranging from 0.0 to 1.0.
+- Reward functions return a `RewardFunctionScore(score, info)` with score ranging from 0.0 to 1.0 and `info` holding diagnostic text.
 - `generate_dataset()` is idempotent and resumable: it reads/writes `dataset.csv` and appends failures to `failed_dataset.csv` immediately.
 - `--task_dist` format is a comma-separated list of floats for available task types (e.g., `0.5,0.5` for 50% math, 50% puzzle).
 - Generator has a rectification loop: low-quality outputs are retried and passed through a `RECTIFY_PROMPT` before being retried; be careful modifying retry logic or thresholds.
 - Concurrency uses `ThreadPoolExecutor` with explicit locks (`dataset_lock`, `failed_dataset_lock`, `save_lock`)—be precise when adding shared state.
-- Curriculum learning tracks task counters (+1 for correct, -1 for incorrect) and advances difficulty when total score exceeds threshold.
+- **Curriculum learning** uses sliding window success rates:
+  - `_track_success()` records 1 (success) or 0 (failure) per task type
+  - `_update_level()` checks: success_rate > threshold AND variance < variance_threshold
+  - `get_success_rate()` provides detailed statistics for debugging
+  - Modifying thresholds or window size affects all difficulty progression
+  - Per-task-type windows in `self.success_windows` allow independent progression
 
 ## Developer workflows & commands
 - Always activate the project's virtual environment before running CLI commands (required for consistent environments):
@@ -78,7 +87,6 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 ## Project-specific conventions & patterns
 - Strict output format: the parser looks for `[PROMPT]/[ANSWER]/[RESPONSE]` headers and `<answer>` tags; changing parsing requires updating `infinite_rl/parser.py` and tests.
 - When adding a new task type:
-  - Add system prompt and a TYPE_PROMPTS entry in `infinite_rl/prompts.py`.
   - Add a reward function class under `infinite_rl/reward_functions/` and expose it in `get_reward_functions()`.
 - Keep `generate_dataset` interfaces stable: many parts (resume logic, distribution, retry/rectify) depend on its signature.
 
@@ -110,7 +118,6 @@ RUNTIME_RELEASE_TAG=v1.2.3 RUNTIME_GITHUB_REPO=owner/repo python -m pip install 
 
 ## Files to inspect when debugging a change
 - `infinite_rl/generator.py` — orchestration, retries/rectify, resume logic, `task_dist` parsing
-- `infinite_rl/prompts.py` — system prompts and task-specific seed hints
 - `infinite_rl/parser.py` — tag and markdown parsing logic
 - `infinite_rl/curriculum.py` — curriculum learning implementation and task difficulty progression
 - `infinite_rl/reward_functions/*.py` — reward function implementations and interfaces

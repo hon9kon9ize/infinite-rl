@@ -9,6 +9,7 @@ on:
 
 permissions:
   actions: write
+  statuses: write
 
 jobs:
   version-check:
@@ -102,12 +103,55 @@ jobs:
           # Install from the corresponding runtimes release tag (e.g., runtimes-v0.1.16)
           # This builds a wheel and triggers our build-time hook to bundle runtimes into the wheel.
           pip install git+https://github.com/${{ github.repository }}@runtimes-${{ needs.version-check.outputs.version }}
-          pip install pytest
+          pip install pytest pytest-cov pytest-html
 
-      - name: Run unit tests
+      - name: Run unit tests with coverage
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         run: |
-          python -m unittest discover tests
+          python -m pytest tests --cov=infinite_rl --cov-report=html --cov-report=xml --cov-report=term-missing --cov-fail-under=80
+
+      - name: Set coverage status check
+        if: ${{ needs.version-check.outputs.release_exists == 'true' && always() }}
+        run: |
+          # Extract coverage percentage from coverage.xml
+          COVERAGE=$(python -c "
+          import xml.etree.ElementTree as ET
+          import re
+          tree = ET.parse('coverage.xml')
+          root = tree.getroot()
+          coverage_elem = root.find('.//coverage')
+          if coverage_elem is not None:
+              line_rate = coverage_elem.get('line-rate', '0')
+              percentage = round(float(line_rate) * 100)
+              print(percentage)
+          else:
+              print('0')
+          ")
+
+          # Set GitHub status check
+          if [ \"$COVERAGE\" -ge 80 ]; then
+            STATE=\"success\"
+            DESCRIPTION=\"Coverage: ${COVERAGE}%\"
+          else
+            STATE=\"failure\"
+            DESCRIPTION=\"Coverage too low: ${COVERAGE}% (minimum 80%)\"
+          fi
+
+          curl -X POST \
+            -H \"Authorization: token ${{ secrets.GITHUB_TOKEN }}\" \
+            -H \"Accept: application/vnd.github.v3+json\" \
+            https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }} \
+            -d \"{
+              \\\"state\\\": \\\"$STATE\\\",
+              \\\"description\\\": \\\"$DESCRIPTION\\\",
+              \\\"context\\\": \\\"code-coverage\\\",
+              \\\"target_url\\\": \\\"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\\\"
+            }\"
+
+      - name: Update coverage badge in README
+        if: ${{ needs.version-check.outputs.release_exists == 'true' && github.ref == 'refs/heads/main' }}
+        run: |
+          python tests/update_coverage_badge.py
 
   schedule_retry:
     needs: version-check

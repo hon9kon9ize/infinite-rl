@@ -1,9 +1,9 @@
-from typing import Union
+from typing import Union, TYPE_CHECKING
 from collections import defaultdict
-from infinite_rl.utils.parser_utils import extract_tag
-import pycld2 as cld2
-from cantonesedetect import CantoneseDetector
 from .reward_function import RewardFunction, RewardFunctionScore
+
+if TYPE_CHECKING:
+    from ..task import Task
 
 
 class LangConsistencyRewardFunction(RewardFunction):
@@ -17,13 +17,11 @@ class LangConsistencyRewardFunction(RewardFunction):
     def __init__(
         self,
         task_name: str = "lang_consistency",
-        timeout: int = 5,
-        answer_tag: str = "answer",
-        think_tag: str = "think",
+        **kwargs,
     ):
-        super().__init__(
-            task_name, timeout=timeout, answer_tag=answer_tag, think_tag=think_tag
-        )
+        from cantonesedetect import CantoneseDetector
+
+        super().__init__(task_name, **kwargs)
         self.yue_detector = CantoneseDetector(split_seg=True, get_analysis=True)
 
     def initialize(self):
@@ -42,15 +40,26 @@ class LangConsistencyRewardFunction(RewardFunction):
 
     def compute_reward(
         self,
-        model_output: str,
-        expected_output: Union[str, int, float, None],
+        task: "Task",
         **kwargs,
     ) -> RewardFunctionScore:
+        import pycld2 as cld2
+
         # Ensure initialized
         if not self.initialized:
             self.initialize()
 
-        content = self.extract_tag(model_output, **kwargs)
+        # Get expected language from task
+        expected_output = task.language
+
+        content = self.extract_tag(task.model_output or "")
+
+        if not content:
+            return RewardFunctionScore(
+                score=0.0,
+                info=f"No content found in the <{self.target_tag}> tag.",
+            )
+
         norm_expected = expected_output.lower()
 
         # Determine expected language code or dialect
@@ -58,9 +67,7 @@ class LangConsistencyRewardFunction(RewardFunction):
         if norm_expected not in ["en", "zh", "yue", "zh-hant"]:
             return RewardFunctionScore(
                 score=0.0,
-                error_msg={
-                    "lang_consistency": f"Expected output must be a language code like 'en', 'zh', 'zh-Hant', or 'yue'. Received: {norm_expected}"
-                },
+                info=f"Expected output must be a language code like 'en', 'zh', 'zh-Hant', or 'yue'. Received: {norm_expected}",
             )
 
         # Get detected language (CLD2) details
@@ -70,9 +77,7 @@ class LangConsistencyRewardFunction(RewardFunction):
         if not norm_detected:
             return RewardFunctionScore(
                 score=0.0,
-                error_msg={
-                    "lang_consistency": f"Failed to detect language of the response inside <{target_tag}>."
-                },
+                info=f"Failed to detect language of the response inside <{self.target_tag}>.",
             )
 
         # Cantonese ratio (0..1) from specialized detector (if available)
@@ -93,11 +98,9 @@ class LangConsistencyRewardFunction(RewardFunction):
 
         return RewardFunctionScore(
             score=final_score,
-            error_msg=(
-                {
-                    "lang_consistency": f"Detected language '{norm_detected}' does not match expected '{norm_expected}'."
-                }
+            info=(
+                f"Detected language '{norm_detected}' does not match expected '{norm_expected}'."
                 if norm_expected != norm_detected
-                else None
+                else ""
             ),
         )

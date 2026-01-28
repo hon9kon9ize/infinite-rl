@@ -493,6 +493,9 @@ class CurriculumLearning:
         else:
             combined_score = score
 
+        # Increment step counter for warmup tracking (BEFORE level update for cooldown check)
+        self.global_step += 1
+
         # Track success in sliding window for curriculum progression
         self._track_success(task_type, is_correct)
 
@@ -520,9 +523,6 @@ class CurriculumLearning:
             with open(self.log_file, "a", encoding="utf-8") as f:
                 json.dump(log_entry, f, ensure_ascii=False)
                 f.write("\n")
-
-        # Increment step counter for warmup tracking
-        self.global_step += 1
 
         return combined_score
 

@@ -18,3 +18,4 @@ assets
 htmlcov/
 .coverage
 coverage.xml
+*.jsonl

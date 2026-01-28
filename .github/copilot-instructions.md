@@ -33,9 +33,12 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 - Concurrency uses `ThreadPoolExecutor` with explicit locks (`dataset_lock`, `failed_dataset_lock`, `save_lock`)—be precise when adding shared state.
 - **Curriculum learning** uses sliding window success rates:
   - `_track_success()` records 1 (success) or 0 (failure) per task type
-  - `_update_level()` checks: success_rate > threshold AND variance < variance_threshold
+  - `_update_level()` checks: success_rate > threshold AND variance < variance_threshold for advancement, or success_rate < demote_threshold AND variance < variance_threshold for demotion
   - `get_success_rate()` provides detailed statistics for debugging
-  - Modifying thresholds or window size affects all difficulty progression
+  - Thresholds are configurable:
+    - `success_rate_threshold` (default: 0.8 = 80%) for advancement
+    - `demote_threshold` (default: 0.4 = 40%) for demotion
+    - `variance_threshold` (default: 0.05) for stability requirement
   - Per-task-type windows in `self.success_windows` allow independent progression
 
 ## Developer workflows & commands

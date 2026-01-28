@@ -219,6 +219,9 @@ The `CurriculumLearning` class provides adaptive task difficulty progression bas
 - **Dual-Criterion Advancement**: Advances difficulty only when **both** conditions are met:
   - Average success rate > 80% (configurable via `success_rate_threshold`)
   - Variance < 0.05 (configurable via `variance_threshold`)
+- **Dual-Criterion Demotion**: Demotes difficulty when **both** conditions are met:
+  - Average success rate < 40% (configurable via `demote_threshold`)
+  - Variance < 0.05 (configurable via `variance_threshold`)
 - **Per-Task-Type Windows**: Maintains independent sliding windows for math and puzzle tasks
 - **Weighted Selection**: Avoids recently trained tasks to promote variety
 - **Multi-Task Support**: Works with math problems and programming puzzles
@@ -238,7 +241,8 @@ cl = CurriculumLearning(
     answer_tag="answer",
     think_tag="think",
     window_size=50,              # Track last 50 episodes
-    success_rate_threshold=0.8,  # Require 80% success rate
+    success_rate_threshold=0.8,  # Require 80% success rate for advancement
+    demote_threshold=0.4,        # Demote if success rate falls below 40%
     variance_threshold=0.05,     # Require low variance for consistency
 )
 ```

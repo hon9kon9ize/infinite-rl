@@ -42,6 +42,7 @@ class CurriculumLearning:
         window_size: int = 50,
         success_rate_threshold: float = 0.8,
         variance_threshold: float = 0.05,
+        demote_threshold: float = 0.4,
         warmup_step: int = 32,
     ):
         """
@@ -66,6 +67,7 @@ class CurriculumLearning:
             window_size: Size of the sliding window for success rate tracking (default: 50)
             success_rate_threshold: Required success rate for difficulty increase (default: 0.8 = 80%)
             variance_threshold: Maximum variance for success rate stability (default: 0.05)
+            demote_threshold: Success rate threshold for difficulty decrease (default: 0.4 = 40%)
             warmup_step: Number of initial steps to only use level 0 tasks (default: 32)
         """
         self.timeout = timeout
@@ -108,6 +110,7 @@ class CurriculumLearning:
         self.window_size = window_size
         self.success_rate_threshold = success_rate_threshold
         self.variance_threshold = variance_threshold
+        self.demote_threshold = demote_threshold
         # Deques to track success/failure per task type
         self.success_windows: Dict[str, deque] = {}  # Maps task_type -> deque of 0s/1s
 
@@ -210,7 +213,7 @@ class CurriculumLearning:
                         task_info = {
                             "type": "math",
                             "data": item,
-                            "rating": item.get("rating", 1),
+                            "rating": item.get("rating", 0),
                             "id": f"math_{hash(str(item))}",
                         }
                         level = min(task_info["rating"], 5)  # Ensure level <= 5
@@ -409,10 +412,13 @@ class CurriculumLearning:
         remaining at an unsuitable difficulty.
         """
         self._ensure_success_windows_from_session()
+        # Minimum samples required before considering level changes (prevents cascading jumps)
+        min_samples = 10
+
         # Collect all success rates from tracked task types
         success_rates = []
         for task_type, window in self.success_windows.items():
-            if len(window) > 0:
+            if len(window) >= min_samples:  # Only consider if enough samples
                 avg_success = sum(window) / len(window)
                 success_rates.append(avg_success)
 
@@ -431,9 +437,6 @@ class CurriculumLearning:
                 else:
                     variance = 0.0
 
-            # Define thresholds
-            demote_threshold = 0.4  # 40% - demote if success rate falls below this
-
             # Check if we should advance (high success rate with stability)
             if (
                 mean_success_rate > self.success_rate_threshold
@@ -449,7 +452,7 @@ class CurriculumLearning:
 
             # Check if we should demote (low success rate with stability)
             elif (
-                mean_success_rate < demote_threshold
+                mean_success_rate < self.demote_threshold
                 and variance < self.variance_threshold
             ):
                 if self.current_level > 1:

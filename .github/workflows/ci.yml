@@ -117,19 +117,7 @@ jobs:
           # Extract coverage percentage from coverage.xml if it exists
           COVERAGE="0"
           if [ -f coverage.xml ]; then
-            python3 > /tmp/cov.txt << 'PYTHON_EOF'
-import xml.etree.ElementTree as ET
-tree = ET.parse('coverage.xml')
-root = tree.getroot()
-coverage_elem = root.find('.//coverage')
-if coverage_elem is not None:
-    line_rate = coverage_elem.get('line-rate', '0')
-    percentage = round(float(line_rate) * 100)
-    print(percentage)
-else:
-    print('0')
-PYTHON_EOF
-            COVERAGE=$(cat /tmp/cov.txt)
+            COVERAGE=$(python3 -c 'import xml.etree.ElementTree as ET; tree = ET.parse("coverage.xml"); root = tree.getroot(); coverage_elem = root.find(".//coverage"); print(round(float(coverage_elem.get("line-rate", "0")) * 100) if coverage_elem is not None else 0)')
           fi
 
           # Set GitHub status check

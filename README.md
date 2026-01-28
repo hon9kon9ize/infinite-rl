@@ -4,7 +4,7 @@
 
 Infinite-RL is a reward functions toolbox for LLM Reinforcement Learning. It provides modular reward functions for evaluating programming puzzles, mathematical problems, language detection, and auxiliary metrics like length and repetition penalties. The toolbox is designed to integrate with fine-tuning frameworks like Tunix for model training and optimization.
 
-The package includes pre-built datasets for math tasks (`math.json`) and programming puzzles (`puzzles.json`), along with WASM runtimes for secure JavaScript execution.
+The package includes pre-built datasets for math tasks (`math.json` compiled from [OpenAI's GSM8K](https://huggingface.co/datasets/openai/gsm8k)) and programming puzzles (`puzzles.json` compiled from Microsoft's Python Programming Puzzles), along with WASM runtimes for secure JavaScript execution.
 
 ## Installation
 
@@ -343,20 +343,20 @@ infinite_rl/
 │   ├── lang_consistency.py  # Language consistency detection
 │   └── format.py            # Format validation
 └── runtimes/
-    ├── math.json            # Math problem dataset with solutions
-    ├── puzzles.json         # Programming puzzle specifications
+    ├── math.json            # Math problem dataset compiled from OpenAI's GSM8K with solutions
+    ├── puzzles.json         # Programming puzzle specifications compiled from Microsoft's Python Programming Puzzles
     └── puzzle_js.wasm       # WASM runtime for JavaScript execution
 ```
 
 ### Task Types
 
 **1. Math Tasks**
-- **Source**: `infinite_rl/runtimes/math.json`
+- **Source**: `infinite_rl/runtimes/math.json` (compiled from OpenAI's GSM8K)
 - **Evaluation**: Symbolic computation with SymPy
 - **Reward Function**: `MathRewardFunction`
 
 **2. Puzzle Tasks**
-- **Source**: `infinite_rl/runtimes/puzzles.json`
+- **Source**: `infinite_rl/runtimes/puzzles.json` (compiled from Microsoft's Python Programming Puzzles)
 - **Languages**: Python (subprocess execution) and JavaScript (WASM execution)
 - **Evaluation**: Code validation against SAT (satisfaction) functions
 - **Reward Function**: `PuzzleRewardFunction`
@@ -453,6 +453,7 @@ Notes:
 ## References
 
 **GSM8K Dataset** (Math tasks source):
+- Repository: [https://huggingface.co/datasets/openai/gsm8k](https://huggingface.co/datasets/openai/gsm8k)
 ```bibtex
 @article{cobbe2021gsm8k,
   title={Training Verifiers to Solve Math Word Problems},

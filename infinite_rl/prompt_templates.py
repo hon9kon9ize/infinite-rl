@@ -7,6 +7,13 @@ ensuring consistent structure across all generated tasks.
 
 from typing import Dict, Any, Optional
 
+# Language code to full language name mapping
+LANG_MAP = {
+    "zh": "Mandarin",
+    "yue": "Cantonese",
+    "en": "English",
+}
+
 
 def format_math_prompt(
     problem_statement: str,
@@ -29,7 +36,8 @@ def format_math_prompt(
     """
     lang_instruction = ""
     if language and language != "en":
-        lang_instruction = f"\nRespond in {language}. "
+        lang_name = LANG_MAP.get(language, language)
+        lang_instruction = f"\nRespond in {lang_name}. "
 
     prompt = f"""{problem_statement}{lang_instruction}
 

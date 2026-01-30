@@ -34,22 +34,30 @@ def format_math_prompt(
     Returns:
         Formatted prompt string with instructions for the model
     """
-    lang_instruction = ""
-    if language and language != "en":
-        lang_name = LANG_MAP.get(language, language)
-        lang_instruction = f"\nRespond in {lang_name}. "
+    lang_name = LANG_MAP.get(language, language) if language else "English"
+    if not lang_name:
+        lang_name = "English"
+    lang_instruction = f"Your response must be in {lang_name}"
 
-    prompt = f"""{problem_statement}{lang_instruction}
+    prompt = f"""Solve this math problem. {lang_instruction}
 
-First, show your reasoning process in <{think_tag}> tags:
+**Problem:**
+{problem_statement}
 
+**Instructions:**
+1. **Reasoning**: You MUST perform your step-by-step reasoning in **English** inside <{think_tag}> tags.
+2. **Response Language**: All text OUTSIDE of XML tags must be in **{lang_name}**.
+3. **Final Answer:** Wrap the final numeric or symbolic value inside <{answer_tag}> tags.
+
+**Response Structure:**
 <{think_tag}>
-Your step-by-step reasoning here...
+[Reasoning steps in English...]
 </{think_tag}>
 
-Then provide your final answer in <{answer_tag}> tags with just the numeric or symbolic result (no code blocks):
+[Concluding sentence in {lang_name}]
 
-<{answer_tag}>42</{answer_tag}>"""
+<{answer_tag}>[Final numeric or symbolic result]</{answer_tag}>
+"""
     return prompt
 
 
@@ -85,20 +93,20 @@ def format_puzzle_prompt(
 
 Write a function that satisfies the following condition:
 
-```javascript
+```{language}
 {sat_func}
 ```
 
 Your solution should be a {language} function with this signature:
 
-```javascript
+```{language}
 {sol_func}
 ```
 
 First, show your reasoning and approach in <{think_tag}> tags:
 
 <{think_tag}>
-Your analysis of the problem and approach here...
+[Reasoning steps here, must be in English]
 </{think_tag}>
 
 Then provide your solution in <{answer_tag}> tags with a triple-backtick code block:
@@ -117,8 +125,7 @@ function sol(...) {{
 def format_reflective_math_prompt(
     original_prompt: str,
     previous_attempt: str,
-    answer_tag: str = "answer",
-    think_tag: str = "think",
+    **kwargs,
 ) -> str:
     """Format a reflective learning prompt for a math task that failed format validation.
 
@@ -136,35 +143,20 @@ def format_reflective_math_prompt(
     if not previous_attempt:
         previous_attempt = "<no output recorded>"
 
-    reflective_prompt = f"""You previously attempted this math problem but your response did not follow the required format.
+    reflective_prompt = f"""You previously attempted this problem, but your response had formatting issues. Review your attempt and solve the problem again.
 
-**Your Original Problem:**
+**Original Problem:**
 {original_prompt}
 
 **Your Previous Attempt:**
 {previous_attempt}
 
-**Format Requirements (IMPORTANT):**
-First, show your reasoning in <{think_tag}> tags.
-Then, wrap your final answer in <{answer_tag}> tags with a numeric or symbolic value (NOT a code block).
+**Guidelines:**
+Please review the following guidelines carefully when solving the problem again:
+1. Pay attention to the format requirements
+2. Provide your answer in <answer> tags with just the numeric or symbolic result
+3. Ensure your response follows the specified format structure
 
-**Correct Format Example:**
-<{think_tag}>
-Let me work through this step by step...
-Therefore, the answer is 42.
-</{think_tag}>
-
-<{answer_tag}>42</{answer_tag}>
-
-**Guidelines for this retry:**
-1. Work through the math problem step by step in <{think_tag}> tags
-2. Show your reasoning and calculations
-3. Determine the final numeric or symbolic answer
-4. Wrap your reasoning in <{think_tag}>...</{think_tag}> tags
-5. Wrap ONLY the final answer value in <{answer_tag}>...</{answer_tag}> tags
-6. Do NOT include code blocks (```), only the numeric/symbolic result
-
-**Please solve this problem again, paying close attention to the format requirements:**
 {original_prompt}
 """
     return reflective_prompt
@@ -173,9 +165,7 @@ Therefore, the answer is 42.
 def format_reflective_puzzle_prompt(
     original_prompt: str,
     previous_attempt: str,
-    language: str = "python",
-    answer_tag: str = "answer",
-    think_tag: str = "think",
+    **kwargs,
 ) -> str:
     """Format a reflective learning prompt for a puzzle/code task that failed format validation.
 
@@ -194,51 +184,20 @@ def format_reflective_puzzle_prompt(
     if not previous_attempt:
         previous_attempt = "<no output recorded>"
 
-    # Language-specific code example
-    if language.lower() == "javascript":
-        code_example = """function sol(param1, param2) {
-  // your implementation
-  return result;
-}"""
-    else:  # python or default
-        code_example = """def sol(param1, param2):
-    # your implementation
-    return result"""
+    reflective_prompt = f"""You previously attempted this puzzle, but your response had formatting issues. Review your attempt and solve this puzzle again.
 
-    reflective_prompt = f"""You previously attempted this coding puzzle but your response did not follow the required format.
-
-**Your Original Task:**
+**Original Task:**
 {original_prompt}
 
 **Your Previous Attempt:**
 {previous_attempt}
 
-**Format Requirements (IMPORTANT):**
-First, show your reasoning in <{think_tag}> tags.
-Then, wrap your code solution in <{answer_tag}> tags with a triple-backtick code block.
+**Guidelines:**
+Please review the following guidelines carefully when solving this puzzle again:
+1. Pay attention to the format requirements
+2. Provide your code solution in <answer> tags with a code block
+3. Ensure your solution follows the specified format structure
 
-**Correct Format Example:**
-<{think_tag}>
-Your analysis of the problem and approach here...
-</{think_tag}>
-
-<{answer_tag}>
-```{language}
-{code_example}
-```
-</{answer_tag}>
-
-**Guidelines for this retry:**
-1. Analyze the problem and understand the requirements in <{think_tag}> tags
-2. Think through your solution approach and explain your reasoning
-3. Write the complete, working code
-4. Wrap your reasoning in <{think_tag}>...</{think_tag}> tags
-5. Wrap your code in <{answer_tag}>...</{answer_tag}> tags
-6. Use triple backticks with language specifier: ```{language}
-7. Make sure all function parameters match the sat() function signature
-8. Do NOT use input() or interactive features
-
-**Please solve this puzzle again, paying close attention to the format requirements:**
 {original_prompt}
 """
     return reflective_prompt

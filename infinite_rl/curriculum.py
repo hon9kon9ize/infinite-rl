@@ -155,6 +155,8 @@ class CurriculumLearning:
                         timeout=self.timeout,
                         answer_tag=self.answer_tag,
                         think_tag=self.think_tag,
+                        tag_excluded=False,
+                        target_tag=self.think_tag,
                         **self.lang_consistency_kwargs,
                     )
                 )

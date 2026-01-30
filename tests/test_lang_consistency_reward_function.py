@@ -9,7 +9,7 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
 
     def setUp(self):
         self.reward_fn = LangConsistencyRewardFunction(
-            task_name="lang_consistency", answer_tag_excluded=False
+            task_name="lang_consistency", tag_excluded=False
         )
         self.reward_fn.initialize()
 
@@ -43,9 +43,9 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
         self.assertAlmostEqual(score.score, 1.0, places=3)
 
     def test_answer_tag_included_default(self):
-        """Test that by default (answer_tag_excluded=False), content inside <answer> tag is checked."""
+        """Test that by default (tag_excluded=False), content inside <answer> tag is checked."""
         reward_fn = LangConsistencyRewardFunction(
-            task_name="lang_consistency", answer_tag_excluded=False
+            task_name="lang_consistency", tag_excluded=False
         )
         reward_fn.initialize()
 
@@ -65,10 +65,10 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
         # Should detect Cantonese from inside the <answer> tag
         self.assertAlmostEqual(score.score, 1.0, places=3)
 
-    def test_answer_tag_excluded_true(self):
-        """Test that with answer_tag_excluded=True, content OUTSIDE <answer> tag is checked."""
+    def test_tag_excluded_true(self):
+        """Test that with tag_excluded=True, content OUTSIDE <answer> tag is checked."""
         reward_fn = LangConsistencyRewardFunction(
-            task_name="lang_consistency", answer_tag_excluded=True
+            task_name="lang_consistency", tag_excluded=True
         )
         reward_fn.initialize()
 
@@ -88,10 +88,10 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
         # Should detect Cantonese from outside the <answer> tag
         self.assertAlmostEqual(score.score, 1.0, places=3)
 
-    def test_answer_tag_excluded_with_prefix_and_suffix(self):
-        """Test answer_tag_excluded=True with both prefix and suffix outside the tag."""
+    def test_tag_excluded_with_prefix_and_suffix(self):
+        """Test tag_excluded=True with both prefix and suffix outside the tag."""
         reward_fn = LangConsistencyRewardFunction(
-            task_name="lang_consistency", answer_tag_excluded=True
+            task_name="lang_consistency", tag_excluded=True
         )
         reward_fn.initialize()
 
@@ -109,10 +109,10 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
         # Should detect Cantonese from both prefix and suffix (outside tags)
         self.assertAlmostEqual(score.score, 1.0, places=3)
 
-    def test_answer_tag_excluded_mismatch(self):
-        """Test answer_tag_excluded=True with mismatched language outside tag."""
+    def test_tag_excluded_mismatch(self):
+        """Test tag_excluded=True with mismatched language outside tag."""
         reward_fn = LangConsistencyRewardFunction(
-            task_name="lang_consistency", answer_tag_excluded=True
+            task_name="lang_consistency", tag_excluded=True
         )
         reward_fn.initialize()
 

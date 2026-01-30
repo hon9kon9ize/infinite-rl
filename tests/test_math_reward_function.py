@@ -1,36 +1,23 @@
 import unittest
-import json
 from infinite_rl.reward_functions.math import (
     MathRewardFunction,
-    _last_boxed_only_string,
-    _remove_boxed,
-    _extract_boxed_answer,
     _extract_number,
-    _to_sympy,
     _check_equality,
 )
 from infinite_rl.task import Task
 
 
 class TestMathRewardFunction(unittest.TestCase):
-    """Test math reward function with SymPy evaluation."""
+    """Test math reward function with numeric comparison only."""
 
     def setUp(self):
         self.reward_fn = MathRewardFunction(task_name="math")
         self.reward_fn.initialize()
 
-    def test_correct_integral_answer(self):
-        """Test correct mathematical answer."""
-        model_output = """
-The integral of f(x) = 2x^3 - 4x + 1:
-
-Using the power rule:
-= 2x^4/4 - 4x^2/2 + x + C
-= (1/2)x^4 - 2x^2 + x + C
-
-<answer>(1/2)x^4 - 2x^2 + x + C</answer>
-"""
-        expected_output = "(1/2)x^4 - 2x^2 + x + C"
+    def test_correct_numeric_answer(self):
+        """Test correct numeric answer."""
+        model_output = "<answer>42</answer>"
+        expected_output = "42"
         task = Task(
             task_id="test_1",
             task_name="test",
@@ -43,22 +30,12 @@ Using the power rule:
         )
 
         score = self.reward_fn.compute_reward(task)
+        self.assertEqual(score.score, 1.0)
 
-        # Correctness reflected in unified `score` field
-        self.assertEqual(score.score, 1.0)  # Mathematically correct
-
-    def test_latex_answer_symbolic_match(self):
-        """Latex formatted answer should match symbolic expected output."""
-        model_output = """
-The integral of f(x) = 2x^3 - 4x + 1 (LaTeX form):
-
-Using the power rule:
-= 2x^4/4 - 4x^2/2 + x + C
-= \frac{1}{2}x^4 - 2x^2 + x + C
-
-<answer>\\frac{1}{2}x^4 - 2x^2 + x + C</answer>
-"""
-        expected_output = "(1/2)x^4 - 2x^2 + x + C"
+    def test_correct_fractional_answer(self):
+        """Test correct fractional answer (1/2)."""
+        model_output = "<answer>0.5</answer>"
+        expected_output = "1/2"
         task = Task(
             task_id="test_2",
             task_name="test",
@@ -71,7 +48,6 @@ Using the power rule:
         )
 
         score = self.reward_fn.compute_reward(task)
-
         self.assertEqual(score.score, 1.0)
 
     def test_missing_answer_tag(self):
@@ -95,8 +71,8 @@ Using the power rule:
 
     def test_incorrect_mathematical_answer(self):
         """Test mathematically incorrect answer."""
-        model_output = "<answer>x^4 - 2x^2 + x + C</answer>"
-        expected_output = "(1/2)x^4 - 2x^2 + x + C"
+        model_output = "<answer>40</answer>"
+        expected_output = "42"
         task = Task(
             task_id="test_4",
             task_name="test",
@@ -109,8 +85,6 @@ Using the power rule:
         )
 
         score = self.reward_fn.compute_reward(task)
-
-        # Correctness now in unified `score` field; format checked separately
         self.assertEqual(score.score, 0.0)
 
     def test_integer_expected_output(self):
@@ -135,13 +109,13 @@ Using the power rule:
     def test_numeric_only_comparison_from_string(self):
         """Ensure math reward compares numbers only when annotations are present."""
         cases = [
-            ("<answer>10 \\text{hours}</answer>", 10),
-            ("<answer>20\\,\\text{ml}</answer>", 20),
-            ("<answer>50 \\text{ml/dose}</answer>", 50),
+            ("<answer>10</answer>", 10),
+            ("<answer>20</answer>", 20),
+            ("<answer>50</answer>", 50),
             ("<answer>$50</answer>", 50),
             ("<answer>$1000$</answer>", 1000),
             ("<answer>$1000</answer>", 1000),
-            ("<answer>12 \\, \\text{cm|kg\\}</answer>", 12),
+            ("<answer>12</answer>", 12),
             ("<answer>3.14159</answer>", 3.14159),
         ]
         for i, (model_out, expected) in enumerate(cases):
@@ -196,48 +170,6 @@ Using the power rule:
 class TestMathHelperFunctions(unittest.TestCase):
     """Test helper functions in math reward module."""
 
-    def test_last_boxed_only_string_with_boxed(self):
-        """Test extracting last boxed string."""
-        text = "Some text \\boxed{answer1} and \\boxed{answer2}"
-        result = _last_boxed_only_string(text)
-        self.assertEqual(result, "\\boxed{answer2}")
-
-    def test_last_boxed_only_string_with_fbox(self):
-        """Test extracting last fbox string."""
-        text = "Some text \\fbox{answer1} and \\fbox{answer2}"
-        result = _last_boxed_only_string(text)
-        self.assertEqual(result, "\\fbox{answer2}")
-
-    def test_last_boxed_only_string_no_boxed(self):
-        """Test when no boxed content exists."""
-        text = "Some text without boxed content"
-        result = _last_boxed_only_string(text)
-        self.assertIsNone(result)
-
-    def test_last_boxed_only_string_unclosed_boxed(self):
-        """Test when boxed content is not properly closed."""
-        text = "Some text \\boxed{unclosed"
-        result = _last_boxed_only_string(text)
-        self.assertIsNone(result)
-
-    def test_remove_boxed_valid(self):
-        """Test removing boxed wrapper from valid input."""
-        text = "\\boxed{answer}"
-        result = _remove_boxed(text)
-        self.assertEqual(result, "answer")
-
-    def test_remove_boxed_invalid(self):
-        """Test removing boxed wrapper from invalid input."""
-        text = "not boxed"
-        result = _remove_boxed(text)
-        self.assertIsNone(result)
-
-    def test_extract_boxed_answer(self):
-        """Test extracting boxed answer from text."""
-        text = "Some text \\boxed{42} and more"
-        result = _extract_boxed_answer(text)
-        self.assertEqual(result, "42")
-
     def test_extract_number_integer(self):
         """Test extracting integer from string."""
         result = _extract_number("42")
@@ -283,24 +215,14 @@ class TestMathHelperFunctions(unittest.TestCase):
         result = _extract_number("not a number")
         self.assertIsNone(result)
 
-    def test_to_sympy_latex(self):
-        """Test converting LaTeX to sympy."""
-        result = _to_sympy("\\frac{1}{2}")
-        self.assertEqual(str(result), "1/2")
-
-    def test_to_sympy_regular(self):
-        """Test converting regular expression to sympy."""
-        result = _to_sympy("x^2 + 2*x + 1")
-        self.assertEqual(str(result), "x**2 + 2*x + 1")
-
     def test_check_equality_numeric(self):
         """Test numeric equality checking."""
         result = _check_equality("42", "42")
         self.assertTrue(result)
 
-    def test_check_equality_symbolic(self):
-        """Test symbolic equality checking."""
-        result = _check_equality("x^2 + 2*x + 1", "(x + 1)^2")
+    def test_check_equality_fraction_vs_decimal(self):
+        """Test fraction vs decimal equality checking."""
+        result = _check_equality("1/2", "0.5")
         self.assertTrue(result)
 
     def test_check_equality_unequal(self):
@@ -308,13 +230,18 @@ class TestMathHelperFunctions(unittest.TestCase):
         result = _check_equality("42", "43")
         self.assertFalse(result)
 
-    def test_math_reward_with_boxed_expected(self):
-        """Test math reward when expected output contains boxed answer."""
+    def test_check_equality_invalid_input(self):
+        """Test equality checking with invalid input."""
+        result = _check_equality("abc", "42")
+        self.assertFalse(result)
+
+    def test_math_reward_simple_number(self):
+        """Test math reward with simple numeric answer."""
         reward_fn = MathRewardFunction()
         reward_fn.initialize()
 
         model_output = "<answer>42</answer>"
-        expected_output = "\\boxed{42}"
+        expected_output = "42"
         task = Task(
             task_id="test_8",
             task_name="test",
@@ -329,13 +256,13 @@ class TestMathHelperFunctions(unittest.TestCase):
         score = reward_fn.compute_reward(task)
         self.assertEqual(score.score, 1.0)
 
-    def test_math_reward_with_boxed_model_and_expected(self):
-        """Test math reward when both model and expected contain boxed answers."""
+    def test_math_reward_with_text_in_answer(self):
+        """Test math reward when answer contains text (extracts first number)."""
         reward_fn = MathRewardFunction()
         reward_fn.initialize()
 
-        model_output = "<answer>\\boxed{42}</answer>"
-        expected_output = "\\boxed{42}"
+        model_output = "<answer>The answer is 42 units</answer>"
+        expected_output = "42"
         task = Task(
             task_id="test_9",
             task_name="test",

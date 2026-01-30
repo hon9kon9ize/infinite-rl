@@ -51,6 +51,7 @@ class CurriculumLearning:
         warmup_step: int = 32,
         reflective_learning_rate: float = 0.2,
         level_change_cooldown: int = 5,
+        num_generations: int = 4,
     ):
         """
         Initialize curriculum learning.
@@ -77,7 +78,8 @@ class CurriculumLearning:
             demote_threshold: Success rate threshold for difficulty decrease (default: 0.4 = 40%)
             warmup_step: Number of initial steps to only use level 0 tasks (default: 32)
             reflective_learning_rate: Probability of triggering reflective learning on format failures (default: 0.1). Set to 0 to disable.
-            level_change_cooldown: int = 5, Minimum steps between level changes to prevent rapid fluctuations
+            level_change_cooldown: Minimum steps between level changes to prevent rapid fluctuations (default: 5)
+            num_generations: Number of generations per prompt for GRPO batching (default: 4)
         """
         self.timeout = timeout
         self.answer_tag = answer_tag
@@ -129,6 +131,14 @@ class CurriculumLearning:
         # Level change cooldown: prevent successive advancements too quickly
         self.last_level_change_step: int = -999  # Track when last level change occurred
         self.level_change_cooldown: int = level_change_cooldown
+
+        # GRPO batch tracking: accumulate group responses until prompt-level decision
+        self.grpo_batch_scores: Dict[str, List[float]] = (
+            {}
+        )  # Maps task_id -> list of scores
+        self.num_generations: int = (
+            num_generations  # Number of generations per prompt (configurable)
+        )
 
         # Load available tasks
         self._load_available_tasks()
@@ -496,11 +506,29 @@ class CurriculumLearning:
         # Increment step counter for warmup tracking (BEFORE level update for cooldown check)
         self.global_step += 1
 
-        # Track success in sliding window for curriculum progression
-        self._track_success(task_type, is_correct)
+        # GRPO batch accumulation: collect scores until group is complete
+        # Extract base task_id (remove instance counter)
+        base_task_id = task_id.rsplit("_", 1)[0] if "_" in task_id else task_id
+        if base_task_id not in self.grpo_batch_scores:
+            self.grpo_batch_scores[base_task_id] = []
 
-        # Check if we should advance level
-        self._update_level()
+        self.grpo_batch_scores[base_task_id].append(combined_score)
+
+        # Check if we have a complete group (GRPO batch size)
+        if len(self.grpo_batch_scores[base_task_id]) >= self.num_generations:
+            # Complete group: track success at prompt level
+            group_scores = self.grpo_batch_scores[base_task_id]
+            self._track_success_group(task_type, group_scores)
+
+            # Check if we should advance/demote level
+            self._update_level()
+
+            # Clean up batch
+            del self.grpo_batch_scores[base_task_id]
+        else:
+            # Incomplete group: still accumulating responses
+            # Don't update level yet, just wait for more responses
+            pass
 
         # Save rewards to session
         self.session.set_reward(task_id, task_rewards, model_output=model_output)
@@ -527,82 +555,78 @@ class CurriculumLearning:
         return combined_score
 
     def _update_level(self):
-        """Update current difficulty level based on sliding window success rate and variance.
+        """Update difficulty level based on prompt-level success rate (optimized for GRPO).
 
-        Can advance or demote based on trend:
-        - Advance if success_rate > threshold (80%) AND variance < variance_threshold (0.05)
-        - Demote if success_rate < demote_threshold (40%) AND variance < variance_threshold
+        GRPO-aware logic:
+        - ADVANCE: Success rate > 80% (high performance at current level)
+        - DEMOTE: Success rate < 30% (struggling significantly)
+        - Variance check is ONLY used for demotion to prevent thrashing
+        - Windows are cleared on level change to start fresh (prevents old data drift)
 
-        Enforces cooldown period to prevent cascading level changes - at least N steps
-        must pass between consecutive level changes.
-
-        This ensures the level follows the agent's actual performance trend rather than
-        remaining at an unsuitable difficulty.
+        Enforces cooldown to prevent cascading changes.
         """
         self._ensure_success_windows_from_session()
 
-        # Check if we're in cooldown period (prevent consecutive advancements)
+        # Check if we're in cooldown period
         steps_since_change = self.global_step - self.last_level_change_step
         if steps_since_change < self.level_change_cooldown:
-            return False  # Still in cooldown, don't change level
+            return False
 
-        # Minimum samples required before considering level changes (prevents cascading jumps)
+        # Minimum samples required (10 prompts = ~40 responses for GRPO)
         min_samples = 10
 
-        # Collect all success rates from tracked task types
+        # Collect success rates from all tracked task types
         success_rates = []
         for task_type, window in self.success_windows.items():
-            if len(window) >= min_samples:  # Only consider if enough samples
+            if len(window) >= min_samples:
                 avg_success = sum(window) / len(window)
                 success_rates.append(avg_success)
 
-        # If we have enough data, check conditions for advancing or demoting
         if success_rates:
             mean_success_rate = sum(success_rates) / len(success_rates)
 
-            # Calculate variance across tracked windows
-            if len(success_rates) > 1:
-                variance = statistics.variance(success_rates)
-            else:
-                # Single window - check its internal variance
-                window = list(self.success_windows.values())[0]
-                if len(window) >= 2:
-                    variance = statistics.variance(window)
-                else:
-                    variance = 0.0
-
-            # Check if we should advance (high success rate with stability)
-            if (
-                mean_success_rate > self.success_rate_threshold
-                and variance < self.variance_threshold
-            ):
+            # ADVANCE: High success rate with no variance penalty
+            # The model has mastered this difficulty level
+            if mean_success_rate > self.success_rate_threshold:
                 if self.current_level < 5:
                     print(
                         f"🚀 Advancing to level {self.current_level + 1}: "
-                        f"success_rate={mean_success_rate:.1%}, variance={variance:.4f}"
+                        f"prompt-level success rate = {mean_success_rate:.1%}"
                     )
                     self.current_level = min(self.current_level + 1, 5)
-                    self.last_level_change_step = self.global_step  # Record the change
+                    self.last_level_change_step = self.global_step
+                    # Clear windows to start fresh at new difficulty
+                    self.success_windows.clear()
                     return True
 
-            # Check if we should demote (low success rate with stability)
-            elif (
-                mean_success_rate < self.demote_threshold
-                and variance < self.variance_threshold
-            ):
-                if self.current_level > 1:
-                    print(
-                        f"📉 Demoting to level {self.current_level - 1}: "
-                        f"success_rate={mean_success_rate:.1%}, variance={variance:.4f}"
-                    )
-                    self.current_level = max(self.current_level - 1, 1)
-                    self.last_level_change_step = self.global_step  # Record the change
-                    return True
+            # DEMOTE: Low success rate AND stable (consistent failure)
+            # Only demote if we're confident the model is truly stuck
+            elif mean_success_rate < self.demote_threshold:
+                # Check variance to ensure consistent poor performance
+                if len(success_rates) > 1:
+                    variance = statistics.variance(success_rates)
+                else:
+                    window = list(self.success_windows.values())[0]
+                    variance = statistics.variance(window) if len(window) > 1 else 0.0
+
+                # Demote only if performance is consistently bad
+                if variance < self.variance_threshold:
+                    if self.current_level > 0:
+                        print(
+                            f"📉 Demoting to level {self.current_level - 1}: "
+                            f"prompt-level success rate = {mean_success_rate:.1%}, "
+                            f"variance = {variance:.4f}"
+                        )
+                        self.current_level = max(self.current_level - 1, 0)
+                        self.last_level_change_step = self.global_step
+                        # Clear windows to start fresh at easier difficulty
+                        self.success_windows.clear()
+                        return True
 
         return False
 
     def _track_success(self, task_type: str, is_correct: bool) -> None:
-        """Track success/failure in sliding window for a task type.
+        """Track success/failure in sliding window for a task type (legacy single-response).
 
         Args:
             task_type: Type of task (e.g., 'math', 'puzzle')
@@ -613,6 +637,30 @@ class CurriculumLearning:
 
         # Add 1 for success, 0 for failure
         self.success_windows[task_type].append(1 if is_correct else 0)
+
+    def _track_success_group(self, task_type: str, scores: List[float]) -> None:
+        """Track success at prompt-level based on group of GRPO responses.
+
+        For GRPO: considers the prompt "solved" if:
+        - ANY response achieves perfect score (1.0), OR
+        - Mean score of group >= 0.7 (70% quality threshold)
+
+        This prevents single correct answers from being diluted by incorrect ones,
+        and prevents the sliding window from yo-yo'ing on partial solutions.
+
+        Args:
+            task_type: Type of task (e.g., 'math', 'puzzle')
+            scores: List of scores from GRPO group (typically length 4)
+        """
+        if task_type not in self.success_windows:
+            self.success_windows[task_type] = deque(maxlen=self.window_size)
+
+        # Group success logic: solved if perfect OR high average quality
+        mean_score = sum(scores) / len(scores) if scores else 0.0
+        max_score = max(scores) if scores else 0.0
+        group_success = 1 if (max_score == 1.0 or mean_score >= 0.7) else 0
+
+        self.success_windows[task_type].append(group_success)
 
     def _ensure_success_windows_from_session(self) -> None:
         """Seed success windows from session history when no tracking data exists."""

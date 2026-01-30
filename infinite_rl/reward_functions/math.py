@@ -9,8 +9,8 @@ if TYPE_CHECKING:
 def _extract_number(s: str):
     """Extract numeric value from string, supporting fractions and decimals.
 
-    Rejects strings with brackets or angle brackets around numbers.
-    Accepts numbers with surrounding text.
+    Only accepts strings containing digits (0-9), slash (/), dot (.), and comma (,).
+    Rejects any string with other characters including minus, plus, text, dollar signs, etc.
 
     Args:
         s: String potentially containing a number
@@ -18,24 +18,26 @@ def _extract_number(s: str):
     Returns:
         float if a number is found, None otherwise
     """
-    # Remove common formatting: dollar signs, commas
-    s_clean = s.replace("$", "").replace(",", "").strip()
+    s_clean = s.strip()
 
-    # Reject if contains invalid characters like brackets or angle brackets
-    # These indicate malformed answers like [123] or <123>
-    if any(char in s_clean for char in ["[", "]", "<", ">", "{", "}"]):
+    # Only allow digits (0-9), slash (/), dot (.), comma (,), and whitespace
+    # Reject any string containing other characters
+    if not all(char.isdigit() or char in ["/", ".", ",", " "] for char in s_clean):
         return None
 
+    # Remove commas for parsing (e.g., "1,000" -> "1000")
+    s_clean = s_clean.replace(",", "")
+
     # Try to parse fraction like "1/2" or "3 / 4"
-    m = re.search(r"([-+]?[0-9]*\.?[0-9]+)\s*/\s*([0-9]*\.?[0-9]+)", s_clean)
+    m = re.search(r"([0-9]*\.?[0-9]+)\s*/\s*([0-9]*\.?[0-9]+)", s_clean)
     if m:
         try:
             return float(m.group(1)) / float(m.group(2))
         except Exception:
             pass
 
-    # Try to parse regular number (including scientific notation)
-    m2 = re.search(r"[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?", s_clean)
+    # Try to parse regular number (decimals only, no scientific notation)
+    m2 = re.search(r"[0-9]*\.?[0-9]+", s_clean)
     if m2:
         try:
             return float(m2.group(0))

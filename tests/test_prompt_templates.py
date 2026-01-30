@@ -96,9 +96,8 @@ class TestFormatMathPrompt(unittest.TestCase):
         problem = "What is the square root of 16?"
         result = format_math_prompt(problem)
 
-        # Should instruct about numeric/symbolic result
+        # Should instruct about numeric result
         self.assertIn("numeric", result.lower())
-        self.assertIn("symbolic", result.lower())
 
     def test_empty_problem(self):
         """Test handling of empty problem statement."""

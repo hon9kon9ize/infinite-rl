@@ -112,9 +112,6 @@ class TestMathRewardFunction(unittest.TestCase):
             ("<answer>10</answer>", 10),
             ("<answer>20</answer>", 20),
             ("<answer>50</answer>", 50),
-            ("<answer>$50</answer>", 50),
-            ("<answer>$1000$</answer>", 1000),
-            ("<answer>$1000</answer>", 1000),
             ("<answer>12</answer>", 12),
             ("<answer>3.14159</answer>", 3.14159),
         ]
@@ -191,24 +188,24 @@ class TestMathHelperFunctions(unittest.TestCase):
         self.assertIsNone(result)
 
     def test_extract_number_with_text(self):
-        """Test extracting number with surrounding text."""
+        """Test that text is rejected (strict mode)."""
         result = _extract_number("The answer is 42 hours")
-        self.assertEqual(result, 42.0)
+        self.assertIsNone(result)
 
     def test_extract_number_with_dollar(self):
-        """Test extracting number with dollar signs."""
+        """Test that dollar signs are rejected (strict mode)."""
         result = _extract_number("$1000")
-        self.assertEqual(result, 1000.0)
+        self.assertIsNone(result)
 
     def test_extract_number_with_commas(self):
-        """Test extracting number with commas."""
+        """Test that commas are accepted and parsed correctly."""
         result = _extract_number("1,000,000")
         self.assertEqual(result, 1000000.0)
 
     def test_extract_number_scientific(self):
-        """Test extracting scientific notation."""
+        """Test that scientific notation is rejected (strict mode)."""
         result = _extract_number("1.23e-4")
-        self.assertEqual(result, 1.23e-4)
+        self.assertIsNone(result)
 
     def test_extract_number_invalid(self):
         """Test extracting from invalid string."""
@@ -257,7 +254,7 @@ class TestMathHelperFunctions(unittest.TestCase):
         self.assertEqual(score.score, 1.0)
 
     def test_math_reward_with_text_in_answer(self):
-        """Test math reward when answer contains text (extracts first number)."""
+        """Test math reward when answer contains text (should fail in strict mode)."""
         reward_fn = MathRewardFunction()
         reward_fn.initialize()
 
@@ -275,4 +272,45 @@ class TestMathHelperFunctions(unittest.TestCase):
         )
 
         score = reward_fn.compute_reward(task)
-        self.assertEqual(score.score, 1.0)
+        self.assertEqual(score.score, 0.0)
+
+    def test_strict_validation_rejects_special_chars(self):
+        """Test that strict validation rejects dollar signs, minus, plus, and text."""
+        # These should all be rejected (return None)
+        invalid_cases = [
+            "$100",  # dollar sign
+            "$50",  # dollar sign
+            "-42",  # minus sign
+            "+42",  # plus sign
+            "1.23e-4",  # scientific notation
+            "The answer is 42",  # text
+            "[123]",  # brackets
+            "<123>",  # angle brackets
+        ]
+        for input_str in invalid_cases:
+            with self.subTest(input=input_str):
+                result = _extract_number(input_str)
+                self.assertIsNone(
+                    result, f"Expected None for '{input_str}', got {result}"
+                )
+
+    def test_strict_validation_accepts_valid_formats(self):
+        """Test that strict validation accepts only digits, slash, dot, and comma."""
+        # These should all be accepted
+        valid_cases = [
+            ("42", 42.0),
+            ("3.14", 3.14),
+            ("1/2", 0.5),
+            ("100", 100.0),
+            ("0.5", 0.5),
+            ("3 / 4", 0.75),  # fraction with spaces
+            ("1,000", 1000.0),  # comma
+            ("1,000,000", 1000000.0),  # multiple commas
+        ]
+        for input_str, expected in valid_cases:
+            with self.subTest(input=input_str):
+                result = _extract_number(input_str)
+                self.assertIsNotNone(
+                    result, f"Expected value for '{input_str}', got None"
+                )
+                self.assertAlmostEqual(result, expected, places=5)

@@ -54,8 +54,6 @@ def format_math_prompt(
 [Reasoning steps in English...]
 </{think_tag}>
 
-[Concluding sentence in {lang_name}]
-
 <{answer_tag}>[Final numeric result]</{answer_tag}>
 """
     return prompt

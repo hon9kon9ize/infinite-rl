@@ -47,7 +47,7 @@ def format_math_prompt(
 **Instructions:**
 1. **Reasoning**: You MUST perform your step-by-step reasoning in **English** inside <{think_tag}> tags.
 2. **Response Language**: All text OUTSIDE of XML tags must be in **{lang_name}**.
-3. **Final Answer:** Wrap the final numeric or symbolic value inside <{answer_tag}> tags.
+3. **Final Answer:** Wrap the final numeric value inside <{answer_tag}> tags.
 
 **Response Structure:**
 <{think_tag}>
@@ -56,7 +56,7 @@ def format_math_prompt(
 
 [Concluding sentence in {lang_name}]
 
-<{answer_tag}>[Final numeric or symbolic result]</{answer_tag}>
+<{answer_tag}>[Final numeric result]</{answer_tag}>
 """
     return prompt
 

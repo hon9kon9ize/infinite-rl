@@ -52,6 +52,16 @@ class FormatRewardFunction(RewardFunction):
         pattern = f"{re.escape(tag_start)}(.*?){re.escape(tag_end)}"
         matches = re.findall(pattern, task.model_output or "", re.DOTALL)
 
+        # count how many tag_start and tag_end are present
+        start_count = task.model_output.count(tag_start)
+        end_count = task.model_output.count(tag_end)
+
+        if start_count > 1 or end_count > 1:
+            return RewardFunctionScore(
+                score=0.0,
+                info=f"Multiple <{self.target_tag}> tags found.",
+            )
+
         if not matches:
             return RewardFunctionScore(
                 score=0.0,

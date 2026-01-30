@@ -3,6 +3,7 @@
 from .executor import Executor
 from .reward_functions import get_reward_functions
 from .curriculum import CurriculumLearning
+from .dynamic_dataset import DynamicCurriculumDataset
 
 # Expose package version from VERSION.txt included in the package
 try:
@@ -26,4 +27,9 @@ try:
 except Exception:
     __version__ = "0.0.0"
 
-__all__ = ["Executor", "get_reward_functions", "CurriculumLearning"]
+__all__ = [
+    "Executor",
+    "get_reward_functions",
+    "CurriculumLearning",
+    "DynamicCurriculumDataset",
+]

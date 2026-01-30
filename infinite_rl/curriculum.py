@@ -546,9 +546,6 @@ class CurriculumLearning:
         else:
             combined_score = score
 
-        # Increment step counter for warmup tracking (BEFORE level update for cooldown check)
-        self.global_step += 1
-
         # GRPO batch accumulation: collect scores until group is complete
         # Extract base task_id (remove instance counter)
         base_task_id = task_id.rsplit("_", 1)[0] if "_" in task_id else task_id
@@ -563,15 +560,43 @@ class CurriculumLearning:
             group_scores = self.grpo_batch_scores[base_task_id]
             self._track_success_group(task_type, group_scores)
 
+            # Increment step counter ONCE per complete prompt group
+            self.global_step += 1
+
             # Check if we should advance/demote level
             self._update_level()
 
-            # Clean up batch
+            # Clean up completed batch
+            del self.grpo_batch_scores[base_task_id]
+        elif len(self.grpo_batch_scores[base_task_id]) > self.num_generations:
+            # Safety: If we somehow got MORE than expected, process anyway
+            print(
+                f"Warning: Task {base_task_id} has {len(self.grpo_batch_scores[base_task_id])} responses "
+                f"(expected {self.num_generations}). Processing batch anyway."
+            )
+            group_scores = self.grpo_batch_scores[base_task_id][: self.num_generations]
+            self._track_success_group(task_type, group_scores)
+            self.global_step += 1
+            self._update_level()
             del self.grpo_batch_scores[base_task_id]
         else:
             # Incomplete group: still accumulating responses
             # Don't update level yet, just wait for more responses
             pass
+
+        # Periodic cleanup of stale batches (prevents memory leak if training crashes)
+        if self.global_step % 100 == 0 and len(self.grpo_batch_scores) > 50:
+            print(
+                f"Warning: {len(self.grpo_batch_scores)} incomplete GRPO batches detected. "
+                f"This may indicate a problem with the training loop. Cleaning up stale batches..."
+            )
+            # Keep only the most recent 20 incomplete batches
+            if len(self.grpo_batch_scores) > 20:
+                sorted_batches = sorted(self.grpo_batch_scores.items())
+                stale_count = len(sorted_batches) - 20
+                for batch_id, _ in sorted_batches[:stale_count]:
+                    del self.grpo_batch_scores[batch_id]
+                print(f"Cleaned up {stale_count} stale batches")
 
         # Save rewards to session
         self.session.set_reward(task_id, task_rewards, model_output=model_output)

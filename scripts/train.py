@@ -33,61 +33,10 @@ from peft import LoraConfig, get_peft_model, TaskType
 
 # Import infinite-rl components
 from infinite_rl.curriculum import CurriculumLearning
-
-from tokenizers import Tokenizer
-from copy import deepcopy
+from infinite_rl.dynamic_dataset import DynamicCurriculumDataset
 
 import functools
 from vllm import LLM
-
-
-class DynamicCurriculumDataset(torch.utils.data.Dataset):
-    """Dynamic dataset that generates prompts on-demand from curriculum.
-
-    This ensures each sample reflects the current curriculum level without
-    needing to pre-generate or refresh the dataset.
-    """
-
-    def __init__(self, curriculum: CurriculumLearning, num_samples: int = 10000):
-        """Initialize the dynamic dataset.
-
-        Args:
-            curriculum: CurriculumLearning instance to generate prompts from
-            num_samples: Virtual size of the dataset (for trainer iteration)
-        """
-        self.curriculum = curriculum
-        self.num_samples = num_samples
-
-    def __len__(self):
-        return self.num_samples
-
-    def __getitem__(self, idx):
-        """Generate a prompt on-demand from the curriculum."""
-        task = self.curriculum.get_prompt()
-        if task is None:
-            raise RuntimeError(f"Failed to generate task at index {idx}")
-
-        # Format as TRL expects: list of message dicts
-        prompt = [{"role": "user", "content": task.prompt}]
-
-        # Metadata for reward function
-        task_metadata = {
-            "task_id": task.task_id,
-            "task_name": task.task_name,
-            "task_type": task.task_type,
-            "level": task.level,
-            "language": task.language or "python",
-            "expected_answer": (
-                task.expected_answer
-                if isinstance(task.expected_answer, str)
-                else json.dumps(task.expected_answer)
-            ),
-        }
-
-        return {
-            "prompt": prompt,
-            "task_metadata": task_metadata,
-        }
 
 
 # --- THE FIX ---

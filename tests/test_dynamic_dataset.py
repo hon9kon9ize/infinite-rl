@@ -80,19 +80,27 @@ class TestDynamicCurriculumDataset(unittest.TestCase):
 
     def test_task_cache_cleanup(self):
         """Test that task cache is cleaned up to prevent memory leak."""
-        # Access enough batches to trigger cleanup (> 20 batches)
-        for batch_idx in range(25):
+        # Access 90 batches to trigger cleanup (> 50 batches)
+        for batch_idx in range(90):
             _ = self.dataset[batch_idx * 4]  # First item of each batch
 
-        # Cache should be limited to 20 entries
+        # Cache should be limited by stale batch cleanup
+        # Cleanup happens when creating batch 90, threshold is 90-30=60
+        # So batches < 60 should be removed when len > 50
         self.assertLessEqual(
             len(self.dataset.task_cache),
-            20,
-            f"Cache should be <= 20, got {len(self.dataset.task_cache)}",
+            50,
+            f"Cache should be <= 50, got {len(self.dataset.task_cache)}",
         )
 
         # Most recent batch should still be in cache
-        self.assertIn(24, self.dataset.task_cache)
+        self.assertIn(89, self.dataset.task_cache)
+
+        # Batches far behind should be removed
+        # At batch 89 creation (last), threshold was 89-30=59
+        self.assertNotIn(0, self.dataset.task_cache)
+        self.assertNotIn(10, self.dataset.task_cache)
+        self.assertNotIn(20, self.dataset.task_cache)
 
     def test_batch_index_calculation(self):
         """Test that batch_idx is calculated correctly for different indices."""
@@ -194,6 +202,124 @@ class TestDynamicCurriculumDataset(unittest.TestCase):
             2,
             f"Expected 2 unique tasks, got {len(unique_task_ids)}: {unique_task_ids}",
         )
+
+    def test_cache_cleanup_keeps_recent_batches(self):
+        """Test that cache cleanup only removes stale batches (>30 behind)."""
+        # Access 100 batches to trigger cleanup multiple times
+        for batch_idx in range(100):
+            _ = self.dataset[batch_idx * 4]
+
+        # Cleanup happens when:
+        # 1. Creating a NEW batch (not in cache)
+        # 2. AND cache size > 50
+        # After 100 batches, cleanup happens periodically as cache fills
+
+        # Verify cache size stays bounded
+        self.assertLessEqual(len(self.dataset.task_cache), 50)
+
+        # Verify very old batches are removed
+        # Batches from early on (< 50) should definitely be gone
+        very_old_count = sum(1 for b in self.dataset.task_cache.keys() if b < 50)
+        self.assertEqual(
+            very_old_count,
+            0,
+            f"Found {very_old_count} very old batches < 50 that should be removed",
+        )
+
+    def test_cache_cleanup_preserves_current_batch(self):
+        """Test that cache cleanup never removes the current batch."""
+        # Access many batches in sequence
+        for batch_idx in range(100):
+            item = self.dataset[batch_idx * 4]
+            # Current batch should always be accessible
+            self.assertIsNotNone(item)
+            # Current batch should be in cache after access
+            self.assertIn(batch_idx, self.dataset.task_cache)
+
+    def test_defensive_recheck_after_cleanup(self):
+        """Test that defensive re-check regenerates task if missing after cleanup."""
+        # Simulate a scenario where cleanup might remove current batch
+        # (shouldn't happen, but defensive code handles it)
+
+        # First, populate some batches
+        for batch_idx in range(10):
+            _ = self.dataset[batch_idx * 4]
+
+        # Manually delete a batch to simulate race condition
+        if 5 in self.dataset.task_cache:
+            del self.dataset.task_cache[5]
+
+        # Accessing batch 5 again should work (defensive re-check)
+        item = self.dataset[5 * 4]
+        self.assertIsNotNone(item)
+        self.assertIn("task_metadata", item)
+
+        # Batch 5 should now be back in cache
+        self.assertIn(5, self.dataset.task_cache)
+
+    def test_multi_worker_simulation(self):
+        """Test cache behavior simulating multi-worker data loading."""
+        # Simulate workers accessing batches in non-sequential order
+        access_pattern = [0, 5, 2, 8, 1, 10, 3, 15, 7, 20]
+
+        for batch_idx in access_pattern:
+            # Access all indices in the batch
+            for offset in range(4):
+                idx = batch_idx * 4 + offset
+                item = self.dataset[idx]
+                self.assertIsNotNone(item)
+
+        # All accessed batches should have valid data
+        for batch_idx in access_pattern:
+            # Either in cache or can be regenerated
+            idx = batch_idx * 4
+            item = self.dataset[idx]
+            self.assertIsNotNone(item["task_metadata"]["task_id"])
+
+    def test_cache_size_limit_enforcement(self):
+        """Test that cache never exceeds 50 batches."""
+        # Access 100 batches
+        for batch_idx in range(100):
+            _ = self.dataset[batch_idx * 4]
+
+            # Cache should never exceed 50 entries
+            self.assertLessEqual(
+                len(self.dataset.task_cache),
+                50,
+                f"Cache exceeded 50 entries at batch {batch_idx}: {len(self.dataset.task_cache)}",
+            )
+
+    def test_stale_batch_threshold(self):
+        """Test that batches >30 behind are considered stale."""
+        # Access 100 batches to ensure cleanup triggers multiple times
+        for batch_idx in range(100):
+            _ = self.dataset[batch_idx * 4]
+
+        # Cleanup removes batches < (batch_idx - 30) when cache > 50
+        # After 100 sequential accesses, early batches should be removed
+        # Verify batches from the first half are definitely gone
+        for batch_idx in range(50):
+            self.assertNotIn(
+                batch_idx,
+                self.dataset.task_cache,
+                f"Batch {batch_idx} should be removed after 100 batches accessed",
+            )
+
+    def test_sequential_access_pattern(self):
+        """Test typical sequential access pattern during training."""
+        # Simulate typical training: sequential batch access
+        num_batches = 50
+
+        for batch_idx in range(num_batches):
+            # Access all 4 items in the batch
+            batch_items = [self.dataset[batch_idx * 4 + i] for i in range(4)]
+
+            # All items in batch should have same task_id
+            task_ids = [item["task_metadata"]["task_id"] for item in batch_items]
+            self.assertEqual(len(set(task_ids)), 1)
+
+            # Cache should be managed properly
+            self.assertLessEqual(len(self.dataset.task_cache), 50)
 
 
 if __name__ == "__main__":

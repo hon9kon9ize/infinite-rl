@@ -60,10 +60,22 @@ class DynamicCurriculumDataset(torch.utils.data.Dataset):
             self.task_cache[batch_idx] = task
 
             # Clean up old caches to prevent memory leak
-            # Keep last 20 batches (enough for gradient accumulation)
-            if len(self.task_cache) > 20:
-                oldest_batch = min(self.task_cache.keys())
-                del self.task_cache[oldest_batch]
+            # Keep last 50 batches (conservative for multi-worker data loading)
+            # Only cleanup batches that are far behind current batch_idx
+            if len(self.task_cache) > 50:
+                # Remove batches that are more than 30 batches behind
+                stale_batches = [
+                    b for b in self.task_cache.keys() if b < batch_idx - 30
+                ]
+                for stale_batch in stale_batches:
+                    del self.task_cache[stale_batch]
+
+        # Defensive: re-check after cleanup (handles race conditions)
+        if batch_idx not in self.task_cache:
+            task = self.curriculum.get_prompt()
+            if task is None:
+                raise RuntimeError(f"Failed to generate task at batch {batch_idx}")
+            self.task_cache[batch_idx] = task
 
         task = self.task_cache[batch_idx]
 

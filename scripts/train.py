@@ -344,6 +344,10 @@ def setup_training_args(
         eval_strategy="no",
         log_completions=True,
         num_completions_to_print=5,
+        model_init_kwargs={
+            "torch_dtype": torch.bfloat16,
+            "attn_implementation": "kernels-community/flash-attn2",
+        },
         **kwargs,
     )
     return config

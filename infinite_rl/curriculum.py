@@ -135,7 +135,10 @@ class CurriculumLearning:
         # GRPO batch tracking: accumulate group responses until prompt-level decision
         self.grpo_batch_scores: Dict[str, List[float]] = (
             {}
-        )  # Maps task_id -> list of scores
+        )  # Maps task_id -> list of combined scores
+        self.grpo_batch_primary_scores: Dict[str, List[float]] = (
+            {}
+        )  # Maps task_id -> list of primary scores (for curriculum)
         self.num_generations: int = (
             num_generations  # Number of generations per prompt (configurable)
         )
@@ -551,14 +554,17 @@ class CurriculumLearning:
         base_task_id = task_id.rsplit("_", 1)[0] if "_" in task_id else task_id
         if base_task_id not in self.grpo_batch_scores:
             self.grpo_batch_scores[base_task_id] = []
+            self.grpo_batch_primary_scores[base_task_id] = []
 
         self.grpo_batch_scores[base_task_id].append(combined_score)
+        self.grpo_batch_primary_scores[base_task_id].append(score)
 
         # Check if we have a complete group (GRPO batch size)
         if len(self.grpo_batch_scores[base_task_id]) >= self.num_generations:
             # Complete group: track success at prompt level
             group_scores = self.grpo_batch_scores[base_task_id]
-            self._track_success_group(task_type, group_scores)
+            primary_scores = self.grpo_batch_primary_scores[base_task_id]
+            self._track_success_group(task_type, group_scores, primary_scores)
 
             # Increment step counter ONCE per complete prompt group
             self.global_step += 1
@@ -568,6 +574,7 @@ class CurriculumLearning:
 
             # Clean up completed batch
             del self.grpo_batch_scores[base_task_id]
+            del self.grpo_batch_primary_scores[base_task_id]
         elif len(self.grpo_batch_scores[base_task_id]) > self.num_generations:
             # Safety: If we somehow got MORE than expected, process anyway
             print(
@@ -575,10 +582,14 @@ class CurriculumLearning:
                 f"(expected {self.num_generations}). Processing batch anyway."
             )
             group_scores = self.grpo_batch_scores[base_task_id][: self.num_generations]
-            self._track_success_group(task_type, group_scores)
+            primary_scores = self.grpo_batch_primary_scores[base_task_id][
+                : self.num_generations
+            ]
+            self._track_success_group(task_type, group_scores, primary_scores)
             self.global_step += 1
             self._update_level()
             del self.grpo_batch_scores[base_task_id]
+            del self.grpo_batch_primary_scores[base_task_id]
         else:
             # Incomplete group: still accumulating responses
             # Don't update level yet, just wait for more responses
@@ -706,27 +717,35 @@ class CurriculumLearning:
         # Add 1 for success, 0 for failure
         self.success_windows[task_type].append(1 if is_correct else 0)
 
-    def _track_success_group(self, task_type: str, scores: List[float]) -> None:
+    def _track_success_group(
+        self, task_type: str, scores: List[float], primary_scores: List[float]
+    ) -> None:
         """Track success at prompt-level based on group of GRPO responses.
 
         For GRPO: considers the prompt "solved" if:
-        - ANY response achieves perfect score (1.0), OR
-        - Mean score of group >= 0.7 (70% quality threshold)
+        - ANY response achieves perfect PRIMARY score (1.0), OR
+        - Mean PRIMARY score >= 0.7 (70% correctness threshold)
 
-        This prevents single correct answers from being diluted by incorrect ones,
-        and prevents the sliding window from yo-yo'ing on partial solutions.
+        Uses primary scores (task correctness) for curriculum progression,
+        while combined scores (with aux penalties) are still used for training rewards.
+        This ensures that format/quality issues don't prevent level advancement
+        when the model is solving tasks correctly.
 
         Args:
             task_type: Type of task (e.g., 'math', 'puzzle')
-            scores: List of scores from GRPO group (typically length 4)
+            scores: List of combined scores from GRPO group (for reference)
+            primary_scores: List of primary correctness scores (for curriculum)
         """
         if task_type not in self.success_windows:
             self.success_windows[task_type] = deque(maxlen=self.window_size)
 
-        # Group success logic: solved if perfect OR high average quality
-        mean_score = sum(scores) / len(scores) if scores else 0.0
-        max_score = max(scores) if scores else 0.0
-        group_success = 1 if (max_score == 1.0 or mean_score >= 0.7) else 0
+        # Group success logic: use PRIMARY scores for curriculum decisions
+        # This separates task-solving ability from formatting/quality
+        mean_primary = (
+            sum(primary_scores) / len(primary_scores) if primary_scores else 0.0
+        )
+        max_primary = max(primary_scores) if primary_scores else 0.0
+        group_success = 1 if (max_primary == 1.0 or mean_primary >= 0.7) else 0
 
         self.success_windows[task_type].append(group_success)
 

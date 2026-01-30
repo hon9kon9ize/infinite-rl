@@ -503,9 +503,29 @@ class CurriculumLearning:
 
         # Compute auxiliary rewards and combine them
         is_correct = score == 1  # Threshold for success
-        aux_score_dict = self.get_aux_reward_scores(
-            model_output, task, is_correct=is_correct
-        )
+
+        # If primary score is 0, compute aux scores but cap positive ones at 0
+        # This preserves negative penalties (like lang_consistency = -1.0)
+        # while preventing positive auxiliary rewards when the main task failed
+        if score == 0:
+            aux_score_dict_raw = self.get_aux_reward_scores(
+                model_output, task, is_correct=is_correct
+            )
+            aux_score_dict = {
+                name: {
+                    "score": min(0.0, data["score"]),
+                    "info": (
+                        data["info"]
+                        if data["score"] < 0
+                        else "Primary task failed, positive auxiliary reward capped at 0"
+                    ),
+                }
+                for name, data in aux_score_dict_raw.items()
+            }
+        else:
+            aux_score_dict = self.get_aux_reward_scores(
+                model_output, task, is_correct=is_correct
+            )
 
         # Add auxiliary rewards to task_rewards
         for name, data in aux_score_dict.items():

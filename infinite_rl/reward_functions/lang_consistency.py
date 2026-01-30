@@ -1,5 +1,4 @@
 from typing import Union, TYPE_CHECKING
-from collections import defaultdict
 from .reward_function import RewardFunction, RewardFunctionScore
 
 if TYPE_CHECKING:
@@ -29,16 +28,10 @@ class LangConsistencyRewardFunction(RewardFunction):
     def initialize(self):
         self.initialized = True
 
-    def _yue_ratio(self, text: str) -> float:
-        """Return a ratio (0..1) representing how Cantonese the text appears."""
+    def _is_cantonese(self, text: str) -> bool:
+        """Return True if the text is Cantonese, False otherwise."""
         judgement, _ = self.yue_detector.judge(text)
-
-        if judgement in ["cantonese", "neutral"]:
-            return 1.0
-        elif judgement == "swc":
-            return 0.25
-        elif judgement in ["mixed", "cantonese_quotes_in_swc", "mixed_quotes_in_swc"]:
-            return 0.5
+        return judgement in ["cantonese", "neutral"]
 
     def compute_reward(
         self,
@@ -84,31 +77,25 @@ class LangConsistencyRewardFunction(RewardFunction):
 
         if not norm_detected:
             return RewardFunctionScore(
-                score=0.0,
+                score=-1.0,
                 info=f"Failed to detect language of the response inside <{self.target_tag}>.",
             )
 
-        # Cantonese ratio (0..1) from specialized detector (if available)
-        y_ratio = self._yue_ratio(content)
-        norm_detected = (
-            "yue" if y_ratio == 1.0 and norm_expected == "yue" else norm_detected
-        )
-        lang_ratio = defaultdict(float)
-        total_bytes = sum(entry[-1] for entry in details) if details else 0
-        if total_bytes > 0:
-            for entry in details:
-                code = entry[1]
-                b = entry[-1]
-                c = code.lower()
-                lang_ratio[c] += b / total_bytes
-        lang_ratio["yue"] = max(y_ratio, lang_ratio["yue"])
-        final_score = lang_ratio[norm_expected]
+        # Check if Cantonese is expected and detected
+        if norm_expected == "yue":
+            is_cantonese = self._is_cantonese(content)
+            if is_cantonese:
+                norm_detected = "yue"
+
+        # Simple binary scoring: 1.0 if match, -1.0 if mismatch
+        if norm_expected == norm_detected:
+            final_score = 1.0
+            info_msg = ""
+        else:
+            final_score = -1.0
+            info_msg = f"Detected language '{norm_detected}' does not match expected '{norm_expected}'."
 
         return RewardFunctionScore(
             score=final_score,
-            info=(
-                f"Detected language '{norm_detected}' does not match expected '{norm_expected}'."
-                if norm_expected != norm_detected
-                else ""
-            ),
+            info=info_msg,
         )

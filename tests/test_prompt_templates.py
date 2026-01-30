@@ -58,39 +58,6 @@ class TestFormatMathPrompt(unittest.TestCase):
         self.assertIn("</reasoning>", result)
         self.assertNotIn("<think>", result)
 
-    def test_language_instruction_english(self):
-        """Test that English (default) doesn't add language instruction."""
-        problem = "Calculate 10 / 2"
-        result = format_math_prompt(problem, language="en")
-
-        # English should not add explicit language instruction
-        # (though it may still be implicit in the prompt)
-        self.assertIn(problem, result)
-
-    def test_language_instruction_chinese(self):
-        """Test Chinese language instruction."""
-        problem = "計算 5 + 5"
-        result = format_math_prompt(problem, language="zh")
-
-        self.assertIn("Mandarin", result)
-        self.assertIn(problem, result)
-
-    def test_language_instruction_cantonese(self):
-        """Test Cantonese language instruction."""
-        problem = "計算 7 + 3"
-        result = format_math_prompt(problem, language="yue")
-
-        self.assertIn("Cantonese", result)
-        self.assertIn(problem, result)
-
-    def test_language_instruction_unknown(self):
-        """Test unknown language falls back to language code."""
-        problem = "Resolver: 2 + 2"
-        result = format_math_prompt(problem, language="es")
-
-        self.assertIn("es", result)  # Should use the code as fallback
-        self.assertIn(problem, result)
-
     def test_prompt_instructions_present(self):
         """Test that prompt includes instructions about format."""
         problem = "What is the square root of 16?"
@@ -423,19 +390,6 @@ class TestPromptIntegration(unittest.TestCase):
 
         self.assertIn(failed_code, reflective_prompt)
         self.assertIn("Review", reflective_prompt)
-
-    def test_multilingual_math_workflow(self):
-        """Test multilingual math task workflow."""
-        for lang_code in ["en", "zh", "yue"]:
-            problem = "Calculate 2 + 2"
-            prompt = format_math_prompt(problem, language=lang_code)
-
-            self.assertIn(problem, prompt)
-            self.assertIn("<think>", prompt)
-            self.assertIn("<answer>", prompt)
-
-            if lang_code != "en":
-                self.assertIn(LANG_MAP[lang_code], prompt)
 
 
 class TestPromptEdgeCases(unittest.TestCase):

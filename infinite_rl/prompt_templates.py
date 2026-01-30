@@ -34,19 +34,13 @@ def format_math_prompt(
     Returns:
         Formatted prompt string with instructions for the model
     """
-    lang_name = LANG_MAP.get(language, language) if language else "English"
-    if not lang_name:
-        lang_name = "English"
-    lang_instruction = f"Your response must be in {lang_name}"
-
-    prompt = f"""Solve this math problem. {lang_instruction}
+    prompt = f"""Solve this math problem.
 
 **Problem:**
 {problem_statement}
 
 **Instructions:**
 1. **Reasoning**: You MUST perform your step-by-step reasoning in **English** inside <{think_tag}> tags.
-2. **Response Language**: All text OUTSIDE of XML tags must be in **{lang_name}**.
 3. **Final Answer:** Wrap the final numeric value inside <{answer_tag}> tags.
 
 **Response Structure:**

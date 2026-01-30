@@ -9,6 +9,9 @@ if TYPE_CHECKING:
 def _extract_number(s: str):
     """Extract numeric value from string, supporting fractions and decimals.
 
+    Rejects strings with brackets or angle brackets around numbers.
+    Accepts numbers with surrounding text.
+
     Args:
         s: String potentially containing a number
 
@@ -17,6 +20,11 @@ def _extract_number(s: str):
     """
     # Remove common formatting: dollar signs, commas
     s_clean = s.replace("$", "").replace(",", "").strip()
+
+    # Reject if contains invalid characters like brackets or angle brackets
+    # These indicate malformed answers like [123] or <123>
+    if any(char in s_clean for char in ["[", "]", "<", ">", "{", "}"]):
+        return None
 
     # Try to parse fraction like "1/2" or "3 / 4"
     m = re.search(r"([-+]?[0-9]*\.?[0-9]+)\s*/\s*([0-9]*\.?[0-9]+)", s_clean)

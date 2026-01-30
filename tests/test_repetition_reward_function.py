@@ -20,8 +20,8 @@ class TestRepetitionRewardFunction(unittest.TestCase):
             model_output="<think>hello world</think>",
         )
         s = self.fn.compute_reward(task)
-        # Aux-only reward: returned in unified `score` field
-        self.assertAlmostEqual(s.score, 1.0, places=5)
+        # No repetition should return 0.0 (no penalty)
+        self.assertAlmostEqual(s.score, 0.0, places=5)
 
     def test_repetition_penalized(self):
         task = Task(
@@ -35,9 +35,10 @@ class TestRepetitionRewardFunction(unittest.TestCase):
             model_output="<think>hello hello hello hello</think>",
         )
         s = self.fn.compute_reward(task)
-        # High repetition -> lower score than 1.0
-        self.assertLess(s.score, 1.0)
-        self.assertGreaterEqual(s.score, 0.0)
+        # High repetition -> negative penalty score
+        self.assertLess(s.score, 0.0)
+        # Verify info message is present
+        self.assertIn("Repetition detected", s.info)
 
 
 if __name__ == "__main__":

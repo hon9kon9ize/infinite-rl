@@ -74,9 +74,10 @@ def ngram_repetition_reward(text: str, n: int = 3, weight: float = -0.1) -> floa
 
 
 class RepetitionRewardFunction(RewardFunction):
-    """Reward function that applies an n-gram repetition penalty as a lightweight reward.
+    """Reward function that applies an n-gram repetition penalty.
 
-    The correctness_score is computed as max(0.0, 1.0 + penalty) where penalty <= 0.
+    Returns 0.0 for no repetition, negative scores for detected repetitions.
+    The penalty is proportional to the ratio of duplicate n-grams.
     """
 
     def __init__(
@@ -120,6 +121,11 @@ class RepetitionRewardFunction(RewardFunction):
             )
 
         penalty = ngram_repetition_reward(text, n=self.n, weight=self.weight)
-        correctness = max(0.0, 1.0 + float(penalty))
 
-        return RewardFunctionScore(score=float(correctness))
+        # Return the penalty directly as a negative score
+        # 0.0 = no repetition, negative values = increasing repetition penalty
+        info_msg = ""
+        if penalty < 0:
+            info_msg = f"Repetition detected: {penalty:.3f} penalty"
+
+        return RewardFunctionScore(score=float(penalty), info=info_msg)

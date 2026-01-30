@@ -7,12 +7,15 @@ if TYPE_CHECKING:
 
 
 class ReasoningStepsRewardFunction(RewardFunction):
-    """Reward function that gives a small bonus when the model provides explicit
-    reasoning steps inside a <think>...</think> block.
+    """Reward function that gives bonuses/penalties based on reasoning step indicators.
 
     The function looks for a <think> tag and checks for presence of common
     step/analysis indicators ("first", "second", "finally", "therefore", etc.).
-    It returns a small encouragement bonus (0.1 or 0.2) as score.
+
+    Returns:
+    - 0.7: Two or more indicators found (strong reasoning)
+    - 0.5: One indicator found (basic reasoning)
+    - -1.0: No indicators found (penalty for lack of structured reasoning)
     """
 
     def __init__(
@@ -66,12 +69,12 @@ class ReasoningStepsRewardFunction(RewardFunction):
 
         found_count = sum(1 for word in indicators if word in thinking_content)
 
-        if found_count >= 3:
-            bonus = 0.2
+        if found_count >= 2:
+            bonus = 0.7
         elif found_count > 0:
-            bonus = 0.1
+            bonus = 0.5
         else:
-            bonus = 0.0
+            bonus = -1.0
 
         # Signal the bonus in the single score field
         return RewardFunctionScore(score=float(bonus))

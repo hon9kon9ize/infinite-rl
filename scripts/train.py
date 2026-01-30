@@ -806,6 +806,10 @@ def main():
         "training_config": training_args.to_dict(),
         "dataset_size": len(train_dataset),
     }
+
+    # Create the output directory if it doesn't exist
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     with open(output_dir / "training_config.json", "w") as f:
         json.dump(config_dict, f, indent=2)
     print(f"   ✓ Configuration saved to {output_dir / 'training_config.json'}")

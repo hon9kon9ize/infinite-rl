@@ -36,7 +36,7 @@ class TestFormatRewardFunction(unittest.TestCase):
             model_output=out,
         )
         score = fn.compute_reward(task)
-        self.assertEqual(score.score, 0.0)
+        self.assertEqual(score.score, -1.0)
 
     def test_math_simple_value(self):
         fn = FormatRewardFunction(task_name="math")
@@ -70,7 +70,7 @@ class TestFormatRewardFunction(unittest.TestCase):
             model_output=out,
         )
         score = fn.compute_reward(task)
-        self.assertEqual(score.score, 0.0)
+        self.assertEqual(score.score, -1.0)
 
 
 if __name__ == "__main__":

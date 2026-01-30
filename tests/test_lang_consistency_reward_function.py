@@ -26,7 +26,7 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
             model_output="<answer>这是普通话。</answer>",
         )
         score = self.reward_fn.compute_reward(task)
-        self.assertEqual(score.score, -1.0)
+        self.assertEqual(score.score, -4.0)
 
     def test_language_match(self):
         task = Task(
@@ -129,5 +129,5 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
         )
         score = reward_fn.compute_reward(task)
         # Should detect Mandarin/SWC from outside, not Cantonese inside
-        # Since expected is Cantonese but detected is Mandarin, score should be -1.0
-        self.assertEqual(score.score, -1.0)
+        # Since expected is Cantonese but detected is Mandarin, score should be -4.0
+        self.assertEqual(score.score, -4.0)

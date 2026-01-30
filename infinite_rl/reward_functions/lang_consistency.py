@@ -17,6 +17,7 @@ class LangConsistencyRewardFunction(RewardFunction):
         self,
         task_name: str = "lang_consistency",
         tag_excluded=False,
+        multiplier: float = 4.0,
         **kwargs,
     ):
         from cantonesedetect import CantoneseDetector
@@ -24,6 +25,7 @@ class LangConsistencyRewardFunction(RewardFunction):
         super().__init__(task_name, **kwargs)
         self.yue_detector = CantoneseDetector(split_seg=True, get_analysis=True)
         self.tag_excluded = tag_excluded
+        self.multiplier = multiplier
 
     def initialize(self):
         self.initialized = True
@@ -77,7 +79,7 @@ class LangConsistencyRewardFunction(RewardFunction):
 
         if not norm_detected:
             return RewardFunctionScore(
-                score=-1.0,
+                score=-1.0 * self.multiplier,
                 info=f"Failed to detect language of the response inside <{self.target_tag}>.",
             )
 
@@ -87,12 +89,12 @@ class LangConsistencyRewardFunction(RewardFunction):
             if is_cantonese:
                 norm_detected = "yue"
 
-        # Simple binary scoring: 1.0 if match, -1.0 if mismatch
+        # Simple binary scoring: 1.0 if match, -multiplier if mismatch
         if norm_expected == norm_detected:
             final_score = 1.0
             info_msg = ""
         else:
-            final_score = -1.0
+            final_score = -1.0 * self.multiplier
             info_msg = f"Detected language '{norm_detected}' does not match expected '{norm_expected}'."
 
         return RewardFunctionScore(

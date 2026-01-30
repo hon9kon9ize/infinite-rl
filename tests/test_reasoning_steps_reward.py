@@ -35,8 +35,8 @@ class TestReasoningStepsRewardFunction(unittest.TestCase):
             model_output=model_output,
         )
         out = self.rf.compute_reward(task)
-        # Aux-only: returned in unified score field
-        self.assertAlmostEqual(out.score, 0.1, places=5)
+        # Single indicator gives 0.5 bonus
+        self.assertAlmostEqual(out.score, 0.5, places=5)
 
     def test_multiple_unique_indicators(self):
         model_output = "<think>First, we compute. Second, we verify. Finally, we present the result.</think>"
@@ -51,7 +51,8 @@ class TestReasoningStepsRewardFunction(unittest.TestCase):
             model_output=model_output,
         )
         out = self.rf.compute_reward(task)
-        self.assertAlmostEqual(out.score, 0.2, places=5)
+        # Multiple indicators (>=2) give 0.7 bonus
+        self.assertAlmostEqual(out.score, 0.7, places=5)
 
     def test_repeated_indicators_count_once(self):
         model_output = "<think>First. First. First.</think>"
@@ -66,7 +67,25 @@ class TestReasoningStepsRewardFunction(unittest.TestCase):
             model_output=model_output,
         )
         out = self.rf.compute_reward(task)
-        self.assertAlmostEqual(out.score, 0.1, places=5)
+        # Single unique indicator gives 0.5 bonus
+        self.assertAlmostEqual(out.score, 0.5, places=5)
+
+    def test_no_indicators_penalty(self):
+        """Test that no reasoning indicators results in -1.0 penalty."""
+        model_output = "<think>The answer is correct.</think>"
+        task = Task(
+            task_id="test_5",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer="answer",
+            language="en",
+            model_output=model_output,
+        )
+        out = self.rf.compute_reward(task)
+        # No indicators results in -1.0 penalty
+        self.assertEqual(out.score, -1.0)
 
 
 if __name__ == "__main__":

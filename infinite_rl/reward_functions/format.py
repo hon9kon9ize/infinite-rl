@@ -58,13 +58,13 @@ class FormatRewardFunction(RewardFunction):
 
         if start_count > 1 or end_count > 1:
             return RewardFunctionScore(
-                score=0.0,
+                score=-1.0,
                 info=f"Multiple <{self.target_tag}> tags found.",
             )
 
         if not matches:
             return RewardFunctionScore(
-                score=0.0,
+                score=-1.0,
                 info=f"No content found in the <{self.target_tag}> tag.",
             )
 
@@ -74,14 +74,14 @@ class FormatRewardFunction(RewardFunction):
         if self.task_name == "math":
             if "```" in raw_content:
                 return RewardFunctionScore(
-                    score=0.0,
+                    score=-1.0,
                     info=f"Math task should not contain code blocks.",
                 )
             # Math should have non-empty content without code blocks
             if raw_content.strip():
                 return RewardFunctionScore(score=1.0, info="Valid math answer.")
             else:
-                return RewardFunctionScore(score=0.0, info="Empty math answer.")
+                return RewardFunctionScore(score=-1.0, info="Empty math answer.")
 
         # For code/puzzle tasks, check proper code block formatting
         if "```" in raw_content:
@@ -91,7 +91,7 @@ class FormatRewardFunction(RewardFunction):
             if opening_count % 2 != 0:
                 # Odd number of triple-backtick sequences = malformed
                 return RewardFunctionScore(
-                    score=0.0,
+                    score=-1.0,
                     info=f"Code block not properly closed (missing closing ```).",
                 )
             # Check if code blocks have language specifier
@@ -111,4 +111,4 @@ class FormatRewardFunction(RewardFunction):
         if raw_content.strip():
             return RewardFunctionScore(score=1.0, info="Valid answer tag with content.")
         else:
-            return RewardFunctionScore(score=0.0, info="Empty answer tag.")
+            return RewardFunctionScore(score=-1.0, info="Empty answer tag.")

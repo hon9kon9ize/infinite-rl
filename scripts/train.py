@@ -21,6 +21,7 @@ from typing import Optional, List, Dict, Any, Callable
 from dataclasses import dataclass, asdict
 
 import torch
+import numpy as np
 import wandb
 from transformers import (
     Gemma3ForCausalLM,
@@ -54,6 +55,33 @@ def patched_init(self, *args, **kwargs):
 
 LLM.__init__ = patched_init
 # ----------------
+
+
+def make_json_serializable(obj):
+    """Convert non-JSON-serializable objects to strings recursively.
+
+    Handles: torch.dtype, numpy.dtype, Path, and other common types.
+    """
+    if isinstance(obj, dict):
+        return {k: make_json_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [make_json_serializable(item) for item in obj]
+    elif isinstance(obj, (torch.dtype, np.dtype)):
+        return str(obj)
+    elif isinstance(obj, Path):
+        return str(obj)
+    elif isinstance(obj, type):
+        return obj.__name__
+    elif hasattr(obj, "__dict__") and not isinstance(
+        obj, (str, int, float, bool, type(None))
+    ):
+        # For custom objects, try to convert to dict
+        try:
+            return make_json_serializable(obj.__dict__)
+        except:
+            return str(obj)
+    else:
+        return obj
 
 
 @dataclass
@@ -759,6 +787,9 @@ def main():
         "training_config": training_args.to_dict(),
         "dataset_size": len(train_dataset),
     }
+
+    # Convert to JSON-serializable format (handles dtype objects)
+    config_dict = make_json_serializable(config_dict)
 
     # Create the output directory if it doesn't exist
     output_dir.mkdir(parents=True, exist_ok=True)

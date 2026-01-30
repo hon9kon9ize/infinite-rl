@@ -68,6 +68,15 @@ class FormatRewardFunction(RewardFunction):
                 info=f"No content found in the <{self.target_tag}> tag.",
             )
 
+        # Check if there's content before the opening tag (format violation)
+        tag_start_index = task.model_output.find(tag_start)
+        content_before_tag = task.model_output[:tag_start_index].strip()
+        if content_before_tag:
+            return RewardFunctionScore(
+                score=-1.0,
+                info=f"Content found before <{self.target_tag}> opening tag. Tags must appear at the start.",
+            )
+
         raw_content = "\n".join(matches)
 
         # For math tasks, check if content has code blocks (should not)

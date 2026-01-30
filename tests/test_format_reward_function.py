@@ -72,6 +72,73 @@ class TestFormatRewardFunction(unittest.TestCase):
         score = fn.compute_reward(task)
         self.assertEqual(score.score, -1.0)
 
+    def test_content_before_opening_tag_think(self):
+        """Test that content before <think> tag returns -1.0"""
+        fn = FormatRewardFunction(task_name="format_think", target_tag="think")
+        fn.initialize()
+        out = """first think about the problem
+here is my analysis
+
+<think>
+Now the actual thinking content
+</think>
+
+<answer>42</answer>"""
+        task = Task(
+            task_id="test_5",
+            task_name="test",
+            task_type="math",
+            level=1,
+            prompt="Test",
+            expected_answer="42",
+            language="en",
+            model_output=out,
+        )
+        score = fn.compute_reward(task)
+        self.assertEqual(score.score, -1.0)
+        self.assertIn("before", score.info.lower())
+
+    def test_content_before_opening_tag_answer(self):
+        """Test that content before <answer> tag returns -1.0"""
+        fn = FormatRewardFunction(task_name="format_answer", target_tag="answer")
+        fn.initialize()
+        out = """The answer is 42
+<answer>42</answer>"""
+        task = Task(
+            task_id="test_6",
+            task_name="test",
+            task_type="math",
+            level=1,
+            prompt="Test",
+            expected_answer="42",
+            language="en",
+            model_output=out,
+        )
+        score = fn.compute_reward(task)
+        self.assertEqual(score.score, -1.0)
+        self.assertIn("before", score.info.lower())
+
+    def test_whitespace_before_tag_allowed(self):
+        """Test that whitespace/newlines before tag is allowed"""
+        fn = FormatRewardFunction(task_name="format_answer", target_tag="answer")
+        fn.initialize()
+        out = """
+
+        
+<answer>42</answer>"""
+        task = Task(
+            task_id="test_7",
+            task_name="test",
+            task_type="math",
+            level=1,
+            prompt="Test",
+            expected_answer="42",
+            language="en",
+            model_output=out,
+        )
+        score = fn.compute_reward(task)
+        self.assertEqual(score.score, 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

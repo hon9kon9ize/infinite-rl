@@ -70,7 +70,7 @@ class TestTask(unittest.TestCase):
         # Add auxiliary reward (should not affect get_score)
         aux_reward = RewardFunctionScore(
             score=0.9,
-            reward_function_name="format",
+            reward_function_name="format_answer",
             info="",
         )
         self.task.add_reward(aux_reward)
@@ -180,7 +180,7 @@ class TestSession(unittest.TestCase):
             ),
             RewardFunctionScore(
                 score=0.9,
-                reward_function_name="format",
+                reward_function_name="format_answer",
                 info="",
             ),
         ]
@@ -230,7 +230,7 @@ class TestSession(unittest.TestCase):
             ),
             RewardFunctionScore(
                 score=0.8,
-                reward_function_name="format",
+                reward_function_name="format_answer",
                 info="",
             ),
         ]
@@ -686,8 +686,11 @@ class TestCurriculumLearning(unittest.TestCase):
         cl = CurriculumLearning(use_format=True)
 
         self.assertTrue(cl.use_format)
-        self.assertIn("format", cl.aux_reward_functions)
-        self.assertIsNotNone(cl.aux_reward_functions.get("format"))
+        # Should have both format_think and format_answer
+        self.assertIn("format_think", cl.aux_reward_functions)
+        self.assertIn("format_answer", cl.aux_reward_functions)
+        self.assertIsNotNone(cl.aux_reward_functions.get("format_think"))
+        self.assertIsNotNone(cl.aux_reward_functions.get("format_answer"))
 
     def test_initialization_with_lang_consistency_reward(self):
         """Test initialization with language consistency reward."""
@@ -1089,12 +1092,12 @@ class TestCurriculumLearning(unittest.TestCase):
         """Test that RewardFunctionScore properly stores info message."""
         reward = RewardFunctionScore(
             score=0.8,
-            reward_function_name="format",
+            reward_function_name="format_answer",
             info="Format validation passed",
         )
 
         self.assertEqual(reward.score, 0.8)
-        self.assertEqual(reward.reward_function_name, "format")
+        self.assertEqual(reward.reward_function_name, "format_answer")
         self.assertEqual(reward.info, "Format validation passed")
 
     def test_reward_function_score_default_values(self):
@@ -1201,7 +1204,7 @@ class TestCurriculumLearning(unittest.TestCase):
         )
         # Add format failure reward
         format_reward = RewardFunctionScore(
-            score=0.0, reward_function_name="format", info="Missing answer tags"
+            score=0.0, reward_function_name="format_answer", info="Missing answer tags"
         )
         task.add_reward(format_reward)
         cl.session.add_task(task)
@@ -1239,7 +1242,7 @@ class TestCurriculumLearning(unittest.TestCase):
         )
         # Add format failure reward
         format_reward = RewardFunctionScore(
-            score=0.0, reward_function_name="format", info="Missing answer tags"
+            score=0.0, reward_function_name="format_answer", info="Missing answer tags"
         )
         format_fail_task.add_reward(format_reward)
         cl.session.add_task(format_fail_task)
@@ -1275,7 +1278,7 @@ class TestCurriculumLearning(unittest.TestCase):
             expected_answer="A1",
         )
         format_fail = RewardFunctionScore(
-            score=0.0, reward_function_name="format", info="Failed"
+            score=0.0, reward_function_name="format_think", info="Failed"
         )
         task1.add_reward(format_fail)
         cl.session.add_task(task1)
@@ -1290,7 +1293,7 @@ class TestCurriculumLearning(unittest.TestCase):
             expected_answer="A2",
         )
         format_success = RewardFunctionScore(
-            score=1.0, reward_function_name="format", info="Passed"
+            score=1.0, reward_function_name="format_answer", info="Passed"
         )
         task2.add_reward(format_success)
         cl.session.add_task(task2)
@@ -1305,7 +1308,7 @@ class TestCurriculumLearning(unittest.TestCase):
             expected_answer="A3",
         )
         format_fail_2 = RewardFunctionScore(
-            score=0.0, reward_function_name="format", info="Failed"
+            score=0.0, reward_function_name="format_answer", info="Failed"
         )
         task3.add_reward(format_fail_2)
         cl.session.add_task(task3)
@@ -1361,7 +1364,9 @@ class TestCurriculumLearning(unittest.TestCase):
             language="javascript",
             model_output="function test() { }",
         )
-        format_fail = RewardFunctionScore(score=0.0, reward_function_name="format")
+        format_fail = RewardFunctionScore(
+            score=0.0, reward_function_name="format_answer"
+        )
         puzzle_task.add_reward(format_fail)
         cl.session.add_task(puzzle_task)
 
@@ -1416,7 +1421,7 @@ class TestCurriculumLearning(unittest.TestCase):
             prompt="Q",
             expected_answer="A",
         )
-        fail = RewardFunctionScore(score=0.0, reward_function_name="format")
+        fail = RewardFunctionScore(score=0.0, reward_function_name="format_answer")
         task.add_reward(fail)
         cl.session.add_task(task)
 
@@ -1452,7 +1457,7 @@ class TestCurriculumLearning(unittest.TestCase):
             prompt="Q",
             expected_answer="A",
         )
-        fail = RewardFunctionScore(score=0.0, reward_function_name="format")
+        fail = RewardFunctionScore(score=0.0, reward_function_name="format_answer")
         orig.add_reward(fail)
         cl.session.add_task(orig)
 
@@ -1491,7 +1496,7 @@ class TestCurriculumLearning(unittest.TestCase):
             model_output="Wrong answer",
         )
         format_reward = RewardFunctionScore(
-            score=0.0, reward_function_name="format", info="Failed"
+            score=0.0, reward_function_name="format_answer", info="Failed"
         )
         original_task.add_reward(format_reward)
         cl.session.add_task(original_task)
@@ -1507,7 +1512,7 @@ class TestCurriculumLearning(unittest.TestCase):
 
         # Now mark the reflective task as having a format failure
         reflective_format_reward = RewardFunctionScore(
-            score=0.0, reward_function_name="format", info="Failed"
+            score=0.0, reward_function_name="format_answer", info="Failed"
         )
         reflective_1.add_reward(reflective_format_reward)
 
@@ -1537,7 +1542,7 @@ class TestCurriculumLearning(unittest.TestCase):
             model_output="bad code",
         )
         format_reward = RewardFunctionScore(
-            score=0.0, reward_function_name="format", info="Failed"
+            score=0.0, reward_function_name="format_answer", info="Failed"
         )
         original_task.add_reward(format_reward)
         cl.session.add_task(original_task)
@@ -1554,7 +1559,7 @@ class TestCurriculumLearning(unittest.TestCase):
 
             # Mark it as failed to allow next iteration
             fail_reward = RewardFunctionScore(
-                score=0.0, reward_function_name="format", info="Still failed"
+                score=0.0, reward_function_name="format_answer", info="Still failed"
             )
             reflective.add_reward(fail_reward)
 

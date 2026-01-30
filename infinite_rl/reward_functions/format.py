@@ -22,9 +22,14 @@ class FormatRewardFunction(RewardFunction):
         timeout: int = 5,
         answer_tag: str = "answer",
         think_tag: str = "think",
+        target_tag: str = None,
     ):
         super().__init__(
-            task_name, timeout=timeout, answer_tag=answer_tag, think_tag=think_tag
+            task_name,
+            timeout=timeout,
+            answer_tag=answer_tag,
+            think_tag=think_tag,
+            target_tag=target_tag,
         )
 
     def initialize(self):

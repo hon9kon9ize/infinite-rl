@@ -183,15 +183,28 @@ class CurriculumLearning:
             try:
                 from .reward_functions import FormatRewardFunction
 
-                self.aux_reward_functions["format"] = FormatRewardFunction(
-                    "format",
+                # Create two format reward functions - one for each tag
+                # FormatRewardFunction inherits from RewardFunction which accepts target_tag
+                self.aux_reward_functions["format_think"] = FormatRewardFunction(
+                    task_name="format_think",
                     timeout=self.timeout,
                     answer_tag=self.answer_tag,
                     think_tag=self.think_tag,
-                    **self.format_kwargs,
+                    target_tag=self.think_tag,
+                )
+
+                self.aux_reward_functions["format_answer"] = FormatRewardFunction(
+                    task_name="format_answer",
+                    timeout=self.timeout,
+                    answer_tag=self.answer_tag,
+                    think_tag=self.think_tag,
+                    target_tag=self.answer_tag,
                 )
             except Exception as e:
                 print(f"Warning: Could not initialize FormatRewardFunction: {e}")
+                import traceback
+
+                traceback.print_exc()
 
         if self.use_reasoning_steps:
             try:
@@ -300,8 +313,12 @@ class CurriculumLearning:
                 continue
 
             # Look for format reward in task_rewards
+            # Check both format_think and format_answer
             for reward in task.task_rewards:
-                if reward.reward_function_name == "format" and reward.score == 0:
+                if (
+                    reward.reward_function_name in ["format_think", "format_answer"]
+                    and reward.score == 0
+                ):
                     format_failures.append(task)
                     break  # Only add once per task
         return format_failures
@@ -360,8 +377,12 @@ class CurriculumLearning:
                 continue
 
             # Look for format reward in task_rewards
+            # Check both format_think and format_answer
             for reward in task.task_rewards:
-                if reward.reward_function_name == "format" and reward.score == 0:
+                if (
+                    reward.reward_function_name in ["format_think", "format_answer"]
+                    and reward.score == 0
+                ):
                     format_failures.append(task)
                     break  # Only add once per task
         return format_failures

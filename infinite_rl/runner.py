@@ -5,16 +5,13 @@ import os
 import inspect
 import importlib
 
-# Add infinite_rl to path for imports
-sys.path.append(os.path.dirname(__file__))
-
 # Import PuzzleGenerator for type checking
-from python_puzzles.puzzle_generator import PuzzleGenerator
-from executor import Executor
+from .python_puzzles.puzzle_generator import PuzzleGenerator
+from .executor import Executor
 
 # Dynamically import all puzzle classes
 puzzles = {}
-gen_pkg = importlib.import_module("python_puzzles.generators")
+gen_pkg = importlib.import_module("infinite_rl.python_puzzles.generators")
 for module_name in dir(gen_pkg):
     if not module_name.startswith("_"):
         try:

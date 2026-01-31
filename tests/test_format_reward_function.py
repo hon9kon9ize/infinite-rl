@@ -139,6 +139,166 @@ Now the actual thinking content
         score = fn.compute_reward(task)
         self.assertEqual(score.score, 1.0)
 
+    def test_nested_answer_inside_think_rejected(self):
+        """Test that <answer> tag nested inside <think> tag is rejected"""
+        fn = FormatRewardFunction(task_name="format_think", target_tag="think")
+        fn.initialize()
+        out = """<think>
+Let me calculate this step by step.
+The result is 108.
+<answer>108</answer>
+</think>"""
+        task = Task(
+            task_id="test_8",
+            task_name="test",
+            task_type="math",
+            level=1,
+            prompt="Test",
+            expected_answer="108",
+            language="en",
+            model_output=out,
+        )
+        score = fn.compute_reward(task)
+        self.assertEqual(score.score, -1.0)
+        self.assertIn("nested", score.info.lower())
+        self.assertIn("answer", score.info.lower())
+
+    def test_nested_think_inside_answer_rejected(self):
+        """Test that <think> tag nested inside <answer> tag is rejected"""
+        fn = FormatRewardFunction(task_name="format_answer", target_tag="answer")
+        fn.initialize()
+        # Note: <answer> must be first for format_answer check to pass the "content before" check
+        out = """<answer>
+<think>Wait, let me reconsider...</think>
+108
+</answer>"""
+        task = Task(
+            task_id="test_9",
+            task_name="test",
+            task_type="math",
+            level=1,
+            prompt="Test",
+            expected_answer="108",
+            language="en",
+            model_output=out,
+        )
+        score = fn.compute_reward(task)
+        self.assertEqual(score.score, -1.0)
+        self.assertIn("nested", score.info.lower())
+        self.assertIn("think", score.info.lower())
+
+    def test_nested_partial_tag_rejected(self):
+        """Test that even opening tag without closing is rejected if nested"""
+        fn = FormatRewardFunction(task_name="format_think", target_tag="think")
+        fn.initialize()
+        out = """<think>
+My reasoning process
+<answer>108
+</think>"""
+        task = Task(
+            task_id="test_10",
+            task_name="test",
+            task_type="math",
+            level=1,
+            prompt="Test",
+            expected_answer="108",
+            language="en",
+            model_output=out,
+        )
+        score = fn.compute_reward(task)
+        self.assertEqual(score.score, -1.0)
+        self.assertIn("nested", score.info.lower())
+
+    def test_proper_structure_with_both_tags_accepted(self):
+        """Test that proper structure with both tags in sequence is accepted"""
+        # Test think tag validation - think must be first
+        fn_think = FormatRewardFunction(task_name="format_think", target_tag="think")
+        fn_think.initialize()
+        out_think_first = """<think>
+Let me solve this step by step.
+First, I calculate 0.9 * 120 = 108
+</think>
+
+<answer>108</answer>"""
+        task = Task(
+            task_id="test_11a",
+            task_name="test",
+            task_type="math",
+            level=1,
+            prompt="Test",
+            expected_answer="108",
+            language="en",
+            model_output=out_think_first,
+        )
+        score = fn_think.compute_reward(task)
+        self.assertEqual(score.score, 1.0)
+
+        # Test answer tag validation - when answer is first, it should also pass
+        fn_answer = FormatRewardFunction(task_name="format_answer", target_tag="answer")
+        fn_answer.initialize()
+        out_answer_only = """<answer>108</answer>"""
+        task2 = Task(
+            task_id="test_11b",
+            task_name="test",
+            task_type="math",
+            level=1,
+            prompt="Test",
+            expected_answer="108",
+            language="en",
+            model_output=out_answer_only,
+        )
+        score = fn_answer.compute_reward(task2)
+        self.assertEqual(score.score, 1.0)
+
+    def test_nested_closing_tag_only_rejected(self):
+        """Test that closing tag of other type inside current tag is also rejected"""
+        fn = FormatRewardFunction(task_name="format_think", target_tag="think")
+        fn.initialize()
+        out = """<think>
+Some reasoning
+</answer>
+More reasoning
+</think>
+
+<answer>108</answer>"""
+        task = Task(
+            task_id="test_12",
+            task_name="test",
+            task_type="math",
+            level=1,
+            prompt="Test",
+            expected_answer="108",
+            language="en",
+            model_output=out,
+        )
+        score = fn.compute_reward(task)
+        self.assertEqual(score.score, -1.0)
+        self.assertIn("nested", score.info.lower())
+
+    def test_text_containing_tag_word_but_not_tag_accepted(self):
+        """Test that text mentioning tag names (without brackets) is accepted"""
+        fn = FormatRewardFunction(task_name="format_think", target_tag="think")
+        fn.initialize()
+        out = """<think>
+I think the answer should be 108
+Let me think about this more carefully
+</think>
+
+<answer>108</answer>"""
+        task = Task(
+            task_id="test_13",
+            task_name="test",
+            task_type="math",
+            level=1,
+            prompt="Test",
+            expected_answer="108",
+            language="en",
+            model_output=out,
+        )
+        score = fn.compute_reward(task)
+        self.assertEqual(score.score, 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()
+

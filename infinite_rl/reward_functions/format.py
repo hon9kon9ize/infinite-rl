@@ -79,6 +79,25 @@ class FormatRewardFunction(RewardFunction):
 
         raw_content = "\n".join(matches)
 
+        # Check for nested/misplaced tags: answer tag should not appear inside think tag and vice versa
+        # Determine the other tag based on current target
+        if self.target_tag == self.think_tag:
+            forbidden_tag = self.answer_tag
+        elif self.target_tag == self.answer_tag:
+            forbidden_tag = self.think_tag
+        else:
+            forbidden_tag = None
+
+        # Check if the forbidden tag appears inside the current tag's content
+        if forbidden_tag:
+            forbidden_start = f"<{forbidden_tag}>"
+            forbidden_end = f"</{forbidden_tag}>"
+            if forbidden_start in raw_content or forbidden_end in raw_content:
+                return RewardFunctionScore(
+                    score=-1.0,
+                    info=f"<{forbidden_tag}> tag found inside <{self.target_tag}> tag. Tags cannot be nested.",
+                )
+
         # For math tasks, check if content has code blocks (should not)
         if self.task_name == "math":
             if "```" in raw_content:

@@ -22,18 +22,17 @@ class MockDataset:
         raise NotImplementedError
 
 
-def get_base_class():
-    try:
-        import torch.utils.data
+# Determine base class at module import time
+try:
+    import torch.utils.data
 
-        return torch.utils.data.Dataset
-    except (ImportError, ModuleNotFoundError):
-        # Scenario 2: CI/Environment without PyTorch
+    _BaseDataset = torch.utils.data.Dataset
+except (ImportError, ModuleNotFoundError):
+    # CI/Environment without PyTorch - use MockDataset
+    _BaseDataset = MockDataset
 
-        return MockDataset
 
-
-class DynamicCurriculumDataset(get_base_class()):
+class DynamicCurriculumDataset(_BaseDataset):
     """Dynamic dataset that generates prompts on-demand from curriculum.
 
     This ensures each sample reflects the current curriculum level without

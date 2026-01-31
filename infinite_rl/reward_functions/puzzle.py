@@ -125,11 +125,21 @@ class PuzzleRewardFunction(RewardFunction):
                 capture_output=True,
                 timeout=self.timeout,
             )
-            if result.returncode != 0 or result.stderr:
+            # Only treat as error if return code is non-zero
+            # Ignore stderr warnings (like wasmtime cleanup exceptions on Python 3.13)
+            if result.returncode != 0:
                 return RewardFunctionScore(
                     score=0.0,
-                    info=f"Execution error: {result.stderr}",
+                    info=f"Execution error (exit code {result.returncode}): {result.stderr}",
                 )
+
+            # Parse output even if there were warnings in stderr
+            if not result.stdout or not result.stdout.strip():
+                return RewardFunctionScore(
+                    score=0.0,
+                    info="No output from execution",
+                )
+
             output = json.loads(result.stdout.strip())
             if "error" in output:
                 return RewardFunctionScore(

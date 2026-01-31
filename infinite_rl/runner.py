@@ -5,13 +5,25 @@ import os
 import inspect
 import importlib
 
-# Import PuzzleGenerator for type checking
-from .python_puzzles.puzzle_generator import PuzzleGenerator
-from .executor import Executor
+# Handle both script execution and module import
+# When run as script, __package__ is None; when imported as module, it's set
+if __package__ is None or __package__ == "":
+    # Running as script - add parent directory to path and use absolute imports
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from infinite_rl.python_puzzles.puzzle_generator import PuzzleGenerator
+    from infinite_rl.executor import Executor
+
+    base_module = "infinite_rl.python_puzzles.generators"
+else:
+    # Running as module - use relative imports
+    from .python_puzzles.puzzle_generator import PuzzleGenerator
+    from .executor import Executor
+
+    base_module = "infinite_rl.python_puzzles.generators"
 
 # Dynamically import all puzzle classes
 puzzles = {}
-gen_pkg = importlib.import_module("infinite_rl.python_puzzles.generators")
+gen_pkg = importlib.import_module(base_module)
 for module_name in dir(gen_pkg):
     if not module_name.startswith("_"):
         try:

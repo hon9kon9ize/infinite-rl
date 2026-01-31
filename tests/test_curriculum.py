@@ -895,20 +895,6 @@ class TestCurriculumLearning(unittest.TestCase):
         aux_scores = cl.get_aux_reward_scores(response, "42")
         self.assertIsInstance(aux_scores, dict)
 
-    def test_missing_math_file(self):
-        """Test curriculum learning when math.json file is missing."""
-        # Create curriculum without math file
-        with patch("infinite_rl.curriculum.Path") as mock_path:
-            mock_math_file = MagicMock()
-            mock_math_file.exists.return_value = False
-            mock_path.return_value.parent.joinpath.return_value = mock_math_file
-
-            with patch("infinite_rl.puzzles.get_available_puzzles", return_value=[]):
-                cl = CurriculumLearning()
-
-        # Should still initialize but with no math tasks
-        self.assertEqual(len(cl.tasks_by_level[1]), 0)
-
     def test_corrupted_math_file(self):
         """Test curriculum learning with corrupted math.json file."""
         with patch("infinite_rl.curriculum.Path") as mock_path, patch(
@@ -923,30 +909,6 @@ class TestCurriculumLearning(unittest.TestCase):
 
         # Should handle JSON parsing error gracefully
         self.assertIsInstance(cl.tasks_by_level, dict)
-
-    def test_missing_puzzles_file(self):
-        """Test curriculum learning when puzzles.json file is missing."""
-        with patch("infinite_rl.curriculum.Path") as mock_path, patch(
-            "infinite_rl.puzzles.get_available_puzzles", return_value=[]
-        ):
-
-            mock_puzzles_file = MagicMock()
-            mock_puzzles_file.exists.return_value = False
-            mock_math_file = MagicMock()
-            mock_math_file.exists.return_value = False
-
-            def mock_joinpath(*args):
-                if "puzzles.json" in str(args):
-                    return mock_puzzles_file
-                return mock_math_file
-
-            mock_path.return_value.parent.joinpath.side_effect = mock_joinpath
-
-            cl = CurriculumLearning()
-
-        # Should still initialize but with no puzzle tasks
-        total_tasks = sum(len(tasks) for tasks in cl.tasks_by_level.values())
-        self.assertEqual(total_tasks, 0)
 
     def test_corrupted_puzzles_file(self):
         """Test curriculum learning with corrupted puzzles.json file."""

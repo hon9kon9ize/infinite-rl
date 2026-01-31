@@ -109,14 +109,39 @@ jobs:
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         run: |
           python - <<'PY'
-          import infinite_rl
+          import subprocess
+          import json
           import os
 
-          runtimes_dir = os.path.join(os.path.dirname(infinite_rl.__file__), 'runtimes')
+          # Find the installed package location using pip show
+          result = subprocess.run(['pip', 'show', '-f', 'infinite-rl'], capture_output=True, text=True)
+          if result.returncode != 0:
+              print('ERROR: Package infinite-rl not found!')
+              exit(1)
+
+          # Parse the output to get the Location
+          location = None
+          for line in result.stdout.split('\n'):
+              if line.startswith('Location:'):
+                  location = line.split(':', 1)[1].strip()
+                  break
+
+          if not location:
+              print('ERROR: Could not determine package installation location!')
+              exit(1)
+
+          print(f'Package installed at: {location}')
+
+          # The runtimes directory should be at {location}/infinite_rl/runtimes
+          runtimes_dir = os.path.join(location, 'infinite_rl', 'runtimes')
           print(f'Checking runtimes directory: {runtimes_dir}')
 
           if not os.path.exists(runtimes_dir):
               print('ERROR: Runtimes directory does not exist!')
+              print(f'Checking what exists at {os.path.join(location, "infinite_rl")}:')
+              infinite_rl_dir = os.path.join(location, 'infinite_rl')
+              if os.path.exists(infinite_rl_dir):
+                  print(f'  Contents: {sorted(os.listdir(infinite_rl_dir))}')
               exit(1)
 
           contents = sorted(os.listdir(runtimes_dir))

@@ -1,8 +1,30 @@
 """Unit tests for DynamicCurriculumDataset GRPO batching behavior."""
 
 import unittest
+from unittest.mock import Mock, patch
 from infinite_rl.dynamic_dataset import DynamicCurriculumDataset
 from infinite_rl.curriculum import CurriculumLearning, Task
+
+
+class MockCurriculum:
+    """Mock curriculum for testing that always returns valid tasks."""
+
+    def __init__(self, num_generations=4):
+        self.num_generations = num_generations
+        self.task_counter = 0
+
+    def get_prompt(self):
+        """Generate a mock task."""
+        self.task_counter += 1
+        return Task(
+            task_id=f"mock_task_{self.task_counter}",
+            task_name="mock_test",
+            task_type="math",
+            level=0,
+            prompt=f"Test prompt {self.task_counter}",
+            expected_answer="42",
+            language="python",
+        )
 
 
 class TestDynamicCurriculumDataset(unittest.TestCase):
@@ -10,15 +32,8 @@ class TestDynamicCurriculumDataset(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        self.curriculum = CurriculumLearning(
-            num_generations=4,
-            warmup_step=0,
-            use_format=False,
-            use_repetition=False,
-            use_reasoning_steps=False,
-            use_length=False,
-            use_lang_consistency=False,
-        )
+        # Use mock curriculum to avoid dependency on runtime files
+        self.curriculum = MockCurriculum(num_generations=4)
         self.dataset = DynamicCurriculumDataset(
             curriculum=self.curriculum, num_samples=100
         )

@@ -1,4 +1,5 @@
 recursive-include infinite_rl/reward_functions *.py
+recursive-include infinite_rl/python_puzzles *.py
 include infinite_rl/*.py
 include README.md
 include requirements.txt

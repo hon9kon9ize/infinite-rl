@@ -46,7 +46,7 @@ class CurriculumLearning:
         log_file: Optional[str] = None,
         window_size: int = 50,
         success_rate_threshold: float = 0.8,
-        variance_threshold: float = 0.05,
+        variance_threshold: float = 0.15,
         demote_threshold: float = 0.4,
         warmup_step: int = 32,
         reflective_learning_rate: float = 0.2,
@@ -74,7 +74,7 @@ class CurriculumLearning:
             log_file: Path to the logging file (JSON Lines format). If None, defaults to 'curriculum_log.jsonl' in the module directory.
             window_size: Size of the sliding window for success rate tracking (default: 50)
             success_rate_threshold: Required success rate for difficulty increase (default: 0.8 = 80%)
-            variance_threshold: Maximum variance for success rate stability (default: 0.05)
+            variance_threshold: Maximum variance for success rate stability (default: 0.15)
             demote_threshold: Success rate threshold for difficulty decrease (default: 0.4 = 40%)
             warmup_step: Number of initial steps to only use level 0 tasks (default: 32)
             reflective_learning_rate: Probability of triggering reflective learning on format failures (default: 0.1). Set to 0 to disable.
@@ -244,7 +244,7 @@ class CurriculumLearning:
     def _load_available_tasks(self):
         """Load all available tasks and their ratings."""
         self.tasks_by_level: Dict[int, List[Dict[str, Any]]] = {
-            i: [] for i in range(0, 6)  # 0-5 level
+            i: [] for i in range(0, 7)  # 0-6 level
         }
 
         # Load math tasks (downloaded via setup.py into runtimes/)
@@ -260,7 +260,7 @@ class CurriculumLearning:
                             "rating": item.get("rating", 0),
                             "id": f"math_{hash(str(item))}",
                         }
-                        level = min(task_info["rating"], 5)  # Ensure level <= 5
+                        level = min(task_info["rating"], 6)  # Ensure level <= 6
                         self.tasks_by_level[level].append(task_info)
             except Exception as e:
                 print(f"Warning: Could not load math tasks: {e}")
@@ -289,7 +289,7 @@ class CurriculumLearning:
                                     "rating": puzzle_info.get("rating") or 3,
                                     "id": f"puzzle_{lang}_{puzzle_name}",
                                 }
-                                level = min(task_info["rating"], 5)
+                                level = min(task_info["rating"], 6)
                                 self.tasks_by_level[level].append(task_info)
                                 puzzle_count += 1
             except Exception as e:
@@ -300,7 +300,7 @@ class CurriculumLearning:
         print(
             f"Loaded {total_tasks} tasks across {len(self.tasks_by_level)} difficulty levels"
         )
-        for level in range(0, 6):
+        for level in range(0, 7):
             print(f"  Level {level}: {len(self.tasks_by_level[level])} tasks")
 
     def _get_format_failure_tasks(self) -> List[Task]:
@@ -667,12 +667,12 @@ class CurriculumLearning:
             # ADVANCE: High success rate with no variance penalty
             # The model has mastered this difficulty level
             if mean_success_rate > self.success_rate_threshold:
-                if self.current_level < 5:
+                if self.current_level < 6:
                     print(
                         f"🚀 Advancing to level {self.current_level + 1}: "
                         f"prompt-level success rate = {mean_success_rate:.1%}"
                     )
-                    self.current_level = min(self.current_level + 1, 5)
+                    self.current_level = min(self.current_level + 1, 6)
                     self.last_level_change_step = self.global_step
                     # Clear windows to start fresh at new difficulty
                     self.success_windows.clear()
@@ -836,7 +836,7 @@ class CurriculumLearning:
         task wrapped in a reflective prompt to help the model learn proper formatting.
         Otherwise, returns a new task based on current difficulty level.
 
-        During warmup stage (first warmup_step iterations), only level 1 tasks are used
+        During warmup stage (first warmup_step iterations), only level 0 tasks are used
         (unless reflective learning is triggered).
 
         Returns:
@@ -866,7 +866,7 @@ class CurriculumLearning:
 
         if not available_tasks:
             # Fallback to any available tasks
-            for level in range(0, 6):
+            for level in range(0, 7):
                 if self.tasks_by_level[level]:
                     available_tasks = self.tasks_by_level[level]
                     break

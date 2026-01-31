@@ -1,113 +1,483 @@
 [
   {
-    "puzzle_name": "Abbreviate",
+    "puzzle_name": "AbsoluteValues",
     "response": "1",
     "rating": 1
+  },
+  {
+    "puzzle_name": "AddConstant",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "AllEven",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "AllPositive",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "AlternateElements",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "AnyNegative",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "AsciiToChar",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "CharToAscii",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "ClampValues",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "Contains",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "CountConsonants",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "CountEven",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "CountOccurrences",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "CountOdd",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "CountPositive",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "CountSubstring",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "CountUnique",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "CountVowels",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "CreateRange",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "CumulativeSum",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "DoubleEvens",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "EndsWith",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "EveryNth",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "Factorial",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "FilterEven",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "FilterPositive",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "FindIndex",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "FirstElement",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "FlattenOnce",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "GetSlice",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "HasDuplicates",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "InRange",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "IntegerDivision",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "IsDigit",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "IsEven",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "IsLetter",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "IsPositive",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "IsSorted",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "JoinStrings",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "LastElement",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "ListLength",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "ListMax",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "ListMin",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "ListSum",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "Lowercase",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "MaxOfTwo",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "MinOfTwo",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "Modulo",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "MultiplyList",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "PairElements",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "Power",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "RangeWithStart",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "RangeWithStep",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "RemoveSpaces",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "RepeatElements",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "RepeatString",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "ReplaceString",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "ReverseList",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "ReverseString",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "RunningMax",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "RunningMin",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "SortDescending",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "SortList",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "SplitString",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "SquareList",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "StartsWith",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "StringLength",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "StripWhitespace",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "SumPairs",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "ThreeWayMax",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "UniqueElements",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "Uppercase",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "ZeroNegatives",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "ZipLists",
+    "response": "1",
+    "rating": 1
+  },
+  {
+    "puzzle_name": "Abbreviate",
+    "response": "1",
+    "rating": 2
   },
   {
     "puzzle_name": "AllCubicRoots",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "AllPandigitalSquares",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "AllPrefixes",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "AllQuadraticRoots",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "AlternatingFactorials",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "AntiShuffle",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "AnyEdge",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "AnyPath",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "AnyTriangle",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "ArithmeticSequence",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "ArrayDiff",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "BackWorlds",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "BackwardsDigits",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "BallotProblem",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "BasicStrCounts",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "BelowThreshold",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "BiPermutations",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "BigOdds",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "BiggestEven",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "BiggestK",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "BillSums",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "Binarize",
@@ -117,1841 +487,1841 @@
   {
     "puzzle_name": "BinaryAverage",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "BinarySort",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "BinaryStrXOR",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "BinomialProbabilities",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "BirthdayParadox",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "BitSum",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "BooleanPythagoreanTriples",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "BoxVolume",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "Buckets",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "CapitalizeFirstLetter",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "CardGame24",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "CatStrings",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "CeilingSquares",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "CenteredString",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "CertifiedGCD",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "ChangeBase",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "CharCounts",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "CharSum",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "CheckersPosition",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "CircularShiftNum",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "ClockAngle",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "ClosestInteger",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "ClosestPalindrome",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "CollatzCycleUnsolved",
     "response": "5",
-    "rating": 5
+    "rating": 6
   },
   {
     "puzzle_name": "CollatzDelay",
     "response": "5",
-    "rating": 5
+    "rating": 6
   },
   {
     "puzzle_name": "CollatzGeneralizedUnsolved",
     "response": "5",
-    "rating": 5
+    "rating": 6
   },
   {
     "puzzle_name": "CombinationLock",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "CommonCase",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "CommonNumbers",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "CompareInAnyCase",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "CompleteParens",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "CompleteSplit",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "ConcatStrings",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "ConsonantFilter",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "Conway99",
     "response": "5",
-    "rating": 5
+    "rating": 6
   },
   {
     "puzzle_name": "Count47",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "CubeRoot",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "CubicRoot",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "CumulativeSum",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "CumulativeSums",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Dada",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "DateDiff",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "DecreasingCountComparison",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "Dedup",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "DeepestParens",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "DelPalindrome",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Derivative",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "DiffChars",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "DistinctChars",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "DistinctDigits",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "DistinctOddSum",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "DominoTile",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Drops",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Easy63",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "EasySum",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "EasyTwos",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "EightQueensOrFewer",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "EngineerNumbers",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "EvaluateOperators",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Even4Sum",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "EvenBetween",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "EvenOddDigits",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "EvenOddSum",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "EvenPalindromeNumbers",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "EvenPath",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "EvenSqure",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "EvenWords",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "ExpandSpaces",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "ExponentialCoinMoves",
     "response": "5",
-    "rating": 5
+    "rating": 6
   },
   {
     "puzzle_name": "ExponentialProbability",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "Factor47",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "FactorString",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "Factoring",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "FermatComposites",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "FermatsLastTheorem",
     "response": "5",
-    "rating": 5
+    "rating": 6
   },
   {
     "puzzle_name": "Fib3",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "Fib4",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "Fibonacci",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "FilenameOK",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "FilterInts",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "FindBored",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "FindCloseElements",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "FindClosePair",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "FindContainers",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "FindExtensions",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "FindHomogeneousSubstring",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "FindPositives",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "FindProductiveList",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "FindRepeats",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "FindStrangeSum",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "FindVowels",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "FirstNegCumulative",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "FivePowers",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "FlipCase",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "FloatNegSquareRoot",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "FloatSquareRoot",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "FloatWithDecimalValue",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "FourSquares",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "Frac",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "GCD",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "GCD17",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "GCD_multi",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "GeometricSequence",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "GimmeChars",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Grader",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "GraphIsomorphism",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "GreatestHIndex",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "HalfPairs",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "HalfSorted",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "HalfTag",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "Harder63",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "HelloWorld",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "HeronTriangle",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "HexPrimes",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "HungryRabbits",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "IdentifyZeroTrips",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "IfCases",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "IfProblem",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "IfProblemWithAnd",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "IfProblemWithOr",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "IncDec",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "IncreasingViolation",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "IntDiv",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "IntDiv2",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "IntMul",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "IntNeg",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "IntNegSquareRoot",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "IntSquareRoot",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "IntSub",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "IntSub2",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "IntSum",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Intersperse",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "InverseSuperFactorial",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "InvertIndices",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "InvertPermutation",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "InvestigateCrash",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "IsEven",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Kirkman",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "KnightsTour",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "LCM",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "LCM_multi",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "LZW",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "LargestDivisor",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "LargestNegSmallestPos",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "LargestPrimeDigitSum",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "LargestPrimeFactor",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "LargestStringNum",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "LastLetters",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "LearnParity",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "LearnParityWithNoise",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "LexPath",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "LineIntersection",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "ListAt",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "ListDistinctSum",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "ListIn",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "ListInc",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "ListIndex",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "ListIndex2",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "ListLen",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "ListMul",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "ListNegAt",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "ListPosSum",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "ListSetLen",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "ListSlice",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "ListTotal",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "LittleFermat",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "LongEarlySum",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "LongestMonotonicSubstring",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "LongestMonotonicSubstringTricky",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "LongestStr",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "LongestSubsetString",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Mastermind",
     "response": "5",
-    "rating": 5
+    "rating": 6
   },
   {
     "puzzle_name": "MatchBrackets",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "MatchingMarkers",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "MaxConsecutiveProduct",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "MaxConsecutiveSum",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "MaxDelta",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "MaxInt",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "MaybeReversed",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "Median",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "MinBigger",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "MinConsecutiveSum",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "MinRotations",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "MinSquaredDeviation",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "MinSubArraySum",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "MissingBananas",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "MonkeyAndCoconuts",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "Monotonic",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "MoreQueens",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "MostUnique",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Moving0s",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "NarrowerList",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "Nash",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "NearbyDuplicates",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "NecklaceSplit",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "Nim",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "No3Colinear",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "NoRelativePrimes",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "NumPasses",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "OddCase",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "OddCollatz",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "OddDegreePolynomialRoot",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "OddEvenSum",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "OddPath",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "OddProduct",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "OneEnded",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "OnesAndTwos",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "OptimalBridges",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "Oscillators",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "OverlappingCount",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "PackingHam",
     "response": "5",
-    "rating": 5
+    "rating": 6
   },
   {
     "puzzle_name": "PairZeroSum",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "Palindrome",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "PalindromeContaining",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "PandigitalSquare",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "ParenDepth",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "ParenthesesPermutation",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "ParityExchange",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "ParseMusic",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "PenultimateRevString",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "PenultimateString",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "PickNearNeighbors",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "PlanetRange",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "PlantedClique",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "PositiveDigitSums",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "PostageStamp",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "PrimeFactorization",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "PrimeFib",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "PrimeIntervalIntersection",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "PrimeSel",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "PrimeWords",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "PrimesUpTo",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "ProductSigns",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "PythagoreanTriples",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "QuadraticRoot",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "Quine",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "RemoveVowels",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "RepeatDec",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "ReplaceMe",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Rescale",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "RevQuine",
     "response": "5",
-    "rating": 5
+    "rating": 6
   },
   {
     "puzzle_name": "ReverseCase",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "ReverseCat",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "ReverseLifeStep",
     "response": "5",
-    "rating": 5
+    "rating": 6
   },
   {
     "puzzle_name": "RockPaperScissors",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "RollingMax",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "RomanNumerals",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "RotateSort",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "RotateString",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "SameDifferent",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "SecondSmallestUnique",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "SeparateParenGroups",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "SevenElevenThirteen",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "ShiftChars",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "ShortIntegerPath",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "ShortestDecDelta",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "ShortestPath",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "SimplifyProductFraction",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "SlidingOne",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "SlidingPuzzle",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "SmallExponentBigSolution",
     "response": "5",
-    "rating": 5
+    "rating": 6
   },
   {
     "puzzle_name": "SmallestEven",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "SortByDigitSum",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "SortNumbers",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "SortPlusPlus",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "SortedOdds",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "Spaceship",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "SpaceyRange",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "SquareTiles",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "SquaringTheSquare",
     "response": "5",
-    "rating": 5
+    "rating": 6
   },
   {
     "puzzle_name": "Sssuubbstriiingg",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "Sstriiinggssuubb",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "StonePiles",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "StrAdd",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "StrAt",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "StrCount",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "StrIn",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "StrIn2",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "StrIndex",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "StrIndex2",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "StrJoiner",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "StrLen",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "StrLength",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "StrMul",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "StrMul2",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "StrNegAt",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "StrParts",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "StrSetLen",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "StrSlice",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "StrSplit",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "StrSplitter",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "StrangeSplit",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "StrongestExtension",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "Study_1",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Study_10",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "Study_11",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Study_12",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Study_13",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Study_14",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Study_15",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "Study_16",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "Study_17",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "Study_18",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Study_19",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "Study_2",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "Study_20",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "Study_21",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Study_22",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "Study_23",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Study_24",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Study_25",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "Study_26",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Study_27",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "Study_28",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Study_29",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "Study_3",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Study_30",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "Study_4",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Study_5",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "Study_6",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Study_7",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "Study_8",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Study_9",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "SublistSum",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "SubstitutionCypher",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "SubstrCount",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "Sudoku",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "SumOfDigits",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "SumProduct",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "ThreeCubes",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "ThreeCycle",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "ThreePrimes",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "Threeples",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "TicTacToeO",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "TicTacToeX",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "TotalDifference",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "TowersOfHanoi",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "TowersOfHanoiArbitrary",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "TriangleArea",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Tribonacci",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "Triple0",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "TripleDouble",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "TripleZeroSum",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "Tutorial1",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Tutorial2",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Tutorial3",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Tutorial4",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "Tutorial5",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "TwoThirdsSorted",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "UNSOLVED_UncrossedKnightsPath",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "UncrossedKnightsPath",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "UnevenFind",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "UniqueSorted",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "UnitsProduct",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "UnweightedShortestPath",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "UpDownSort",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "UppercaseEven",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "ValidBracketSubsequence",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "VowelDrop",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "VowelSandwich",
     "response": "1",
-    "rating": 1
+    "rating": 2
   },
   {
     "puzzle_name": "WaterPouring",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "WeirdDecodeVowels",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "WildSort",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "Zarankiewicz",
     "response": "5",
-    "rating": 5
+    "rating": 6
   },
   {
     "puzzle_name": "ZeroSum",
     "response": "4",
-    "rating": 4
+    "rating": 5
   },
   {
     "puzzle_name": "ZipStr",
     "response": "2",
-    "rating": 2
+    "rating": 3
   },
   {
     "puzzle_name": "Znam",
     "response": "3",
-    "rating": 3
+    "rating": 4
   },
   {
     "puzzle_name": "ZobristCollision",
     "response": "2",
-    "rating": 2
+    "rating": 3
   }
 ]

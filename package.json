@@ -1,0 +1,6 @@
+{
+  "name": "infinite-rl",
+  "private": true,
+  "description": "RL data generator with curriculum learning",
+  "type": "module"
+}

@@ -3,7 +3,12 @@
 from .executor import Executor
 from .reward_functions import get_reward_functions
 from .curriculum import CurriculumLearning
-from .dynamic_dataset import DynamicCurriculumDataset
+
+# DynamicCurriculumDataset requires torch - make it optional
+try:
+    from .dynamic_dataset import DynamicCurriculumDataset
+except ImportError:
+    DynamicCurriculumDataset = None
 
 # Expose package version from VERSION.txt included in the package
 try:

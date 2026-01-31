@@ -25,7 +25,7 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
 
         # Clear all levels except 1 to ensure we get only our mock puzzle task
         # Note: Puzzles start at level 1; level 0 is reserved for math tasks
-        for level in range(0, 6):
+        for level in range(0, 7):
             if level != 1:
                 cl.tasks_by_level[level] = []
 
@@ -74,7 +74,7 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
         cl = CurriculumLearning()
 
         # Clear all levels except 1 to ensure we get only our mock task
-        for level in range(0, 6):
+        for level in range(0, 7):
             if level != 1:
                 cl.tasks_by_level[level] = []
 
@@ -108,7 +108,7 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
         cl = CurriculumLearning()
 
         # Clear all levels except 1 to ensure we get only our mock task
-        for level in range(0, 6):
+        for level in range(0, 7):
             if level != 1:
                 cl.tasks_by_level[level] = []
 
@@ -169,7 +169,7 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
                 cl = CurriculumLearning()
 
                 # Clear all levels except 1 to ensure we get only our mock task
-                for level in range(0, 6):
+                for level in range(0, 7):
                     if level != 1:
                         cl.tasks_by_level[level] = []
 
@@ -205,7 +205,7 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
         cl = CurriculumLearning()
 
         # Clear all levels except 1 to ensure we get only our mock task
-        for level in range(0, 6):
+        for level in range(0, 7):
             if level != 1:
                 cl.tasks_by_level[level] = []
 
@@ -241,7 +241,7 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
         cl = CurriculumLearning()
 
         # Clear all levels except 1 to ensure we get only our mock task
-        for level in range(0, 6):
+        for level in range(0, 7):
             if level != 1:
                 cl.tasks_by_level[level] = []
 

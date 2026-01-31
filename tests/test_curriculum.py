@@ -676,7 +676,7 @@ class TestCurriculumLearning(unittest.TestCase):
         """Test behavior when no tasks are available."""
         cl = CurriculumLearning()
         # Clear all loaded tasks to simulate no tasks available
-        cl.tasks_by_level = {i: [] for i in range(0, 6)}
+        cl.tasks_by_level = {i: [] for i in range(0, 7)}
 
         task = cl.get_prompt()
         self.assertIsNone(task)
@@ -968,7 +968,7 @@ class TestCurriculumLearning(unittest.TestCase):
         """Test get_prompt when no tasks are available at current level."""
         cl = CurriculumLearning()
         # Clear all tasks
-        cl.tasks_by_level = {i: [] for i in range(0, 6)}
+        cl.tasks_by_level = {i: [] for i in range(0, 7)}
 
         result = cl.get_prompt()
         self.assertIsNone(result)
@@ -1005,11 +1005,11 @@ class TestCurriculumLearning(unittest.TestCase):
     def test_level_advancement_boundary(self):
         """Test level advancement at boundary conditions."""
         cl = CurriculumLearning()
-        cl.current_level = 5  # Maximum level
+        cl.current_level = 6  # Maximum level
 
-        # Should not advance beyond level 5
+        # Should not advance beyond level 6
         cl._update_level()
-        self.assertEqual(cl.current_level, 5)
+        self.assertEqual(cl.current_level, 6)
 
     def test_task_counter_initialization(self):
         """Test that task counters are properly computed from session."""

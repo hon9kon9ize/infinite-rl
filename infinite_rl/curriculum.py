@@ -247,34 +247,90 @@ class CurriculumLearning:
             i: [] for i in range(0, 7)  # 0-6 level
         }
 
-        # Load math tasks (downloaded via setup.py into runtimes/)
-        math_file = Path(__file__).parent / "runtimes" / "math.json"
-        if math_file.exists():
+        # Helper function to load JSON file from package resources
+        def load_runtime_json(filename):
+            """Load JSON file from runtime resources, trying multiple methods."""
             try:
-                with open(math_file, "r", encoding="utf-8") as f:
-                    math_data = json.load(f)
-                    for item in math_data:
-                        task_info = {
-                            "type": "math",
-                            "data": item,
-                            "rating": item.get("rating", 0),
-                            "id": f"math_{hash(str(item))}",
-                        }
-                        level = min(task_info["rating"], 6)  # Ensure level <= 6
-                        self.tasks_by_level[level].append(task_info)
-            except Exception as e:
-                print(f"Warning: Could not load math tasks: {e}")
+                # Method 1: Try importlib.resources (Python 3.9+)
+                try:
+                    from importlib import resources
 
-        # Load puzzle tasks directly from JSON
-        puzzles_file = Path(__file__).parent / "runtimes" / "puzzles.json"
-        if puzzles_file.exists():
+                    try:
+                        # Python 3.9+ API
+                        data_text = (
+                            resources.files("infinite_rl.runtimes")
+                            .joinpath(filename)
+                            .read_text(encoding="utf-8")
+                        )
+                        print(
+                            f"DEBUG: Loaded {filename} via importlib.resources (Python 3.9+)"
+                        )
+                        return json.loads(data_text)
+                    except AttributeError:
+                        # Python 3.7-3.8 API
+                        data_text = resources.read_text(
+                            "infinite_rl.runtimes", filename, encoding="utf-8"
+                        )
+                        print(
+                            f"DEBUG: Loaded {filename} via importlib.resources (Python 3.7-3.8)"
+                        )
+                        return json.loads(data_text)
+                except Exception as resources_error:
+                    print(
+                        f"DEBUG: importlib.resources failed for {filename}: {resources_error}"
+                    )
+
+                # Method 2: Fallback to Path-based loading
+                file_path = Path(__file__).parent / "runtimes" / filename
+                print(f"DEBUG: Trying Path-based loading: {file_path}")
+                print(f"DEBUG: File exists: {file_path.exists()}")
+                if file_path.exists():
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        print(f"DEBUG: Loaded {filename} via Path-based loading")
+                        return data
+                else:
+                    print(f"DEBUG: {filename} not found at {file_path}")
+                    return None
+            except Exception as e:
+                print(f"ERROR: Could not load {filename}: {e}")
+                import traceback
+
+                traceback.print_exc()
+                return None
+
+        # Load math tasks
+        math_data = load_runtime_json("math.json")
+        if math_data:
             try:
-                with open(puzzles_file, "r", encoding="utf-8") as f:
-                    puzzles_data = json.load(f)
+                print(f"DEBUG: Processing {len(math_data)} math items")
+                for item in math_data:
+                    task_info = {
+                        "type": "math",
+                        "data": item,
+                        "rating": item.get("rating", 0),
+                        "id": f"math_{hash(str(item))}",
+                    }
+                    level = min(task_info["rating"], 6)  # Ensure level <= 6
+                    self.tasks_by_level[level].append(task_info)
+            except Exception as e:
+                print(f"Warning: Could not process math tasks: {e}")
+                import traceback
+
+                traceback.print_exc()
+
+        # Load puzzle tasks
+        puzzles_data = load_runtime_json("puzzles.json")
+        if puzzles_data:
+            try:
+                print(
+                    f"DEBUG: Processing puzzles data, keys: {puzzles_data.keys() if isinstance(puzzles_data, dict) else 'not a dict'}"
+                )
 
                 for lang in ["javascript", "python"]:
                     if lang in puzzles_data:
                         puzzles_list = puzzles_data[lang]
+                        print(f"DEBUG: Found {len(puzzles_list)} {lang} puzzles")
                         puzzle_count = 0
                         for puzzle_name, puzzle_info in puzzles_list.items():
                             if (
@@ -292,8 +348,14 @@ class CurriculumLearning:
                                 level = min(task_info["rating"], 6)
                                 self.tasks_by_level[level].append(task_info)
                                 puzzle_count += 1
+                        print(f"DEBUG: Added {puzzle_count} {lang} puzzles to tasks")
             except Exception as e:
-                print(f"Warning: Could not load puzzle tasks: {e}")
+                print(f"Warning: Could not process puzzle tasks: {e}")
+                import traceback
+
+                traceback.print_exc()
+
+                traceback.print_exc()
 
         # Print summary
         total_tasks = sum(len(tasks) for tasks in self.tasks_by_level.values())

@@ -10,6 +10,18 @@ from typing import Any, Dict
 import json
 
 
+class MockDataset:
+    """Minimal shim to satisfy inheritance without Torch."""
+
+    def __getitem__(self, index):
+        """To be overridden by subclass."""
+        raise NotImplementedError
+
+    def __len__(self):
+        """To be overridden by subclass."""
+        raise NotImplementedError
+
+
 def get_base_class():
     try:
         import torch.utils.data
@@ -17,10 +29,6 @@ def get_base_class():
         return torch.utils.data.Dataset
     except (ImportError, ModuleNotFoundError):
         # Scenario 2: CI/Environment without PyTorch
-        class MockDataset:
-            """Minimal shim to satisfy inheritance without Torch."""
-
-            pass
 
         return MockDataset
 

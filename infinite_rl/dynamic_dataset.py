@@ -8,13 +8,30 @@ completions share the same prompt.
 
 from typing import Any, Dict, TYPE_CHECKING
 import json
-import torch.utils.data
 
 if TYPE_CHECKING:
     from .curriculum import CurriculumLearning
 
+try:
+    import torch.utils.data
 
-class DynamicCurriculumDataset(torch.utils.data.Dataset):
+    _BaseDataset = torch.utils.data.Dataset
+except ImportError:
+
+    class _BaseDataset:
+        """Fallback base dataset if PyTorch is not available."""
+
+        def __init__(self):
+            pass
+
+        def __len__(self):
+            raise NotImplementedError
+
+        def __getitem__(self, idx):
+            raise NotImplementedError
+
+
+class DynamicCurriculumDataset(_BaseDataset):
     """Dynamic dataset that generates prompts on-demand from curriculum.
 
     This ensures each sample reflects the current curriculum level without

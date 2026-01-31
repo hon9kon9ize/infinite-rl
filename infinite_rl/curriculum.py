@@ -496,7 +496,8 @@ class CurriculumLearning:
                 if format_name in self.aux_reward_functions:
                     format_fn = self.aux_reward_functions[format_name]
                     format_result = format_fn.compute_reward(task, is_correct=False)
-                    if format_result.score == 0:
+                    # Format functions return 1.0 for success, -1.0 for failure
+                    if format_result.score < 1.0:
                         format_valid = False
                         format_failure_reason = format_result.info
                         break

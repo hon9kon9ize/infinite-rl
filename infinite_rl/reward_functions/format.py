@@ -71,11 +71,29 @@ class FormatRewardFunction(RewardFunction):
         # Check if there's content before the opening tag (format violation)
         tag_start_index = task.model_output.find(tag_start)
         content_before_tag = task.model_output[:tag_start_index].strip()
-        if content_before_tag:
-            return RewardFunctionScore(
-                score=-1.0,
-                info=f"Content found before <{self.target_tag}> opening tag. Tags must appear at the start.",
-            )
+
+        # For think tag: must be at the very start (no content before)
+        # For answer tag: allow think tag before it, but no other content
+        if self.target_tag == self.think_tag:
+            # Think tag must be first - no content allowed before it
+            if content_before_tag:
+                return RewardFunctionScore(
+                    score=-1.0,
+                    info=f"Content found before <{self.target_tag}> opening tag. Tags must appear at the start.",
+                )
+        elif self.target_tag == self.answer_tag:
+            # Answer tag can have think tag before it, but check for other content
+            # Remove the think tag section if present
+            if content_before_tag:
+                think_tag_pattern = f"<{self.think_tag}>.*?</{self.think_tag}>"
+                content_without_think = re.sub(
+                    think_tag_pattern, "", content_before_tag, flags=re.DOTALL
+                ).strip()
+                if content_without_think:
+                    return RewardFunctionScore(
+                        score=-1.0,
+                        info=f"Content found before <{self.target_tag}> opening tag (excluding valid <{self.think_tag}> section).",
+                    )
 
         raw_content = "\n".join(matches)
 

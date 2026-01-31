@@ -408,7 +408,9 @@ class TestCurriculumLearning(unittest.TestCase):
             mock_result.info = ""
             mock_compute.return_value = mock_result
 
-            reward = cl.compute_reward("math_test", "<answer>4</answer>")
+            # Provide valid format with both tags to pass format gate
+            response = "<think>2 + 2 = 4</think>\n\n<answer>4</answer>"
+            reward = cl.compute_reward("math_test", response)
 
             self.assertGreaterEqual(reward, 0.5)
             # Check that task has is_correct set to True
@@ -669,8 +671,12 @@ class TestCurriculumLearning(unittest.TestCase):
         )
         cl.session.add_task(task)
 
+        # Provide valid format with both tags so we reach the task type check
+        # (format gate runs before task type validation)
         with self.assertRaises(ValueError):
-            cl.compute_reward("invalid_task", "answer")
+            cl.compute_reward(
+                "invalid_task", "<think>test</think>\n\n<answer>answer</answer>"
+            )
 
     def test_no_tasks_available(self):
         """Test behavior when no tasks are available."""
@@ -793,12 +799,13 @@ class TestCurriculumLearning(unittest.TestCase):
                     }
                 }
 
-                response = "<answer>4</answer>"
+                # Provide valid format with both tags to pass format gate
+                response = "<think>2 + 2 = 4</think>\n\n<answer>4</answer>"
                 reward = cl.compute_reward("math_test", response)
 
-                # Combined score should be 70% primary + 30% auxiliary average
-                # 0.7 * 1.0 + 0.3 * 0.8 = 0.7 + 0.24 = 0.94
-                self.assertAlmostEqual(reward, 0.94, places=2)
+                # Combined score should be 80% primary + 20% auxiliary average (new default)
+                # 0.8 * 1.0 + 0.2 * 0.8 = 0.8 + 0.16 = 0.96
+                self.assertAlmostEqual(reward, 0.96, places=2)
 
     def test_auxiliary_rewards_affect_curriculum_progression(self):
         """Test that combined rewards (primary + auxiliary) affect curriculum level."""

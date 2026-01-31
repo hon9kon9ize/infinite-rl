@@ -32,7 +32,7 @@ class CurriculumLearning:
         timeout: int = 10,
         answer_tag: str = "answer",
         think_tag: str = "think",
-        aux_weight: float = 0.3,
+        aux_weight: float = 0.2,
         use_lang_consistency: bool = False,
         use_repetition: bool = False,
         use_format: bool = True,
@@ -45,7 +45,7 @@ class CurriculumLearning:
         length_kwargs: Optional[Dict[str, Any]] = None,
         log_file: Optional[str] = None,
         window_size: int = 50,
-        success_rate_threshold: float = 0.8,
+        success_rate_threshold: float = 0.7,
         variance_threshold: float = 0.15,
         demote_threshold: float = 0.4,
         warmup_step: int = 32,
@@ -60,7 +60,7 @@ class CurriculumLearning:
             timeout: Timeout for reward function execution
             answer_tag: Tag used to extract answers from model responses
             think_tag: Tag used to extract reasoning from model responses
-            aux_weight: Weight for auxiliary rewards in combined score (0-1)
+            aux_weight: Weight for auxiliary rewards in combined score (0-1, default: 0.2)
             use_lang_consistency: Enable language consistency auxiliary reward
             use_repetition: Enable repetition penalty auxiliary reward
             use_format: Enable format validation auxiliary reward
@@ -73,7 +73,7 @@ class CurriculumLearning:
             length_kwargs: Keyword arguments for LengthRewardFunction
             log_file: Path to the logging file (JSON Lines format). If None, defaults to 'curriculum_log.jsonl' in the module directory.
             window_size: Size of the sliding window for success rate tracking (default: 50)
-            success_rate_threshold: Required success rate for difficulty increase (default: 0.8 = 80%)
+            success_rate_threshold: Required success rate for difficulty increase (default: 0.7 = 70%)
             variance_threshold: Maximum variance for success rate stability (default: 0.15)
             demote_threshold: Success rate threshold for difficulty decrease (default: 0.4 = 40%)
             warmup_step: Number of initial steps to only use level 0 tasks (default: 32)
@@ -485,69 +485,127 @@ class CurriculumLearning:
         # Store model_output in task for reward functions
         task.model_output = model_output
 
-        # Get appropriate reward function
-        if task_type not in self.reward_functions:
-            raise ValueError(f"Unknown task type: {task_type}")
+        # FORMAT AS HARD GATE: Check format validity before evaluating primary task
+        # If format is invalid, return 0 immediately without computing primary reward
+        format_valid = True
+        format_failure_reason = ""
 
-        reward_fn = self.reward_functions[task_type]
+        if self.use_format:
+            # Check both think and answer format
+            for format_name in ["format_think", "format_answer"]:
+                if format_name in self.aux_reward_functions:
+                    format_fn = self.aux_reward_functions[format_name]
+                    format_result = format_fn.compute_reward(task, is_correct=False)
+                    if format_result.score == 0:
+                        format_valid = False
+                        format_failure_reason = format_result.info
+                        break
 
-        # Compute primary reward
-        result = reward_fn.compute_reward(task)
-        score = result.score
-        primary_info = result.info
-
-        # Create primary reward
-        primary_reward = RewardFunctionScore(
-            score=score,
-            reward_function_name="primary",
-            info=primary_info or "",
-        )
-        task_rewards = [primary_reward]
-
-        # Compute auxiliary rewards and combine them
-        is_correct = score == 1  # Threshold for success
-
-        # If primary score is 0, compute aux scores but cap positive ones at 0
-        # This preserves negative penalties (like lang_consistency = -1.0)
-        # while preventing positive auxiliary rewards when the main task failed
-        if score == 0:
-            aux_score_dict_raw = self.get_aux_reward_scores(
-                model_output, task, is_correct=is_correct
+        # If format is invalid, skip primary evaluation and return 0
+        if not format_valid:
+            primary_reward = RewardFunctionScore(
+                score=0.0,
+                reward_function_name="primary",
+                info=f"Format validation failed: {format_failure_reason}",
             )
-            aux_score_dict = {
-                name: {
-                    "score": min(0.0, data["score"]),
-                    "info": (
-                        data["info"]
-                        if data["score"] < 0
-                        else "Primary task failed, positive auxiliary reward capped at 0"
-                    ),
-                }
-                for name, data in aux_score_dict_raw.items()
-            }
-        else:
+            task_rewards = [primary_reward]
+
+            # Still compute aux scores for logging, but all will be penalties
             aux_score_dict = self.get_aux_reward_scores(
-                model_output, task, is_correct=is_correct
+                model_output, task, is_correct=False
             )
 
-        # Add auxiliary rewards to task_rewards
-        for name, data in aux_score_dict.items():
-            aux_reward = RewardFunctionScore(
-                score=data["score"],
-                reward_function_name=name,
-                info=data["info"] or "",
-            )
-            task_rewards.append(aux_reward)
+            # Add auxiliary rewards to task_rewards
+            for name, data in aux_score_dict.items():
+                aux_reward = RewardFunctionScore(
+                    score=min(0.0, data["score"]),  # Cap at 0
+                    reward_function_name=name,
+                    info=data["info"] or "",
+                )
+                task_rewards.append(aux_reward)
 
-        aux_scores = [(name, data["score"]) for name, data in aux_score_dict.items()]
+            # Clip aux average to prevent extreme penalties
+            aux_scores = [
+                (name, min(0.0, data["score"])) for name, data in aux_score_dict.items()
+            ]
+            if aux_scores:
+                aux_avg = sum(s for _, s in aux_scores) / len(aux_scores)
+                aux_avg = max(-1.0, aux_avg)  # Clip to [-1.0, 0.0]
+                combined_score = self.aux_weight * aux_avg  # Primary is 0
+            else:
+                combined_score = 0.0
 
-        # Combine scores (primary + auxiliary)
-        if aux_scores:
-            aux_avg = sum(s for _, s in aux_scores) / len(aux_scores)
-            primary_weight = 1.0 - self.aux_weight
-            combined_score = primary_weight * score + self.aux_weight * aux_avg
+            # Skip to end of reward computation
+            score = 0.0
+            is_correct = False
         else:
-            combined_score = score
+            # Get appropriate reward function
+            if task_type not in self.reward_functions:
+                raise ValueError(f"Unknown task type: {task_type}")
+
+            reward_fn = self.reward_functions[task_type]
+
+            # Compute primary reward
+            result = reward_fn.compute_reward(task)
+            score = result.score
+            primary_info = result.info
+
+            # Create primary reward
+            primary_reward = RewardFunctionScore(
+                score=score,
+                reward_function_name="primary",
+                info=primary_info or "",
+            )
+            task_rewards = [primary_reward]
+
+            # Compute auxiliary rewards and combine them
+            is_correct = score == 1  # Threshold for success
+
+            # If primary score is 0, compute aux scores but cap positive ones at 0
+            # This preserves negative penalties (like lang_consistency = -1.0)
+            # while preventing positive auxiliary rewards when the main task failed
+            if score == 0:
+                aux_score_dict_raw = self.get_aux_reward_scores(
+                    model_output, task, is_correct=is_correct
+                )
+                aux_score_dict = {
+                    name: {
+                        "score": min(0.0, data["score"]),
+                        "info": (
+                            data["info"]
+                            if data["score"] < 0
+                            else "Primary task failed, positive auxiliary reward capped at 0"
+                        ),
+                    }
+                    for name, data in aux_score_dict_raw.items()
+                }
+            else:
+                aux_score_dict = self.get_aux_reward_scores(
+                    model_output, task, is_correct=is_correct
+                )
+
+            # Add auxiliary rewards to task_rewards
+            for name, data in aux_score_dict.items():
+                aux_reward = RewardFunctionScore(
+                    score=data["score"],
+                    reward_function_name=name,
+                    info=data["info"] or "",
+                )
+                task_rewards.append(aux_reward)
+
+            aux_scores = [
+                (name, data["score"]) for name, data in aux_score_dict.items()
+            ]
+
+            # Combine scores (primary + auxiliary) with clipping to prevent extreme fluctuations
+            if aux_scores:
+                aux_avg = sum(s for _, s in aux_scores) / len(aux_scores)
+                # Clip auxiliary average to [-1.0, 1.0] to prevent extreme penalties/bonuses
+                aux_avg = max(-1.0, min(1.0, aux_avg))
+                primary_weight = 1.0 - self.aux_weight
+                combined_score = primary_weight * score + self.aux_weight * aux_avg
+            else:
+                combined_score = score
 
         # GRPO batch accumulation: collect scores until group is complete
         # Extract base task_id (remove instance counter)

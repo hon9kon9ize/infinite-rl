@@ -28,7 +28,6 @@ from transformers import (
     AutoTokenizer,
     TrainerCallback,
 )
-from datasets import Dataset
 from trl import GRPOTrainer, GRPOConfig
 from peft import LoraConfig, get_peft_model, TaskType
 
@@ -90,8 +89,8 @@ class InfiniteRLConfig:
 
     # Curriculum parameters
     window_size: int = 50
-    success_rate_threshold: float = 0.8
-    variance_threshold: float = 0.05
+    success_rate_threshold: float = 0.7
+    variance_threshold: float = 0.15
     demote_threshold: float = 0.4
     warmup_step: int = 32
     level_change_cooldown: int = 5
@@ -109,7 +108,7 @@ class InfiniteRLConfig:
     use_length: bool = True
     use_lang_consistency: bool = True
     use_repetition: bool = True
-    aux_weight: float = 0.3
+    aux_weight: float = 0.2
 
     # Output
     log_file: Optional[str] = "curriculum_learning_log.jsonl"
@@ -367,7 +366,7 @@ def setup_training_args(
         optim="paged_adamw_8bit",
         gradient_checkpointing=True,
         logging_steps=10,
-        save_steps=100,
+        save_steps=200,
         save_strategy="steps",
         eval_strategy="no",
         log_completions=True,
@@ -509,13 +508,13 @@ def main():
     parser.add_argument(
         "--success_rate_threshold",
         type=float,
-        default=0.8,
+        default=0.7,
         help="Success rate threshold for advancing difficulty",
     )
     parser.add_argument(
         "--variance_threshold",
         type=float,
-        default=0.05,
+        default=0.15,
         help="Variance threshold for stability check",
     )
     parser.add_argument(

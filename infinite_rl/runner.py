@@ -15,7 +15,9 @@ gen_pkg = importlib.import_module("infinite_rl.python_puzzles.generators")
 for module_name in dir(gen_pkg):
     if not module_name.startswith("_"):
         try:
-            mod = importlib.import_module(f"python_puzzles.generators.{module_name}")
+            mod = importlib.import_module(
+                f"infinite_rl.python_puzzles.generators.{module_name}"
+            )
             for name, obj in inspect.getmembers(mod):
                 if (
                     inspect.isclass(obj)

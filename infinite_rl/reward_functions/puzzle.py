@@ -3,7 +3,7 @@ import re
 import subprocess
 import os
 import sys
-from typing import Union, TYPE_CHECKING
+from typing import TYPE_CHECKING
 from .reward_function import RewardFunction, RewardFunctionScore
 
 if TYPE_CHECKING:

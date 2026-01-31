@@ -21,6 +21,40 @@ class Executor:
         self._modules = {
             "javascript": self._load_wasm_module("puzzle_js.wasm"),
         }
+        # Store wasmtime module to prevent it from being garbage collected before cleanup
+        self._wasmtime = wasmtime
+
+    def close(self):
+        """Explicitly close resources to avoid cleanup issues."""
+        try:
+            # Clear modules first
+            if hasattr(self, "_modules"):
+                self._modules.clear()
+            # Then clear linker and engine
+            if hasattr(self, "linker"):
+                del self.linker
+            if hasattr(self, "engine"):
+                del self.engine
+        except Exception:
+            pass
+
+    def __del__(self):
+        """Clean up wasmtime resources to avoid errors during interpreter shutdown."""
+        try:
+            self.close()
+        except Exception:
+            # Suppress all errors during shutdown - wasmtime cleanup in Python 3.13
+            # can fail when modules are already being torn down
+            pass
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        self.close()
+        return False
 
     def _load_wasm_module(self, filename):
         import wasmtime

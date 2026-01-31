@@ -1,12 +1,12 @@
-"""Unit tests for DynamicCurriculumDataset GRPO batching behavior."""
+"""Unit tests for CurriculumDatasetLogic GRPO batching behavior."""
 
 import unittest
-from infinite_rl.dynamic_dataset import DynamicCurriculumDataset
+from infinite_rl.dynamic_dataset import CurriculumDatasetLogic
 from infinite_rl.curriculum import CurriculumLearning, Task
 
 
-class TestDynamicCurriculumDataset(unittest.TestCase):
-    """Test DynamicCurriculumDataset for proper GRPO batching."""
+class TestCurriculumDatasetLogic(unittest.TestCase):
+    """Test CurriculumDatasetLogic for proper GRPO batching."""
 
     def setUp(self):
         """Set up test fixtures."""
@@ -19,7 +19,7 @@ class TestDynamicCurriculumDataset(unittest.TestCase):
             use_length=False,
             use_lang_consistency=False,
         )
-        self.dataset = DynamicCurriculumDataset(
+        self.dataset = CurriculumDatasetLogic(
             curriculum=self.curriculum, num_samples=100
         )
 
@@ -173,7 +173,7 @@ class TestDynamicCurriculumDataset(unittest.TestCase):
             use_length=False,
             use_lang_consistency=False,
         )
-        dataset = DynamicCurriculumDataset(curriculum=curriculum, num_samples=100)
+        dataset = CurriculumDatasetLogic(curriculum=curriculum, num_samples=100)
 
         # Indices 0-1 should get the same task
         task0 = dataset[0]["task_metadata"]["task_id"]

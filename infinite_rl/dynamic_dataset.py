@@ -8,10 +8,9 @@ completions share the same prompt.
 
 from typing import Any, Dict
 import json
-import torch.utils.data
 
 
-class DynamicCurriculumDataset(torch.utils.data.Dataset):
+class CurriculumDatasetLogic:
     """Dynamic dataset that generates prompts on-demand from curriculum.
 
     This ensures each sample reflects the current curriculum level without
@@ -100,3 +99,20 @@ class DynamicCurriculumDataset(torch.utils.data.Dataset):
             "prompt": prompt,
             "task_metadata": task_metadata,
         }
+
+
+def __getattr__(name: str):
+    if name == "DynamicCurriculumDataset":
+        try:
+            import torch.utils.data
+
+            base = torch.utils.data.Dataset
+        except ImportError:
+            # Scenario 2: CI / Unit Testing without PyTorch
+            # We use 'object' so the code doesn't crash on import
+            base = object
+
+        # Create the class dynamically
+        return type("DynamicCurriculumDataset", (base, CurriculumDatasetLogic), {})
+
+    raise AttributeError(f"module {__name__} has no attribute {name}")

@@ -166,6 +166,13 @@ jobs:
           print('✓ All runtime assets verified successfully!')
           PY
 
+      - name: Remove local source to force using pip-installed package
+        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
+        run: |
+          echo "Removing local infinite_rl source directory to ensure tests use pip-installed version..."
+          rm -rf infinite_rl/
+          ls -la
+
       - name: Run unit tests with coverage
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         run: |

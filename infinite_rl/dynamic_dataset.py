@@ -6,33 +6,15 @@ curriculum learning system, ensuring proper GRPO batching where multiple
 completions share the same prompt.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, TYPE_CHECKING
 import json
+import torch.utils.data
+
+if TYPE_CHECKING:
+    from .curriculum import CurriculumLearning
 
 
-class MockDataset:
-    """Minimal shim to satisfy inheritance without Torch."""
-
-    def __getitem__(self, index):
-        """To be overridden by subclass."""
-        raise NotImplementedError
-
-    def __len__(self):
-        """To be overridden by subclass."""
-        raise NotImplementedError
-
-
-# Determine base class at module import time
-try:
-    import torch.utils.data
-
-    _BaseDataset = torch.utils.data.Dataset
-except (ImportError, ModuleNotFoundError):
-    # CI/Environment without PyTorch - use MockDataset
-    _BaseDataset = MockDataset
-
-
-class DynamicCurriculumDataset(_BaseDataset):
+class DynamicCurriculumDataset(torch.utils.data.Dataset):
     """Dynamic dataset that generates prompts on-demand from curriculum.
 
     This ensures each sample reflects the current curriculum level without

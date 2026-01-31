@@ -105,6 +105,42 @@ jobs:
           pip install git+https://github.com/${{ github.repository }}@runtimes-${{ needs.version-check.outputs.version }}
           pip install pytest pytest-cov pytest-html
 
+      - name: Verify runtime assets were downloaded
+        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
+        run: |
+          python - <<'PY'
+          import infinite_rl
+          import os
+
+          runtimes_dir = os.path.join(os.path.dirname(infinite_rl.__file__), 'runtimes')
+          print(f'Checking runtimes directory: {runtimes_dir}')
+
+          if not os.path.exists(runtimes_dir):
+              print('ERROR: Runtimes directory does not exist!')
+              exit(1)
+
+          contents = sorted(os.listdir(runtimes_dir))
+          print(f'Contents: {contents}')
+
+          required_files = ['math.json', 'puzzle_js.wasm', 'puzzles.json']
+          missing_files = [f for f in required_files if f not in contents]
+
+          if missing_files:
+              print(f'ERROR: Missing required runtime files: {missing_files}')
+              exit(1)
+
+          # Verify files are not empty
+          for filename in required_files:
+              filepath = os.path.join(runtimes_dir, filename)
+              size = os.path.getsize(filepath)
+              print(f'  {filename}: {size:,} bytes')
+              if size == 0:
+                  print(f'ERROR: {filename} is empty!')
+                  exit(1)
+
+          print('✓ All runtime assets verified successfully!')
+          PY
+
       - name: Run unit tests with coverage
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         run: |

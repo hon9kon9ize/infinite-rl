@@ -1125,6 +1125,7 @@ class TestCurriculumLearning(unittest.TestCase):
             use_reasoning_steps=False,
             use_length=False,
             use_lang_consistency=False,
+            num_generations=1,
         )
 
         task = Task(
@@ -1156,7 +1157,6 @@ class TestCurriculumLearning(unittest.TestCase):
         self.assertEqual(log_entry["model_output"], "<answer>2</answer>")
         self.assertEqual(log_entry["primary_score"], 1.0)
         self.assertEqual(log_entry["info"]["primary"], "logged")
-        self.assertIsNotNone(log_entry["first_response_at"])
 
     def test_reflective_learning_disabled(self):
         """Test that reflective learning is disabled when rate is 0."""

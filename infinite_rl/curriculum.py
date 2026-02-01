@@ -807,9 +807,58 @@ class CurriculumLearning:
             # Check if we should advance/demote level
             self._update_level()
 
+            # Log evaluation if configured (only when batch is complete)
+            if self.log_file is not None:
+                log_entry = task.to_dict()
+                log_entry["timestamp"] = datetime.datetime.now().isoformat()
+                log_entry["primary_score"] = primary_reward.score
+                log_entry["aux_scores"] = {
+                    name: data["score"] for name, data in aux_score_dict.items()
+                }
+                log_entry["combined_score"] = combined_score
+                log_entry["info"] = {
+                    "primary": primary_reward.info,
+                    **{
+                        f"aux_{name}": data["info"]
+                        for name, data in aux_score_dict.items()
+                    },
+                }
+                # Add GRPO batch information
+                log_entry["grpo_batch_size"] = len(primary_scores)
+                log_entry["grpo_primary_scores"] = primary_scores
+                log_entry["grpo_combined_scores"] = group_scores
+                with open(self.log_file, "a", encoding="utf-8") as f:
+                    json.dump(log_entry, f, ensure_ascii=False)
+                    f.write("\n")
+
             # Clean up completed batch
             del self.grpo_batch_scores[base_task_id]
             del self.grpo_batch_primary_scores[base_task_id]
+        elif self.num_generations == 1:
+            # Single evaluation mode (non-GRPO): log immediately
+            self._track_success_group(task.level, [combined_score], [score])
+            self.global_step += 1
+            self._update_level()
+
+            # Log evaluation if configured
+            if self.log_file is not None:
+                log_entry = task.to_dict()
+                log_entry["timestamp"] = datetime.datetime.now().isoformat()
+                log_entry["primary_score"] = primary_reward.score
+                log_entry["aux_scores"] = {
+                    name: data["score"] for name, data in aux_score_dict.items()
+                }
+                log_entry["combined_score"] = combined_score
+                log_entry["info"] = {
+                    "primary": primary_reward.info,
+                    **{
+                        f"aux_{name}": data["info"]
+                        for name, data in aux_score_dict.items()
+                    },
+                }
+                with open(self.log_file, "a", encoding="utf-8") as f:
+                    json.dump(log_entry, f, ensure_ascii=False)
+                    f.write("\n")
         elif len(self.grpo_batch_scores[base_task_id]) > self.num_generations:
             # Safety: If we somehow got MORE than expected, process anyway
             print(
@@ -823,6 +872,31 @@ class CurriculumLearning:
             self._track_success_group(task.level, group_scores, primary_scores)
             self.global_step += 1
             self._update_level()
+
+            # Log evaluation if configured (only when batch is complete)
+            if self.log_file is not None:
+                log_entry = task.to_dict()
+                log_entry["timestamp"] = datetime.datetime.now().isoformat()
+                log_entry["primary_score"] = primary_reward.score
+                log_entry["aux_scores"] = {
+                    name: data["score"] for name, data in aux_score_dict.items()
+                }
+                log_entry["combined_score"] = combined_score
+                log_entry["info"] = {
+                    "primary": primary_reward.info,
+                    **{
+                        f"aux_{name}": data["info"]
+                        for name, data in aux_score_dict.items()
+                    },
+                }
+                # Add GRPO batch information
+                log_entry["grpo_batch_size"] = len(primary_scores)
+                log_entry["grpo_primary_scores"] = primary_scores
+                log_entry["grpo_combined_scores"] = group_scores
+                with open(self.log_file, "a", encoding="utf-8") as f:
+                    json.dump(log_entry, f, ensure_ascii=False)
+                    f.write("\n")
+
             del self.grpo_batch_scores[base_task_id]
             del self.grpo_batch_primary_scores[base_task_id]
         else:
@@ -846,25 +920,6 @@ class CurriculumLearning:
 
         # Save rewards to session
         self.session.set_reward(task_id, task_rewards, model_output=model_output)
-
-        # Log evaluation if configured
-        if self.log_file is not None:
-            log_entry = task.to_dict()
-            log_entry["timestamp"] = datetime.datetime.now().isoformat()
-            log_entry["primary_score"] = primary_reward.score
-            log_entry["aux_scores"] = {
-                name: data["score"] for name, data in aux_score_dict.items()
-            }
-            log_entry["combined_score"] = combined_score
-            log_entry["info"] = {
-                "primary": primary_reward.info,
-                **{
-                    f"aux_{name}": data["info"] for name, data in aux_score_dict.items()
-                },
-            }
-            with open(self.log_file, "a", encoding="utf-8") as f:
-                json.dump(log_entry, f, ensure_ascii=False)
-                f.write("\n")
 
         return combined_score
 

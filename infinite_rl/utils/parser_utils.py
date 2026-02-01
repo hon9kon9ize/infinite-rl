@@ -48,7 +48,7 @@ def extract_tag(text: str, tag: Optional[str] = "answer", exclude: bool = False)
     else:
         # Return the content inside the tags
         # Find all occurrences of the tag
-        pattern = f"{re.escape(tag_start)}(.*?){re.escape(tag_end)}"
+        pattern = f"{tag_start}(.*?){tag_end}"
         matches = re.findall(pattern, text, re.DOTALL)
 
         if matches:

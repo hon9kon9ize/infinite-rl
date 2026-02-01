@@ -510,6 +510,12 @@ def main():
         help="Variance threshold for stability check",
     )
     parser.add_argument(
+        "--demote_threshold",
+        type=float,
+        default=0.4,
+        help="Success rate threshold for demoting difficulty (demote if success_rate < demote_threshold)",
+    )
+    parser.add_argument(
         "--log_curriculum_steps",
         type=int,
         default=10,
@@ -648,6 +654,7 @@ def main():
         window_size=args.window_size,
         success_rate_threshold=args.success_rate_threshold,
         variance_threshold=args.variance_threshold,
+        demote_threshold=args.demote_threshold,
         num_generations=args.num_generations,
         log_file=str(output_dir / "curriculum_learning_log.jsonl"),
     )

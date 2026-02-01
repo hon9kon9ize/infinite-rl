@@ -9,6 +9,7 @@ from . import basic
 from . import chess
 from . import compression
 from . import conways_game_of_life
+from . import easy
 from . import games
 from . import graphs
 from . import ICPC

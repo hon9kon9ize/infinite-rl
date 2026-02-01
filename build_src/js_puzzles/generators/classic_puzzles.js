@@ -39,6 +39,11 @@ export class TowersOfHanoi extends PuzzleGenerator {
 		}
 		return helper(8, 0, 2);
 	}
+
+	getExample () {
+		// No input parameters needed
+		return {};
+	}
 }
 
 export class TowersOfHanoiArbitrary extends PuzzleGenerator {
@@ -476,9 +481,8 @@ export class AllPandigitalSquares extends PuzzleGenerator {
 	}
 
 	getExample () {
-		// Return a small example, but since it's all or nothing, perhaps return empty or a subset
-		// But for testing, return the full solution
-		return { nums: AllPandigitalSquares.sol() };
+		// This puzzle requires finding all 174 pandigital squares - no input parameters
+		return {};
 	}
 }
 

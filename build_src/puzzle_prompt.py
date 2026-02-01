@@ -27,6 +27,65 @@ js_generators_dir = project_root / "build_src" / "js_puzzles" / "generators"
 python_generators_dir = project_root / "infinite_rl" / "python_puzzles" / "generators"
 
 
+def _extract_balanced_value(text):
+    """
+    Extract a balanced JavaScript value (object or array) from text.
+
+    Handles nested braces and brackets properly.
+    Returns the extracted value string, or None if invalid.
+    """
+    text = text.lstrip()
+    if not text:
+        return None
+
+    # Determine if it's an object {...} or array [...]
+    if text[0] == "{":
+        open_char, close_char = "{", "}"
+    elif text[0] == "[":
+        open_char, close_char = "[", "]"
+    else:
+        # Try to match a simple value (number, string, etc.)
+        # Match until semicolon or closing brace
+        simple_match = re.match(r"[^;}\n]+", text)
+        if simple_match:
+            return simple_match.group(0).rstrip()
+        return None
+
+    # Balance braces/brackets
+    depth = 0
+    in_string = False
+    string_char = None
+    i = 0
+
+    for i, char in enumerate(text):
+        # Handle string literals
+        if char in ('"', "'") and (i == 0 or text[i - 1] != "\\"):
+            if in_string and string_char == char:
+                in_string = False
+                string_char = None
+            elif not in_string:
+                in_string = True
+                string_char = char
+            continue
+
+        if in_string:
+            continue
+
+        # Track nesting depth
+        if char in ("{", "["):
+            if char == open_char:
+                depth += 1
+        elif char in ("}", "]"):
+            if char == close_char:
+                depth -= 1
+                if depth == 0:
+                    # Found the closing bracket/brace
+                    return text[: i + 1].strip()
+
+    # If we didn't find a balanced expression, return None
+    return None
+
+
 def extract_js_puzzle_info(file_path, puzzle_name):
     """Extract puzzle information from a JavaScript generator file."""
     try:
@@ -72,37 +131,72 @@ def extract_js_puzzle_info(file_path, puzzle_name):
     sol = sol_match.group(0).replace("static sol", "function sol") if sol_match else ""
 
     # Extract getExample and update sol parameters
-    example_match = re.search(
-        r"getExample \(\) \{\s*return (\{[^}]*\}|\[[^\]]*\]);?\s*\}", class_content
-    )
-    if example_match and sol:
-        try:
-            example_obj = eval("(" + example_match[1] + ")")
-            if isinstance(example_obj, dict):
-                params = ", ".join(f"{k} = {repr(v)}" for k, v in example_obj.items())
-            elif isinstance(example_obj, list):
-                # For lists, find the first parameter name from sat function
-                sat_params_match = re.search(r"static sat \(([^)]*)\)", class_content)
-                if sat_params_match:
-                    param_names = [
-                        p.strip().split("=")[0].strip()
-                        for p in sat_params_match[1].split(",")
-                        if p.strip()
-                    ]
-                    if param_names:
-                        params = f"{param_names[0]} = {repr(example_obj)}"
-                    else:
-                        params = ""
-                else:
-                    params = ""
-            else:
-                params = ""
-            if params:
-                sol = f"function sol({params})"
-        except:
-            pass  # Keep original sol if parsing fails
+    example_inputs = {}
+    # Find getExample() method and extract the returned value
+    getex_match = re.search(r"getExample\s*\(\)\s*\{", class_content)
+    if getex_match:
+        # Find the return statement within the method
+        start_pos = getex_match.end()
+        return_match = re.search(r"return\s+", class_content[start_pos:])
+        if return_match:
+            # Start from after 'return '
+            return_start = start_pos + return_match.end()
 
-    return {"docstring": docstring, "sat": sat, "sol": sol, "ans_type": None}
+            # Extract the value by balancing braces/brackets
+            value_str = _extract_balanced_value(class_content[return_start:])
+
+            if value_str:
+                try:
+                    # Convert JavaScript object syntax to valid JSON
+                    js_obj_str = value_str
+                    # Add quotes around unquoted object keys: { key: value } -> { "key": value }
+                    js_obj_str = re.sub(r"(\w+):", r'"\1":', js_obj_str)
+                    # Replace single quotes with double quotes
+                    js_obj_str = js_obj_str.replace("'", '"')
+
+                    # Parse as JSON
+                    import json
+
+                    example_obj = json.loads(js_obj_str)
+
+                    if isinstance(example_obj, dict):
+                        example_inputs = example_obj
+                        if sol:
+                            params = ", ".join(
+                                f"{k} = {repr(v)}" for k, v in example_obj.items()
+                            )
+                            if params:
+                                sol = f"function sol({params})"
+                    elif isinstance(example_obj, list):
+                        # For lists, find the first parameter name from sat function
+                        sat_params_match = re.search(
+                            r"static sat \(([^)]*)\)", class_content
+                        )
+                        if sat_params_match:
+                            param_names = [
+                                p.strip().split("=")[0].strip()
+                                for p in sat_params_match[1].split(",")
+                                if p.strip()
+                            ]
+                            if (
+                                param_names and len(param_names) > 1
+                            ):  # Skip 'answer' param
+                                example_inputs = {param_names[1]: example_obj}
+                                if sol:
+                                    params = f"{param_names[1]} = {repr(example_obj)}"
+                                    if params:
+                                        sol = f"function sol({params})"
+                except Exception as e:
+                    # Silently fail - keep empty example_inputs
+                    pass
+
+    return {
+        "docstring": docstring,
+        "sat": sat,
+        "sol": sol,
+        "ans_type": None,
+        "example": example_inputs,
+    }
 
 
 def extract_python_puzzle_info(file_path, puzzle_name):
@@ -133,8 +227,12 @@ def extract_python_puzzle_info(file_path, puzzle_name):
             "sol": sol,
             "ans_type": ans_type,
         }
+    except AttributeError:
+        # Expected when puzzle doesn't exist in this module
+        return None
     except Exception as e:
-        print(f"Error extracting info for {puzzle_name}: {e}")
+        # Only print unexpected errors
+        print(f"Unexpected error extracting {puzzle_name} from {file_path.name}: {e}")
         return None
 
 
@@ -251,6 +349,7 @@ def generate_puzzle_assets(output_dir="assets"):
                             "sol": info["sol"],
                             "ans_type": ans_type,
                             "rating": ratings.get(puzzle_name, None),
+                            "example": info.get("example", {}),
                         }
                         print(f"Processed {language}/{puzzle_name}")
                         break

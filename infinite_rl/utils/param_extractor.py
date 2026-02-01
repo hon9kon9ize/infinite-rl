@@ -359,8 +359,14 @@ def extract_puzzle_inputs(puzzle_info: Dict[str, Any], language: str) -> Dict[st
         language: Programming language ('python' or 'javascript')
 
     Returns:
-        Dictionary of parameter names to their default values
+        Dictionary of parameter names to their default values.
+        Empty dict {} is valid for puzzles where sol() takes no parameters.
     """
+    # First, try to get pre-generated example inputs from puzzle_info
+    # Note: empty dict {} is a valid example (for puzzles with no input parameters)
+    if "example" in puzzle_info and puzzle_info["example"] is not None:
+        return puzzle_info["example"]
+
     if language.lower() == "python":
         # For Python, try to get from the puzzle class if available
         # Otherwise, parse from sat function signature string

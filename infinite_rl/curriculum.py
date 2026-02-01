@@ -372,13 +372,13 @@ class CurriculumLearning:
     def _apply_leaky_gate(self, format_valid: bool, primary_score: float) -> float:
         """Apply leaky gate strategy during warmup phase to solve cold start problem.
 
-        During warmup (steps 0 to warmup_step), allow partial rewards:
-        - Wrong Format (think or answer tag missing) + Wrong Answer: 0.0
+        During warmup (steps 0 to warmup_step), allow partial rewards BUT require both tags:
+        - Missing Both Tags (think or answer tag missing) + Any Answer: 0.0 (NO SHORTCUTS)
         - Both Tags Present + Wrong Answer: 0.1 (encourages proper XML formatting)
-        - Wrong Format (think or answer tag missing) + Right Answer: 0.2 (encourages task correctness)
         - Both Tags Present + Right Answer: 1.0 (perfect)
 
         Note: format_valid requires BOTH think and answer tags to be properly formatted.
+        Both tags are MANDATORY from the start - no partial credit for correctness alone.
 
         After warmup, enforce strict gates (both tags AND correctness required).
 
@@ -397,18 +397,17 @@ class CurriculumLearning:
             else:
                 return 0.0
 
-        # During warmup: leaky gate allows partial credit
+        # During warmup: leaky gate allows partial credit for format, but NO shortcuts
+        # Both tags are REQUIRED - missing tags = 0.0 regardless of correctness
         has_format = format_valid
         has_correctness = primary_score > 0.5
 
         if has_format and has_correctness:
             return 1.0  # Jackpot: both tags present AND correct answer
         elif has_format:
-            return 0.1  # Partial credit: at least both tags are present
-        elif has_correctness:
-            return 0.2  # Partial credit: at least got the answer right
+            return 0.1  # Partial credit: both tags present (even if answer wrong)
         else:
-            return 0.0  # Nothing correct
+            return 0.0  # NO SHORTCUTS: Missing tags = 0.0 (no credit for correctness alone)
 
     def _get_format_failure_tasks(self) -> List[Task]:
         """Get list of tasks that failed format validation.

@@ -2,11 +2,21 @@
 Unit tests for Leaky Gate strategy in curriculum learning.
 
 Tests the cold start solution that provides partial rewards during warmup
-to help the model learn when both format and correctness gates are strict.
+to help the model learn proper formatting when both format and correctness gates are strict.
+
+Key Policy: NO SHORTCUTS
+- Both think and answer tags are REQUIRED from the start
+- Missing tags = 0.0 reward, regardless of correctness
+- The model cannot shortcut by skipping formatting requirements
 
 Format Validation Requirement:
 - format_valid is True ONLY when BOTH think and answer tags are properly formatted
 - format_valid is False if either tag is missing or malformed
+
+Leaky Gate Rewards During Warmup:
+- Both tags + correct answer: 1.0 (perfect)
+- Both tags + wrong answer: 0.1 (partial credit for formatting)
+- Missing tags + any answer: 0.0 (NO SHORTCUTS, tags are mandatory)
 """
 
 import unittest
@@ -70,16 +80,16 @@ class TestLeakyGate(unittest.TestCase):
         )
 
     def test_leaky_gate_during_warmup_answer_only_no_tags(self):
-        """Test leaky gate returns 0.2 when answer correct but tags missing during warmup."""
+        """Test leaky gate returns 0.0 (NO SHORTCUTS) when answer correct but tags missing during warmup."""
         self.assertEqual(self.curriculum.global_step, 0)
         self.assertTrue(self.curriculum.is_warmup())
 
-        # Tags missing, but answer correct
+        # Tags missing, but answer correct - NO SHORTCUTS allowed
         score = self.curriculum._apply_leaky_gate(format_valid=False, primary_score=1.0)
         self.assertEqual(
             score,
-            0.2,
-            "Should return 0.2 when answer correct but tags missing during warmup",
+            0.0,
+            "Should return 0.0 (no shortcuts) when answer correct but tags missing during warmup",
         )
 
     def test_leaky_gate_during_warmup_both_wrong(self):
@@ -232,14 +242,14 @@ class TestLeakyGate(unittest.TestCase):
     @patch("infinite_rl.curriculum.CurriculumLearning.get_aux_reward_scores")
     @patch("infinite_rl.curriculum.CurriculumLearning._track_success_group")
     def test_compute_reward_leaky_gate_partial_credit(self, mock_track, mock_aux):
-        """Test that compute_reward gives partial credit during leaky gate."""
+        """Test that compute_reward enforces NO SHORTCUTS during leaky gate."""
         # Setup
         mock_aux.return_value = {}
         self.curriculum.grpo_batch_scores = {}
         self.curriculum.grpo_batch_primary_scores = {}
         self.task.model_output = "4"  # Missing XML tags
 
-        # During warmup: correct answer but bad format
+        # During warmup: correct answer but bad format = NO REWARD (no shortcuts)
         with patch.object(
             self.curriculum.aux_reward_functions["format_think"],
             "compute_reward",
@@ -259,8 +269,8 @@ class TestLeakyGate(unittest.TestCase):
                 )
                 self.assertEqual(
                     score,
-                    0.2,
-                    "Should give 0.2 partial credit for correct answer with bad format during warmup",
+                    0.0,
+                    "Should give 0.0 (no shortcuts) for correct answer with missing tags during warmup",
                 )
 
     def test_custom_warmup_step(self):

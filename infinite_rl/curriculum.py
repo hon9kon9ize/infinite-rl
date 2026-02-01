@@ -373,15 +373,17 @@ class CurriculumLearning:
         """Apply leaky gate strategy during warmup phase to solve cold start problem.
 
         During warmup (steps 0 to warmup_step), allow partial rewards:
-        - Wrong Format + Wrong Answer: 0.0
-        - Right Format + Wrong Answer: 0.1 (encourages proper XML formatting)
-        - Wrong Format + Right Answer: 0.2 (encourages task correctness)
-        - Right Format + Right Answer: 1.0 (perfect)
+        - Wrong Format (think or answer tag missing) + Wrong Answer: 0.0
+        - Both Tags Present + Wrong Answer: 0.1 (encourages proper XML formatting)
+        - Wrong Format (think or answer tag missing) + Right Answer: 0.2 (encourages task correctness)
+        - Both Tags Present + Right Answer: 1.0 (perfect)
 
-        After warmup, enforce strict gates (both must be correct).
+        Note: format_valid requires BOTH think and answer tags to be properly formatted.
+
+        After warmup, enforce strict gates (both tags AND correctness required).
 
         Args:
-            format_valid: Whether format validation passed
+            format_valid: Whether BOTH think and answer tags are valid (True only if both present)
             primary_score: Primary correctness score (0.0 or 1.0)
 
         Returns:
@@ -389,7 +391,7 @@ class CurriculumLearning:
         """
         # Only apply leaky gate during warmup phase
         if not self.is_warmup():
-            # After warmup: strict gate (must have both)
+            # After warmup: strict gate (must have both tags AND correct answer)
             if format_valid and primary_score > 0.5:
                 return primary_score
             else:
@@ -400,9 +402,9 @@ class CurriculumLearning:
         has_correctness = primary_score > 0.5
 
         if has_format and has_correctness:
-            return 1.0  # Jackpot: both correct
+            return 1.0  # Jackpot: both tags present AND correct answer
         elif has_format:
-            return 0.1  # Partial credit: at least got the format right
+            return 0.1  # Partial credit: at least both tags are present
         elif has_correctness:
             return 0.2  # Partial credit: at least got the answer right
         else:
@@ -591,21 +593,34 @@ class CurriculumLearning:
         task.model_output = model_output
 
         # FORMAT AS HARD GATE: Check format validity before evaluating primary task
-        # If format is invalid, return 0 immediately without computing primary reward
+        # format_valid is True only when BOTH think and answer tags are properly formatted
         format_valid = True
         format_failure_reason = ""
 
         if self.use_format:
-            # Check both think and answer format
-            for format_name in ["format_think", "format_answer"]:
-                if format_name in self.aux_reward_functions:
-                    format_fn = self.aux_reward_functions[format_name]
-                    format_result = format_fn.compute_reward(task, is_correct=False)
-                    # Format functions return 1.0 for success, -1.0 for failure
-                    if format_result.score < 1.0:
-                        format_valid = False
+            # Check both think and answer format - BOTH must pass for format_valid=True
+            format_think_valid = True
+            format_answer_valid = True
+
+            if "format_think" in self.aux_reward_functions:
+                format_fn = self.aux_reward_functions["format_think"]
+                format_result = format_fn.compute_reward(task, is_correct=False)
+                # Format functions return 1.0 for success, -1.0 for failure
+                if format_result.score < 1.0:
+                    format_think_valid = False
+                    format_failure_reason = format_result.info
+
+            if "format_answer" in self.aux_reward_functions:
+                format_fn = self.aux_reward_functions["format_answer"]
+                format_result = format_fn.compute_reward(task, is_correct=False)
+                # Format functions return 1.0 for success, -1.0 for failure
+                if format_result.score < 1.0:
+                    format_answer_valid = False
+                    if not format_failure_reason:
                         format_failure_reason = format_result.info
-                        break
+
+            # format_valid is True only if BOTH think and answer tags are valid
+            format_valid = format_think_valid and format_answer_valid
 
         # Get appropriate reward function and compute primary score
         if task_type not in self.reward_functions:

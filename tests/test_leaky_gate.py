@@ -3,6 +3,10 @@ Unit tests for Leaky Gate strategy in curriculum learning.
 
 Tests the cold start solution that provides partial rewards during warmup
 to help the model learn when both format and correctness gates are strict.
+
+Format Validation Requirement:
+- format_valid is True ONLY when BOTH think and answer tags are properly formatted
+- format_valid is False if either tag is missing or malformed
 """
 
 import unittest
@@ -38,108 +42,110 @@ class TestLeakyGate(unittest.TestCase):
         )
         self.curriculum.session.add_task(self.task)
 
-    def test_leaky_gate_during_warmup_both_correct(self):
-        """Test leaky gate returns 1.0 when both format and correctness are correct during warmup."""
+    def test_leaky_gate_during_warmup_both_tags_and_answer_correct(self):
+        """Test leaky gate returns 1.0 when both tags and answer are correct during warmup."""
         # During warmup (global_step < 32)
         self.assertEqual(self.curriculum.global_step, 0)
         self.assertTrue(self.curriculum.is_warmup())
 
-        # Both format valid and correct answer
+        # Both tags present and correct answer
         score = self.curriculum._apply_leaky_gate(format_valid=True, primary_score=1.0)
         self.assertEqual(
             score,
             1.0,
-            "Should return 1.0 when both format and answer are correct during warmup",
+            "Should return 1.0 when both tags present and answer correct during warmup",
         )
 
-    def test_leaky_gate_during_warmup_format_only(self):
-        """Test leaky gate returns 0.1 when format is correct but answer is wrong during warmup."""
+    def test_leaky_gate_during_warmup_both_tags_only(self):
+        """Test leaky gate returns 0.1 when both tags present but answer wrong during warmup."""
         self.assertEqual(self.curriculum.global_step, 0)
         self.assertTrue(self.curriculum.is_warmup())
 
-        # Format valid, but answer wrong
+        # Both tags present, but answer wrong
         score = self.curriculum._apply_leaky_gate(format_valid=True, primary_score=0.0)
         self.assertEqual(
             score,
             0.1,
-            "Should return 0.1 when format is correct but answer is wrong during warmup",
+            "Should return 0.1 when both tags present but answer wrong during warmup",
         )
 
-    def test_leaky_gate_during_warmup_answer_only(self):
-        """Test leaky gate returns 0.2 when answer is correct but format is wrong during warmup."""
+    def test_leaky_gate_during_warmup_answer_only_no_tags(self):
+        """Test leaky gate returns 0.2 when answer correct but tags missing during warmup."""
         self.assertEqual(self.curriculum.global_step, 0)
         self.assertTrue(self.curriculum.is_warmup())
 
-        # Format invalid, but answer correct
+        # Tags missing, but answer correct
         score = self.curriculum._apply_leaky_gate(format_valid=False, primary_score=1.0)
         self.assertEqual(
             score,
             0.2,
-            "Should return 0.2 when answer is correct but format is wrong during warmup",
+            "Should return 0.2 when answer correct but tags missing during warmup",
         )
 
     def test_leaky_gate_during_warmup_both_wrong(self):
-        """Test leaky gate returns 0.0 when both format and answer are wrong during warmup."""
+        """Test leaky gate returns 0.0 when both tags missing and answer wrong during warmup."""
         self.assertEqual(self.curriculum.global_step, 0)
         self.assertTrue(self.curriculum.is_warmup())
 
-        # Both format and answer wrong
+        # Both tags missing and answer wrong
         score = self.curriculum._apply_leaky_gate(format_valid=False, primary_score=0.0)
         self.assertEqual(
             score,
             0.0,
-            "Should return 0.0 when both format and answer are wrong during warmup",
+            "Should return 0.0 when tags missing and answer wrong during warmup",
         )
 
     def test_strict_gate_after_warmup_both_correct(self):
-        """Test strict gate returns primary score when both format and answer are correct after warmup."""
+        """Test strict gate returns score when both tags and answer correct after warmup."""
         # Simulate being past warmup phase
         self.curriculum.global_step = 32  # At or past warmup_step
         self.assertFalse(self.curriculum.is_warmup())
 
-        # Both format valid and correct answer
+        # Both tags present and correct answer
         score = self.curriculum._apply_leaky_gate(format_valid=True, primary_score=1.0)
         self.assertEqual(
             score,
             1.0,
-            "Should return 1.0 when both format and answer are correct after warmup",
+            "Should return 1.0 when both tags present and answer correct after warmup",
         )
 
     def test_strict_gate_after_warmup_format_only(self):
-        """Test strict gate returns 0.0 when format is correct but answer is wrong after warmup."""
+        """Test strict gate returns 0.0 when tags missing after warmup."""
         self.curriculum.global_step = 32
         self.assertFalse(self.curriculum.is_warmup())
 
-        # Format valid, but answer wrong
-        score = self.curriculum._apply_leaky_gate(format_valid=True, primary_score=0.0)
-        self.assertEqual(
-            score,
-            0.0,
-            "Should return 0.0 when answer is wrong after warmup (strict gate)",
-        )
-
-    def test_strict_gate_after_warmup_answer_only(self):
-        """Test strict gate returns 0.0 when answer is correct but format is wrong after warmup."""
-        self.curriculum.global_step = 32
-        self.assertFalse(self.curriculum.is_warmup())
-
-        # Format invalid, but answer correct
+        # Tags missing, but answer correct
         score = self.curriculum._apply_leaky_gate(format_valid=False, primary_score=1.0)
         self.assertEqual(
             score,
             0.0,
-            "Should return 0.0 when format is wrong after warmup (strict gate)",
+            "Should return 0.0 when tags missing after warmup (strict gate)",
         )
 
-    def test_strict_gate_after_warmup_both_wrong(self):
-        """Test strict gate returns 0.0 when both format and answer are wrong after warmup."""
+    def test_strict_gate_after_warmup_answer_only(self):
+        """Test strict gate returns 0.0 when answer wrong after warmup."""
         self.curriculum.global_step = 32
         self.assertFalse(self.curriculum.is_warmup())
 
-        # Both format and answer wrong
+        # Both tags present, but answer wrong
+        score = self.curriculum._apply_leaky_gate(format_valid=True, primary_score=0.0)
+        self.assertEqual(
+            score,
+            0.0,
+            "Should return 0.0 when answer wrong after warmup (strict gate)",
+        )
+
+    def test_strict_gate_after_warmup_both_wrong(self):
+        """Test strict gate returns 0.0 when both tags missing and answer wrong after warmup."""
+        self.curriculum.global_step = 32
+        self.assertFalse(self.curriculum.is_warmup())
+
+        # Both tags missing and answer wrong
         score = self.curriculum._apply_leaky_gate(format_valid=False, primary_score=0.0)
         self.assertEqual(
-            score, 0.0, "Should return 0.0 when both are wrong after warmup"
+            score,
+            0.0,
+            "Should return 0.0 when tags missing and answer wrong after warmup",
         )
 
     def test_leaky_gate_with_threshold_score(self):
@@ -152,13 +158,15 @@ class TestLeakyGate(unittest.TestCase):
         self.assertEqual(
             score,
             0.1,
-            "Score of 0.5 should be treated as incorrect, giving 0.1 partial credit",
+            "Score of 0.5 should be treated as incorrect, giving 0.1 with both tags present",
         )
 
         # Score just above 0.5 (should be treated as correct)
         score = self.curriculum._apply_leaky_gate(format_valid=True, primary_score=0.51)
         self.assertEqual(
-            score, 1.0, "Score > 0.5 should be treated as correct during warmup"
+            score,
+            1.0,
+            "Score > 0.5 should be treated as correct with tags during warmup",
         )
 
     def test_warmup_boundary(self):

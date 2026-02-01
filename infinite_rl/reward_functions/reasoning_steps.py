@@ -69,7 +69,9 @@ class ReasoningStepsRewardFunction(RewardFunction):
 
         found_count = sum(1 for word in indicators if word in thinking_content)
 
-        if found_count >= 2:
+        if found_count >= 3:
+            bonus = 1.0
+        elif found_count >= 2:
             bonus = 0.7
         elif found_count > 0:
             bonus = 0.5

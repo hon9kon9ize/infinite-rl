@@ -51,10 +51,24 @@ class TestReasoningStepsRewardFunction(unittest.TestCase):
             model_output=model_output,
         )
         out = self.rf.compute_reward(task)
-        # Multiple indicators (>=2) give 0.7 bonus
-        self.assertAlmostEqual(out.score, 0.7, places=5)
+        # Three or more indicators (>=3) give 1.0 bonus
+        self.assertAlmostEqual(out.score, 1.0, places=5)
 
-    def test_repeated_indicators_count_once(self):
+    def test_two_indicators(self):
+        model_output = "<think>First, we compute. Second, we verify.</think>"
+        task = Task(
+            task_id="test_3b",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer="answer",
+            language="en",
+            model_output=model_output,
+        )
+        out = self.rf.compute_reward(task)
+        # Exactly two indicators give 0.7 bonus
+        self.assertAlmostEqual(out.score, 0.7, places=5)
         model_output = "<think>First. First. First.</think>"
         task = Task(
             task_id="test_4",

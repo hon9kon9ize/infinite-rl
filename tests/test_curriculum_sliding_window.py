@@ -22,59 +22,59 @@ def test_sliding_window_tracking():
         variance_threshold=0.05,
     )
 
-    # Simulate some successes and failures
-    curriculum._track_success("math", True)  # 1/1
-    curriculum._track_success("math", True)  # 2/2
-    curriculum._track_success("math", True)  # 3/3
-    curriculum._track_success("math", False)  # 3/4
-    curriculum._track_success("math", True)  # 4/5
+    # Simulate some successes and failures for level 0
+    curriculum._track_success(0, True)  # 1/1
+    curriculum._track_success(0, True)  # 2/2
+    curriculum._track_success(0, True)  # 3/3
+    curriculum._track_success(0, False)  # 3/4
+    curriculum._track_success(0, True)  # 4/5
 
     # Check success rate
-    stats = curriculum.get_success_rate("math")
-    print(f"Math success rate: {stats['success_rate']:.2%}")
-    print(f"Math variance: {stats['variance']:.4f}")
-    print(f"Math samples: {stats['samples']}")
+    stats = curriculum.get_success_rate(0)
+    print(f"Level 0 success rate: {stats['success_rate']:.2%}")
+    print(f"Level 0 variance: {stats['variance']:.4f}")
+    print(f"Level 0 samples: {stats['samples']}")
 
     assert stats["success_rate"] == 0.8, f"Expected 0.8, got {stats['success_rate']}"
     assert stats["samples"] == 5, f"Expected 5 samples, got {stats['samples']}"
 
-    print("✓ Single task type tracking works")
+    print("✓ Single level tracking works")
 
-    # Test with multiple task types
+    # Test with multiple levels
     for _ in range(8):
-        curriculum._track_success("puzzle", True)
+        curriculum._track_success(1, True)
 
-    curriculum._track_success("puzzle", False)
-    curriculum._track_success("puzzle", False)
+    curriculum._track_success(1, False)
+    curriculum._track_success(1, False)
 
-    stats = curriculum.get_success_rate("puzzle")
-    print(f"\nPuzzle success rate: {stats['success_rate']:.2%}")
-    print(f"Puzzle variance: {stats['variance']:.4f}")
-    print(f"Puzzle samples: {stats['samples']}")
+    stats = curriculum.get_success_rate(1)
+    print(f"\nLevel 1 success rate: {stats['success_rate']:.2%}")
+    print(f"Level 1 variance: {stats['variance']:.4f}")
+    print(f"Level 1 samples: {stats['samples']}")
 
     assert stats["success_rate"] == 0.8, f"Expected 0.8, got {stats['success_rate']}"
 
-    print("✓ Multiple task type tracking works")
+    print("✓ Multiple level tracking works")
 
     # Test aggregated stats
     agg_stats = curriculum.get_success_rate()
     print(f"\nAggregated success rate: {agg_stats['mean_success_rate']:.2%}")
     print(f"Aggregated variance: {agg_stats['mean_variance']:.4f}")
     print(f"Total samples: {agg_stats['samples']}")
-    print(f"By task type:")
-    for task_stats in agg_stats["by_task_type"]:
+    print(f"By level:")
+    for level_stats in agg_stats["by_level"]:
         print(
-            f"  {task_stats['task_type']}: {task_stats['success_rate']:.2%} "
-            f"(variance: {task_stats['variance']:.4f})"
+            f"  Level {level_stats['level']}: {level_stats['success_rate']:.2%} "
+            f"(variance: {level_stats['variance']:.4f})"
         )
 
     print("\n✓ Aggregated stats work correctly")
 
     # Test sliding window overflow (should only keep last N)
     for i in range(20):
-        curriculum._track_success("math", True)
+        curriculum._track_success(0, True)
 
-    window = curriculum.success_windows["math"]
+    window = curriculum.success_windows[0]
     print(f"\nWindow size after adding 20 more: {len(window)}")
     assert len(window) == 10, f"Window should be capped at 10, but got {len(window)}"
 
@@ -94,12 +94,12 @@ def test_level_advancement():
     initial_level = curriculum.current_level
     print(f"Initial level: {initial_level}")
 
-    # Add consistent success - should eventually advance
+    # Add consistent success at current level (0) - should eventually advance
     for _ in range(15):
-        curriculum._track_success("math", True)
+        curriculum._track_success(0, True)
 
     curriculum._update_level()
-    print(f"After 15 successes: level={curriculum.current_level}")
+    print(f"After 15 successes at level 0: level={curriculum.current_level}")
 
     # With high variance, should NOT advance
     curriculum.success_windows.clear()
@@ -107,9 +107,9 @@ def test_level_advancement():
 
     # Create high variance (alternating success/failure)
     for i in range(10):
-        curriculum._track_success("math", i % 2 == 0)
+        curriculum._track_success(0, i % 2 == 0)
 
-    stats = curriculum.get_success_rate("math")
+    stats = curriculum.get_success_rate(0)
     print(
         f"\nHigh variance test: success_rate={stats['success_rate']:.2%}, "
         f"variance={stats['variance']:.4f}"

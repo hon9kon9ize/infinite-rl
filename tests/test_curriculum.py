@@ -460,13 +460,13 @@ class TestCurriculumLearning(unittest.TestCase):
         cl.current_level = 0
 
         # Simulate good performance by adding successful tasks to the session
-        # Need at least 10 samples per task type due to min_samples constraint
+        # Need at least 10 samples at current level (0) due to min_samples constraint
         for i in range(10):
             task = Task(
                 task_id=f"math_{i}",
                 task_name=f"Math Task {i}",
                 task_type="math",
-                level=1,
+                level=0,  # Must be at current level to be tracked
                 prompt="Test",
                 expected_answer="4",
             )
@@ -478,7 +478,7 @@ class TestCurriculumLearning(unittest.TestCase):
                 task_id=f"puzzle_{i}",
                 task_name=f"Puzzle Task {i}",
                 task_type="puzzle",
-                level=1,
+                level=0,  # Must be at current level to be tracked
                 prompt="Test",
                 expected_answer="test",
             )
@@ -813,8 +813,9 @@ class TestCurriculumLearning(unittest.TestCase):
         cl.current_level = 0
 
         # Simulate good performance with success window data (what actually drives advancement)
+        # Track at current level (0)
         for _ in range(50):
-            cl._track_success("math", True)  # All successes
+            cl._track_success(0, True)  # All successes at level 0
 
         # Trigger level update
         cl._update_level()

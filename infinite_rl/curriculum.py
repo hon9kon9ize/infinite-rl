@@ -125,8 +125,9 @@ class CurriculumLearning:
         self.success_rate_threshold = success_rate_threshold
         self.variance_threshold = variance_threshold
         self.demote_threshold = demote_threshold
-        # Deques to track success/failure per task type
-        self.success_windows: Dict[str, deque] = {}  # Maps task_type -> deque of 0s/1s
+        # Deques to track success/failure per level (not task type)
+        # Maps level (int) -> deque of 0s/1s
+        self.success_windows: Dict[int, deque] = {}
 
         # Level change cooldown: prevent successive advancements too quickly
         self.last_level_change_step: int = -999  # Track when last level change occurred
@@ -685,7 +686,7 @@ class CurriculumLearning:
             # Complete group: track success at prompt level
             group_scores = self.grpo_batch_scores[base_task_id]
             primary_scores = self.grpo_batch_primary_scores[base_task_id]
-            self._track_success_group(task_type, group_scores, primary_scores)
+            self._track_success_group(task.level, group_scores, primary_scores)
 
             # Increment step counter ONCE per complete prompt group
             self.global_step += 1
@@ -706,7 +707,7 @@ class CurriculumLearning:
             primary_scores = self.grpo_batch_primary_scores[base_task_id][
                 : self.num_generations
             ]
-            self._track_success_group(task_type, group_scores, primary_scores)
+            self._track_success_group(task.level, group_scores, primary_scores)
             self.global_step += 1
             self._update_level()
             del self.grpo_batch_scores[base_task_id]
@@ -758,10 +759,11 @@ class CurriculumLearning:
         """Update difficulty level based on prompt-level success rate (optimized for GRPO).
 
         GRPO-aware logic:
-        - ADVANCE: Success rate > 80% (high performance at current level)
-        - DEMOTE: Success rate < 30% (struggling significantly)
+        - ADVANCE: Success rate > threshold (high performance at CURRENT level only)
+        - DEMOTE: Success rate < demote_threshold (struggling significantly at current level)
         - Variance check is ONLY used for demotion to prevent thrashing
         - Windows are cleared on level change to start fresh (prevents old data drift)
+        - Only checks current level's success rate to avoid leveling up too fast
 
         Enforces cooldown to prevent cascading changes.
         """
@@ -775,71 +777,65 @@ class CurriculumLearning:
         # Minimum samples required (10 prompts = ~40 responses for GRPO)
         min_samples = 10
 
-        # Collect success rates from all tracked task types
-        success_rates = []
-        for task_type, window in self.success_windows.items():
-            if len(window) >= min_samples:
-                avg_success = sum(window) / len(window)
-                success_rates.append(avg_success)
+        # Only check CURRENT level's success rate
+        current_window = self.success_windows.get(self.current_level)
+        if current_window is None or len(current_window) < min_samples:
+            return False
 
-        if success_rates:
-            mean_success_rate = sum(success_rates) / len(success_rates)
+        # Calculate success rate for current level only
+        current_success_rate = sum(current_window) / len(current_window)
+        variance = (
+            statistics.variance(current_window) if len(current_window) > 1 else 0.0
+        )
 
-            # ADVANCE: High success rate with no variance penalty
-            # The model has mastered this difficulty level
-            if mean_success_rate > self.success_rate_threshold:
-                if self.current_level < 6:
+        # ADVANCE: High success rate at current level
+        # The model has mastered this difficulty level
+        if current_success_rate > self.success_rate_threshold:
+            if self.current_level < 6:
+                print(
+                    f"🚀 Advancing to level {self.current_level + 1}: "
+                    f"level {self.current_level} success rate = {current_success_rate:.1%}"
+                )
+                self.current_level = min(self.current_level + 1, 6)
+                self.last_level_change_step = self.global_step
+                # Clear windows to start fresh at new difficulty
+                self.success_windows.clear()
+                return True
+
+        # DEMOTE: Low success rate at current level AND stable (consistent failure)
+        # Only demote if we're confident the model is truly stuck
+        elif current_success_rate < self.demote_threshold:
+            # Demote only if performance is consistently bad (low variance)
+            if variance < self.variance_threshold:
+                if self.current_level > 0:
                     print(
-                        f"🚀 Advancing to level {self.current_level + 1}: "
-                        f"prompt-level success rate = {mean_success_rate:.1%}"
+                        f"📉 Demoting to level {self.current_level - 1}: "
+                        f"level {self.current_level} success rate = {current_success_rate:.1%}, "
+                        f"variance = {variance:.4f}"
                     )
-                    self.current_level = min(self.current_level + 1, 6)
+                    self.current_level = max(self.current_level - 1, 0)
                     self.last_level_change_step = self.global_step
-                    # Clear windows to start fresh at new difficulty
+                    # Clear windows to start fresh at easier difficulty
                     self.success_windows.clear()
                     return True
 
-            # DEMOTE: Low success rate AND stable (consistent failure)
-            # Only demote if we're confident the model is truly stuck
-            elif mean_success_rate < self.demote_threshold:
-                # Check variance to ensure consistent poor performance
-                if len(success_rates) > 1:
-                    variance = statistics.variance(success_rates)
-                else:
-                    window = list(self.success_windows.values())[0]
-                    variance = statistics.variance(window) if len(window) > 1 else 0.0
-
-                # Demote only if performance is consistently bad
-                if variance < self.variance_threshold:
-                    if self.current_level > 0:
-                        print(
-                            f"📉 Demoting to level {self.current_level - 1}: "
-                            f"prompt-level success rate = {mean_success_rate:.1%}, "
-                            f"variance = {variance:.4f}"
-                        )
-                        self.current_level = max(self.current_level - 1, 0)
-                        self.last_level_change_step = self.global_step
-                        # Clear windows to start fresh at easier difficulty
-                        self.success_windows.clear()
-                        return True
-
         return False
 
-    def _track_success(self, task_type: str, is_correct: bool) -> None:
-        """Track success/failure in sliding window for a task type (legacy single-response).
+    def _track_success(self, level: int, is_correct: bool) -> None:
+        """Track success/failure in sliding window for a level (legacy single-response).
 
         Args:
-            task_type: Type of task (e.g., 'math', 'puzzle')
+            level: Difficulty level of the task (0-6)
             is_correct: Whether the task was solved correctly
         """
-        if task_type not in self.success_windows:
-            self.success_windows[task_type] = deque(maxlen=self.window_size)
+        if level not in self.success_windows:
+            self.success_windows[level] = deque(maxlen=self.window_size)
 
         # Add 1 for success, 0 for failure
-        self.success_windows[task_type].append(1 if is_correct else 0)
+        self.success_windows[level].append(1 if is_correct else 0)
 
     def _track_success_group(
-        self, task_type: str, scores: List[float], primary_scores: List[float]
+        self, level: int, scores: List[float], primary_scores: List[float]
     ) -> None:
         """Track success at prompt-level based on group of GRPO responses.
 
@@ -853,12 +849,12 @@ class CurriculumLearning:
         when the model is solving tasks correctly.
 
         Args:
-            task_type: Type of task (e.g., 'math', 'puzzle')
+            level: Difficulty level of the task (0-6)
             scores: List of combined scores from GRPO group (for reference)
             primary_scores: List of primary correctness scores (for curriculum)
         """
-        if task_type not in self.success_windows:
-            self.success_windows[task_type] = deque(maxlen=self.window_size)
+        if level not in self.success_windows:
+            self.success_windows[level] = deque(maxlen=self.window_size)
 
         # Group success logic: use PRIMARY scores for curriculum decisions
         # This separates task-solving ability from formatting/quality
@@ -868,7 +864,7 @@ class CurriculumLearning:
         max_primary = max(primary_scores) if primary_scores else 0.0
         group_success = 1 if (max_primary == 1.0 or mean_primary >= 0.7) else 0
 
-        self.success_windows[task_type].append(group_success)
+        self.success_windows[level].append(group_success)
 
     def _ensure_success_windows_from_session(self) -> None:
         """Seed success windows from session history when no tracking data exists."""
@@ -880,25 +876,25 @@ class CurriculumLearning:
                 continue
 
             window = self.success_windows.setdefault(
-                task.task_type, deque(maxlen=self.window_size)
+                task.level, deque(maxlen=self.window_size)
             )
             window.append(1 if task.is_correct else 0)
 
-    def get_success_rate(self, task_type: Optional[str] = None) -> Dict[str, Any]:
-        """Get success rate statistics for task type(s).
+    def get_success_rate(self, level: Optional[int] = None) -> Dict[str, Any]:
+        """Get success rate statistics for level(s).
 
         Args:
-            task_type: Specific task type to query. If None, returns aggregated stats.
+            level: Specific difficulty level to query. If None, returns aggregated stats.
 
         Returns:
             Dictionary with success_rate, variance, window_size, and samples_count.
         """
-        if task_type is not None:
-            # Return stats for specific task type
-            window = self.success_windows.get(task_type, deque())
+        if level is not None:
+            # Return stats for specific level
+            window = self.success_windows.get(level, deque())
             if len(window) == 0:
                 return {
-                    "task_type": task_type,
+                    "level": level,
                     "success_rate": 0.0,
                     "variance": 0.0,
                     "samples": 0,
@@ -909,22 +905,22 @@ class CurriculumLearning:
             variance = statistics.variance(window) if len(window) > 1 else 0.0
 
             return {
-                "task_type": task_type,
+                "level": level,
                 "success_rate": success_rate,
                 "variance": variance,
                 "samples": len(window),
                 "window_size": self.window_size,
             }
         else:
-            # Return aggregated stats across all task types
+            # Return aggregated stats across all levels
             all_stats = []
-            for task_type, window in self.success_windows.items():
+            for level, window in self.success_windows.items():
                 if len(window) > 0:
                     success_rate = sum(window) / len(window)
                     variance = statistics.variance(window) if len(window) > 1 else 0.0
                     all_stats.append(
                         {
-                            "task_type": task_type,
+                            "level": level,
                             "success_rate": success_rate,
                             "variance": variance,
                             "samples": len(window),
@@ -946,7 +942,7 @@ class CurriculumLearning:
                 "threshold_success_rate": self.success_rate_threshold,
                 "threshold_variance": self.variance_threshold,
                 "samples": sum(s["samples"] for s in all_stats),
-                "by_task_type": all_stats,
+                "by_level": all_stats,
             }
 
     def get_prompt(self) -> Optional[Task]:

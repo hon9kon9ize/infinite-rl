@@ -279,10 +279,11 @@ class CurriculumLoggingCallback(TrainerCallback):
                     "curriculum/global_step": self.curriculum.global_step,
                 }
 
-                # Log success rates by task type
+                # Log success rates by level
                 sliding_window = stats.get("sliding_window_stats", {})
 
-                if "by_task_type" in sliding_window:
+                # Log aggregated stats (these are always at top level)
+                if "mean_success_rate" in sliding_window:
                     wandb_logs["curriculum/mean_success_rate"] = sliding_window.get(
                         "mean_success_rate", 0
                     )
@@ -293,29 +294,16 @@ class CurriculumLoggingCallback(TrainerCallback):
                         "samples", 0
                     )
 
-                    for task_stat in sliding_window.get("by_task_type", []):
-                        task_type = task_stat.get("task_type", "unknown")
-                        success_rate = task_stat.get("success_rate", 0)
-                        variance = task_stat.get("variance", 0)
-                        samples = task_stat.get("samples", 0)
+                # Log per-level stats
+                for level_stat in sliding_window.get("by_level", []):
+                    level = level_stat.get("level", "unknown")
+                    success_rate = level_stat.get("success_rate", 0)
+                    variance = level_stat.get("variance", 0)
+                    samples = level_stat.get("samples", 0)
 
-                        wandb_logs[f"curriculum/{task_type}/success_rate"] = (
-                            success_rate
-                        )
-                        wandb_logs[f"curriculum/{task_type}/variance"] = variance
-                        wandb_logs[f"curriculum/{task_type}/samples"] = samples
-                else:
-                    for task_type, window_stats in sliding_window.items():
-                        if isinstance(window_stats, dict):
-                            success_rate = window_stats.get("success_rate", 0)
-                            variance = window_stats.get("variance", 0)
-                            samples = window_stats.get("samples", 0)
-
-                            wandb_logs[f"curriculum/{task_type}/success_rate"] = (
-                                success_rate
-                            )
-                            wandb_logs[f"curriculum/{task_type}/variance"] = variance
-                            wandb_logs[f"curriculum/{task_type}/samples"] = samples
+                    wandb_logs[f"curriculum/level_{level}/success_rate"] = success_rate
+                    wandb_logs[f"curriculum/level_{level}/variance"] = variance
+                    wandb_logs[f"curriculum/level_{level}/samples"] = samples
 
                 wandb.log(wandb_logs)
 
@@ -331,6 +319,7 @@ def setup_training_args(
     max_completion_length: int = 512,
     max_prompt_length: int = 2048,
     gradient_accumulation_steps: int = 1,
+    warmup_steps: int = 0,
     **kwargs,
 ) -> GRPOConfig:
     """Setup GRPO training configuration for vLLM colocate mode.
@@ -343,6 +332,8 @@ def setup_training_args(
         num_generations: Number of completions per prompt
         max_completion_length: Maximum completion length
         max_prompt_length: Maximum prompt length (for vLLM context size)
+        gradient_accumulation_steps: Number of steps to accumulate gradients
+        warmup_steps: Number of warmup steps for learning rate scheduling
         **kwargs: Additional arguments to pass to GRPOConfig
 
     Returns:
@@ -356,6 +347,7 @@ def setup_training_args(
         num_generations=num_generations,
         max_completion_length=max_completion_length,
         gradient_accumulation_steps=gradient_accumulation_steps,
+        warmup_steps=warmup_steps,
         temperature=1.0,
         top_p=1.0,
         # vLLM COLOCATE mode is always enabled
@@ -734,6 +726,7 @@ def main():
         max_completion_length=args.max_completion_length,
         max_prompt_length=args.max_prompt_length,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
+        warmup_steps=args.warmup_step,
         **grpo_kwargs,
     )
     print(f"   ✓ Training configuration ready")
@@ -746,6 +739,7 @@ def main():
     )
     print(f"   - vLLM GPU memory utilization: 50%")
     print(f"   - Learning rate: {training_args.learning_rate}")
+    print(f"   - Warmup steps: {training_args.warmup_steps}")
     print(f"   - vLLM mode: colocate (in-process)")
     if args.max_steps:
         print(f"   - Max steps: {args.max_steps}")
@@ -821,9 +815,8 @@ def main():
         # Log final success rates and statistics
         sliding_window = final_stats.get("sliding_window_stats", {})
 
-        # Handle both aggregated and per-task-type stats
-        if "by_task_type" in sliding_window:
-            # Aggregated stats with per-task-type breakdown
+        # Log aggregated stats (these are always at top level)
+        if "mean_success_rate" in sliding_window:
             final_wandb_logs["curriculum/final_mean_success_rate"] = sliding_window.get(
                 "mean_success_rate", 0
             )
@@ -834,31 +827,16 @@ def main():
                 "samples", 0
             )
 
-            for task_stat in sliding_window.get("by_task_type", []):
-                task_type = task_stat.get("task_type", "unknown")
-                success_rate = task_stat.get("success_rate", 0)
-                variance = task_stat.get("variance", 0)
-                samples = task_stat.get("samples", 0)
+        # Log per-level stats
+        for level_stat in sliding_window.get("by_level", []):
+            level = level_stat.get("level", "unknown")
+            success_rate = level_stat.get("success_rate", 0)
+            variance = level_stat.get("variance", 0)
+            samples = level_stat.get("samples", 0)
 
-                final_wandb_logs[f"final_stats/{task_type}/success_rate"] = success_rate
-                final_wandb_logs[f"final_stats/{task_type}/variance"] = variance
-                final_wandb_logs[f"final_stats/{task_type}/samples"] = samples
-        else:
-            # Single task type stats
-            for task_type, window_stats in sliding_window.items():
-                if isinstance(window_stats, dict) and task_type not in [
-                    "mean_success_rate",
-                    "mean_variance",
-                ]:
-                    success_rate = window_stats.get("success_rate", 0)
-                    variance = window_stats.get("variance", 0)
-                    samples = window_stats.get("samples", 0)
-
-                    final_wandb_logs[f"final_stats/{task_type}/success_rate"] = (
-                        success_rate
-                    )
-                    final_wandb_logs[f"final_stats/{task_type}/variance"] = variance
-                    final_wandb_logs[f"final_stats/{task_type}/samples"] = samples
+            final_wandb_logs[f"final_stats/level_{level}/success_rate"] = success_rate
+            final_wandb_logs[f"final_stats/level_{level}/variance"] = variance
+            final_wandb_logs[f"final_stats/level_{level}/samples"] = samples
 
         wandb.log(final_wandb_logs)
         wandb.finish()

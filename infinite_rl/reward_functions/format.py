@@ -49,7 +49,8 @@ class FormatRewardFunction(RewardFunction):
 
         import re
 
-        pattern = f"{re.escape(tag_start)}(.*?){re.escape(tag_end)}"
+        # Note: Do NOT use re.escape() on tag_start/end since they are literal tags, not regex patterns
+        pattern = f"{tag_start}(.*?){tag_end}"
         matches = re.findall(pattern, task.model_output or "", re.DOTALL)
 
         # count how many tag_start and tag_end are present

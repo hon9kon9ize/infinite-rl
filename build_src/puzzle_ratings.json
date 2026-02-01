@@ -480,11 +480,6 @@
     "rating": 4
   },
   {
-    "puzzle_name": "Binarize",
-    "response": "No response",
-    "rating": null
-  },
-  {
     "puzzle_name": "BinaryAverage",
     "response": "1",
     "rating": 2

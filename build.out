@@ -1,0 +1,1154 @@
+  WARNING: Failed to parse example in AbsoluteValues: Expecting ',' delimiter: line 1 column 19 (char 18)
+    Raw value: { nums: [-1, 2, -3, 4] }
+    After conversions: { "nums": [-1, "2": 2, -3, 4] }
+  WARNING: Failed to parse example in AddConstant: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 3], k: 10 }
+    After conversions: { "nums": [1, "2": 2, 3], "k": 10 }
+  WARNING: Failed to parse example in AllEven: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [2, 4, 6, 8] }
+    After conversions: { "nums": [2, "4": 4, "6": 6, 8] }
+  WARNING: Failed to parse example in AllPositive: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 3, 4, 5] }
+    After conversions: { "nums": [1, "2": 2, "3": 3, "4": 4, 5] }
+  WARNING: Failed to parse example in AlternateElements: Expecting ',' delimiter: line 1 column 15 (char 14)
+    Raw value: { a: [1, 2, 3], b: [4, 5, 6] }
+    After conversions: { "a": [1, "2": 2, 3], "b": [4, "5": 5, 6] }
+  WARNING: Failed to parse example in AnyNegative: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, -3, 4, 5] }
+    After conversions: { "nums": [1, "2": 2, -3, "4": 4, 5] }
+  WARNING: Failed to parse example in ArrayDiff: Expecting ',' delimiter: line 2 column 16 (char 17)
+    Raw value: {
+			a: [1, 2, 3, 0, 4, 17, 2, 4, 5, 9, 8, 4],
+			c: [1, 2, 3, 4, 0, 16, 2, 3, 5, 9, 8, 4],
+		}
+    After conversions: {
+			"a": [1, "2": 2, "3": 3, "0": 0, "4": 4, "17": 17, "2": 2, "4": 4, "5": 5, "9": 9, "8": 8, 4],
+			"c": [1, "2": 2, "3": 3, "4": 4, "0": 0, "16": 16, "2": 2, "3": 3, "5": 5, "9": 9, "8": 8, 4]
+		}
+  WARNING: Failed to parse example in BackwardsDigits: Expecting ',' delimiter: line 2 column 19 (char 20)
+    Raw value: {
+			nums: [0, 2, 14, -2, 3, 8, 4, 5, 5, 7, 21, 101, 41, 2, 9, 6],
+		}
+    After conversions: {
+			"nums": [0, "2": 2, "14": 14, -2, "3": 3, "8": 8, "4": 4, "5": 5, "5": 5, "7": 7, "21": 21, "101": 101, "41": 41, "2": 2, "9": 9, 6]
+		}
+  WARNING: Failed to parse example in BelowThreshold: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [0, 2, 17, 4, 4213, 322, 102, 29, 15, 39, 55], thresh: 100 }
+    After conversions: { "nums": [0, "2": 2, "17": 17, "4": 4, "4213": 4213, "322": 322, "102": 102, "29": 29, "15": 15, "39": 39, 55], "thresh": 100 }
+  WARNING: Failed to parse example in BiPermutations: Expecting ',' delimiter: line 2 column 22 (char 23)
+    Raw value: {
+			prices0: [7, 7, 9, 5, 3, 7, 1, 2],
+			prices1: [5, 5, 5, 4, 2, 5, 1, 1],
+			heights0: [2, 4, 9, 3, 8, 5, 5, 4],
+			heights1: [1, 3, 8, 1, 5, 4, 4, 2],
+		}
+    After conversions: {
+			"prices0": [7, "7": 7, "9": 9, "5": 5, "3": 3, "7": 7, "1": 1, 2],
+			"prices1": [5, "5": 5, "5": 5, "4": 4, "2": 2, "5": 5, "1": 1, 1],
+			"heights0": [2, "4": 4, "9": 9, "3": 3, "8": 8, "5": 5, "5": 5, 4],
+			"heights1": [1, "3": 3, "8": 8, "1": 1, "5": 5, "4": 4, "4": 4, 2]
+		}
+  WARNING: Failed to parse example in BigOdds: Expecting ',' delimiter: line 1 column 22 (char 21)
+    Raw value: { nums: [204, 109, 203, 17, 45, 11, 21, 99, 909, 16, -33, 3, 17] }
+    After conversions: { "nums": [204, "109": 109, "203": 203, "17": 17, "45": 45, "11": 11, "21": 21, "99": 99, "909": 909, "16": 16, -33, "3": 3, 17] }
+  WARNING: Failed to parse example in BiggestK: Expecting ',' delimiter: line 3 column 20 (char 32)
+    Raw value: {
+			k: 7,
+			nums: [31, 1, 2, -10, -2, 4, 17, 18, 20, 14, 20, 21, 18, 0],
+		}
+    After conversions: {
+			"k": 7,
+			"nums": [31, "1": 1, "2": 2, -10, -2, "4": 4, "17": 17, "18": 18, "20": 20, "14": 14, "20": 20, "21": 21, "18": 18, 0]
+		}
+  WARNING: Failed to parse example in BillSums: Expecting ',' delimiter: line 1 column 28 (char 27)
+    Raw value: { denominations: [1, 25, 35, 84], n: 980, max_len: 14 }
+    After conversions: { "denominations": [1, "25": 25, "35": 35, 84], "n": 980, "max_len": 14 }
+  WARNING: Failed to parse example in Binarize: Expecting ',' delimiter: line 1 column 27 (char 26)
+    Raw value: { n: 5324680297138495285n }
+    After conversions: { "n": 5324680297138495285n }
+  WARNING: Failed to parse example in BinarySort: Expecting ',' delimiter: line 1 column 17 (char 16)
+    Raw value: { arr: [4, 2, 3, -1, 15, 2, 6, 9, 5, 16, 1048576] }
+    After conversions: { "arr": [4, "2": 2, "3": 3, -1, "15": 15, "2": 2, "6": 6, "9": 9, "5": 5, "16": 16, 1048576] }
+  WARNING: Failed to parse example in BoxVolume: Expecting ',' delimiter: line 2 column 24 (char 25)
+    Raw value: {
+			options: [2, 512, 1024],
+			n: 340282366920938463463374607431768211456,
+			max_dim: 13,
+		}
+    After conversions: {
+			"options": [2, "512": 512, 1024],
+			"n": 340282366920938463463374607431768211456,
+			"max_dim": 13
+		}
+  WARNING: Failed to parse example in Buckets: Expecting ',' delimiter: line 3 column 12 (char 26)
+    Raw value: {
+			grid: [
+				[1, 1, 0, 1, 1],
+				[0, 0, 0, 0, 0],
+				[1, 1, 0, 0, 1],
+			],
+			capacity: 2,
+		}
+    After conversions: {
+			"grid": [
+				[1, "1": 1, "0": 0, "1": 1, 1],
+				[0, "0": 0, "0": 0, "0": 0, 0],
+				[1, "1": 1, "0": 0, "0": 0, 1]
+			],
+			"capacity": 2
+		}
+  WARNING: Failed to parse example in CardGame24: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 3, 4] }
+    After conversions: { "nums": [1, "2": 2, "3": 3, 4] }
+  WARNING: Failed to parse example in ClampValues: Expecting ',' delimiter: line 1 column 19 (char 18)
+    Raw value: { nums: [1, 15, 8, 25, 3], min_val: 5, max_val: 20 }
+    After conversions: { "nums": [1, "15": 15, "8": 8, "25": 25, 3], "min_val": 5, "max_val": 20 }
+  WARNING: Failed to parse example in CommonNumbers: Expecting ',' delimiter: line 2 column 21 (char 22)
+    Raw value: {
+			a: [2, 416629, 2, 4, 17, 29, 31, 1000],
+			b: [31, 2, 4, 17, 29, 41205],
+		}
+    After conversions: {
+			"a": [2, "416629": 416629, "2": 2, "4": 4, "17": 17, "29": 29, "31": 31, 1000],
+			"b": [31, "2": 2, "4": 4, "17": 17, "29": 29, 41205]
+		}
+  WARNING: Failed to parse example in CompleteSplit: Expecting ',' delimiter: line 1 column 47 (char 46)
+    Raw value: { string: "Hello, world!  You look like you're on turtles." }
+    After conversions: { "string": "Hello, world!  You look like you"re on turtles." }
+  WARNING: Failed to parse example in Contains: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 3, 4, 5], target: 3 }
+    After conversions: { "nums": [1, "2": 2, "3": 3, "4": 4, 5], "target": 3 }
+  WARNING: Failed to parse example in CountEven: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 3, 4, 5, 6] }
+    After conversions: { "nums": [1, "2": 2, "3": 3, "4": 4, "5": 5, 6] }
+  WARNING: Failed to parse example in CountOccurrences: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 2, 3, 2, 4], target: 2 }
+    After conversions: { "nums": [1, "2": 2, "2": 2, "3": 3, "2": 2, 4], "target": 2 }
+  WARNING: Failed to parse example in CountOdd: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 3, 4, 5, 6] }
+    After conversions: { "nums": [1, "2": 2, "3": 3, "4": 4, "5": 5, 6] }
+  WARNING: Failed to parse example in CountPositive: Expecting ',' delimiter: line 1 column 22 (char 21)
+    Raw value: { nums: [1, -2, 3, -4, 5] }
+    After conversions: { "nums": [1, -2, "3": 3, -4, 5] }
+  WARNING: Failed to parse example in CountUnique: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 2, 3, 3, 3, 4] }
+    After conversions: { "nums": [1, "2": 2, "2": 2, "3": 3, "3": 3, "3": 3, 4] }
+  WARNING: Failed to parse example in DecreasingCountComparison: Expecting ',' delimiter: line 1 column 23 (char 22)
+    Raw value: { scores: [100, 95, 80, 70, 65, 9, 9, 9, 4, 2, 1], k: 6 }
+    After conversions: { "scores": [100, "95": 95, "80": 80, "70": 70, "65": 65, "9": 9, "9": 9, "9": 9, "4": 4, "2": 2, 1], "k": 6 }
+  WARNING: Failed to parse example in Dedup: Expecting ',' delimiter: line 1 column 19 (char 18)
+    Raw value: { nums: [2, 19, 2, 53, 1, 1, 2, 44, 17, 0, 19, 31] }
+    After conversions: { "nums": [2, "19": 19, "2": 2, "53": 53, "1": 1, "1": 1, "2": 2, "44": 44, "17": 17, "0": 0, "19": 19, 31] }
+  WARNING: Failed to parse example in Derivative: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { poly: [2, 1, 0, 4, 19, 231, 0, 5] }
+    After conversions: { "poly": [2, "1": 1, "0": 0, "4": 4, "19": 19, "231": 231, "0": 0, 5] }
+  WARNING: Failed to parse example in DoubleEvens: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 3, 4, 5, 6] }
+    After conversions: { "nums": [1, "2": 2, "3": 3, "4": 4, "5": 5, 6] }
+  WARNING: Failed to parse example in Drops: Expecting ',' delimiter: line 3 column 16 (char 30)
+    Raw value: {
+			nums: [
+				2, -1, 14, 8, 9, 9, 8, 4, 2, 4, 3, -100, 1000, 18, 4, -2, -3, -3, 1, 0,
+			],
+		}
+    After conversions: {
+			"nums": [
+				2, -1, "14": 14, "8": 8, "9": 9, "9": 9, "8": 8, "4": 4, "2": 2, "4": 4, "3": 3, -100, "1000": 1000, "18": 18, "4": 4, -2, -3, -3, "1": 1, 0
+			]
+		}
+  WARNING: Failed to parse example in EasySum: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [2, 8, 25, 18, 99, 11, 17, 16], thresh: 17 }
+    After conversions: { "nums": [2, "8": 8, "25": 25, "18": 18, "99": 99, "11": 11, "17": 17, 16], "thresh": 17 }
+  WARNING: Failed to parse example in EasyTwos: Expecting ',' delimiter: line 3 column 12 (char 27)
+    Raw value: {
+			trips: [
+				[1, 1, 0],
+				[1, 0, 0],
+				[0, 0, 0],
+				[0, 1, 1],
+				[0, 1, 1],
+				[1, 1, 1],
+				[1, 0, 1],
+			],
+		}
+    After conversions: {
+			"trips": [
+				[1, "1": 1, 0],
+				[1, "0": 0, 0],
+				[0, "0": 0, 0],
+				[0, "1": 1, 1],
+				[0, "1": 1, 1],
+				[1, "1": 1, 1],
+				[1, "0": 0, 1]
+			]
+		}
+  WARNING: Failed to parse example in EvaluateOperators: Expecting ',' delimiter: line 1 column 34 (char 33)
+    Raw value: { target: 2021, nums: [4, 6, 2, 1, 1, 3, 9] }
+    After conversions: { "target": 2021, "nums": [4, "6": 6, "2": 2, "1": 1, "1": 1, "3": 3, 9] }
+  WARNING: Failed to parse example in EvenOddSum: Expecting ',' delimiter: line 3 column 22 (char 36)
+    Raw value: {
+			nums: [
+				2341, 125146894, 12521, -12451293476325, 535284623934, 132974693614350,
+			],
+		}
+    After conversions: {
+			"nums": [
+				2341, "125146894": 125146894, "12521": 12521, -12451293476325, "535284623934": 535284623934, 132974693614350
+			]
+		}
+  WARNING: Failed to parse example in EveryNth: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 3, 4, 5, 6, 7, 8], n: 2 }
+    After conversions: { "nums": [1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, 8], "n": 2 }
+  WARNING: Failed to parse example in FermatComposites: Expecting ',' delimiter: line 1 column 22 (char 21)
+    Raw value: { nums: [1449, 14, 21, 105, 217] }
+    After conversions: { "nums": [1449, "14": 14, "21": 21, "105": 105, 217] }
+  WARNING: Failed to parse example in FilterEven: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 3, 4, 5, 6] }
+    After conversions: { "nums": [1, "2": 2, "3": 3, "4": 4, "5": 5, 6] }
+  WARNING: Failed to parse example in FilterInts: Expecting ',' delimiter: line 1 column 25 (char 24)
+    Raw value: { int_indices: [2, 4, 7, 9, 101] }
+    After conversions: { "int_indices": [2, "4": 4, "7": 7, "9": 9, 101] }
+  WARNING: Failed to parse example in FilterPositive: Expecting ',' delimiter: line 1 column 22 (char 21)
+    Raw value: { nums: [1, -2, 3, -4, 5] }
+    After conversions: { "nums": [1, -2, "3": 3, -4, 5] }
+  WARNING: Failed to parse example in FindIndex: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 3, 4, 5], target: 3 }
+    After conversions: { "nums": [1, "2": 2, "3": 3, "4": 4, 5], "target": 3 }
+  WARNING: Failed to parse example in FindPositives: Expecting ',' delimiter: line 1 column 21 (char 20)
+    Raw value: { nums: [2, 2342, -2, 32, -8, -5, 2342, 0, -9, 44, 11] }
+    After conversions: { "nums": [2, "2342": 2342, -2, "32": 32, -8, -5, "2342": 2342, "0": 0, -9, "44": 44, 11] }
+  WARNING: Failed to parse example in FirstElement: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [5, 2, 8, 1, 9] }
+    After conversions: { "nums": [5, "2": 2, "8": 8, "1": 1, 9] }
+  WARNING: Failed to parse example in FirstNegCumulative: Expecting ',' delimiter: line 3 column 12 (char 30)
+    Raw value: {
+			balances: [
+				[2, 7, -2, 4, 3, -15, 10, -45, 3],
+				[3, 4, -17, -1],
+				[100, -100, -101],
+				[-1],
+			],
+		}
+    After conversions: {
+			"balances": [
+				[2, "7": 7, -2, "4": 4, "3": 3, -15, "10": 10, -45, 3],
+				[3, "4": 4, -17, -1],
+				[100, -100, -101],
+				[-1]
+			]
+		}
+  WARNING: Failed to parse example in GCD_multi: Expecting ',' delimiter: line 1 column 26 (char 25)
+    Raw value: { nums: [77410, 23223, 54187], lower_bound: 2 }
+    After conversions: { "nums": [77410, "23223": 23223, 54187], "lower_bound": 2 }
+  WARNING: Failed to parse example in GetSlice: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 3, 4, 5], start: 1, end: 4 }
+    After conversions: { "nums": [1, "2": 2, "3": 3, "4": 4, 5], "start": 1, "end": 4 }
+  WARNING: Failed to parse example in GreatestHIndex: Expecting ',' delimiter: line 1 column 17 (char 16)
+    Raw value: { seq: [3, 1, 4, 17, 5, 17, 2, 1, 41, 32, 2, 5, 5, 5, 5] }
+    After conversions: { "seq": [3, "1": 1, "4": 4, "17": 17, "5": 5, "17": 17, "2": 2, "1": 1, "41": 41, "32": 32, "2": 2, "5": 5, "5": 5, "5": 5, 5] }
+  WARNING: Failed to parse example in HalfSorted: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { orig: [1, 6, 3, 41, 19, 4, 12, 3, 18, 5, -29, 0, 19521] }
+    After conversions: { "orig": [1, "6": 6, "3": 3, "41": 41, "19": 19, "4": 4, "12": 12, "3": 3, "18": 18, "5": 5, -29, "0": 0, 19521] }
+  WARNING: Failed to parse example in HalfTag: Expecting ',' delimiter: line 2 column 19 (char 20)
+    Raw value: {
+			tags: [3, 0, 3, 2, 0, 1, 0, 3, 1, 1, 2, 2, 0, 2, 1, 3],
+		}
+    After conversions: {
+			"tags": [3, "0": 0, "3": 3, "2": 2, "0": 0, "1": 1, "0": 0, "3": 3, "1": 1, "1": 1, "2": 2, "2": 2, "0": 0, "2": 2, "1": 1, 3]
+		}
+  WARNING: Failed to parse example in HasDuplicates: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 3, 4, 5] }
+    After conversions: { "nums": [1, "2": 2, "3": 3, "4": 4, 5] }
+  WARNING: Failed to parse example in HungryRabbits: Expecting ',' delimiter: line 3 column 12 (char 27)
+    Raw value: {
+			stats: [
+				[2, 3, 18],
+				[4, 9, 2],
+				[2, 5, 7],
+				[3, 8, 12],
+				[4, 9, 106],
+			],
+		}
+    After conversions: {
+			"stats": [
+				[2, "3": 3, 18],
+				[4, "9": 9, 2],
+				[2, "5": 5, 7],
+				[3, "8": 8, 12],
+				[4, "9": 9, 106]
+			]
+		}
+  WARNING: Failed to parse example in IdentifyZeroTrips: Expecting ',' delimiter: line 4 column 15 (char 60)
+    Raw value: {
+			trips: [
+				[1253532, -3920635, 332],
+				[-24, 18, 6],
+				[0, 5, -5],
+				[1, 1, 1],
+				[-20, 17, 4],
+			],
+		}
+    After conversions: {
+			"trips": [
+				[1253532, -3920635, 332],
+				[-24, "18": 18, 6],
+				[0, "5": 5, -5],
+				[1, "1": 1, 1],
+				[-20, "17": 17, 4]
+			]
+		}
+  WARNING: Failed to parse example in IncreasingViolation: Expecting ',' delimiter: line 2 column 19 (char 20)
+    Raw value: {
+			nums: [1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 17, 17, 18, 19, 20, 22, 24],
+		}
+    After conversions: {
+			"nums": [1, "2": 2, "3": 3, "4": 4, "6": 6, "7": 7, "8": 8, "9": 9, "10": 10, "11": 11, "17": 17, "17": 17, "18": 18, "19": 19, "20": 20, "22": 22, 24]
+		}
+  WARNING: Failed to parse example in Intersperse: Expecting ',' delimiter: line 1 column 20 (char 19)
+    Raw value: { nums: [12, 23, -2, 5, 0], sep: 4 }
+    After conversions: { "nums": [12, "23": 23, -2, "5": 5, 0], "sep": 4 }
+  WARNING: Failed to parse example in InverseSuperFactorial: Expecting ',' delimiter: line 1 column 29 (char 28)
+    Raw value: { superFactorials: [1, 2, 1] }
+    After conversions: { "superFactorials": [1, "2": 2, 1] }
+  WARNING: Failed to parse example in InvertIndices: Expecting ',' delimiter: line 1 column 20 (char 19)
+    Raw value: { target: [1, 3, 4, 2, 5, 6, 7, 13, 12, 11, 9, 10, 8] }
+    After conversions: { "target": [1, "3": 3, "4": 4, "2": 2, "5": 5, "6": 6, "7": 7, "13": 13, "12": 12, "11": 11, "9": 9, "10": 10, 8] }
+  WARNING: Failed to parse example in InvestigateCrash: Expecting ',' delimiter: line 1 column 21 (char 20)
+    Raw value: { weights: [1, 2, 5, 2, 1, 17], max_weight: 100 }
+    After conversions: { "weights": [1, "2": 2, "5": 5, "2": 2, "1": 1, 17], "max_weight": 100 }
+  WARNING: Failed to parse example in IsSorted: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 3, 4, 5] }
+    After conversions: { "nums": [1, "2": 2, "3": 3, "4": 4, 5] }
+  WARNING: Failed to parse example in LCM_multi: Expecting ',' delimiter: line 1 column 20 (char 19)
+    Raw value: { nums: [15, 27, 102], upper_bound: 5000 }
+    After conversions: { "nums": [15, "27": 27, 102], "upper_bound": 5000 }
+  WARNING: Failed to parse example in LargestNegSmallestPos: Expecting ',' delimiter: line 2 column 27 (char 28)
+    Raw value: {
+			nums: [-10, -4, 100, -40, 2, 2, 3, 17, -50, -25, 18, 41, 9, 11, 15],
+		}
+    After conversions: {
+			"nums": [-10, -4, "100": 100, -40, "2": 2, "2": 2, "3": 3, "17": 17, -50, -25, "18": 18, "41": 41, "9": 9, "11": 11, 15]
+		}
+  WARNING: Failed to parse example in LargestPrimeDigitSum: Expecting ',' delimiter: line 2 column 21 (char 22)
+    Raw value: {
+			nums: [23, 17, 201, 14, 10473, 43225, 421, 423, 11, 10, 2022, 342157],
+		}
+    After conversions: {
+			"nums": [23, "17": 17, "201": 201, "14": 14, "10473": 10473, "43225": 43225, "421": 421, "423": 423, "11": 11, "10": 10, "2022": 2022, 342157]
+		}
+  WARNING: Failed to parse example in LastElement: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [5, 2, 8, 1, 9] }
+    After conversions: { "nums": [5, "2": 2, "8": 8, "1": 1, 9] }
+  WARNING: Failed to parse example in LearnParity: Expecting ',' delimiter: line 3 column 15 (char 29)
+    Raw value: {
+			vecs: [
+				169, 203, 409, 50, 37, 479, 370, 133, 53, 159, 161, 367, 474, 107, 82,
+				447, 385,
+			],
+		}
+    After conversions: {
+			"vecs": [
+				169, "203": 203, "409": 409, "50": 50, "37": 37, "479": 479, "370": 370, "133": 133, "53": 53, "159": 159, "161": 161, "367": 367, "474": 474, "107": 107, "82": 82, "447": 447, 385
+			]
+		}
+  WARNING: Failed to parse example in LearnParityWithNoise: Expecting ',' delimiter: line 3 column 12 (char 26)
+    Raw value: {
+			vecs: [
+				26, 5, 32, 3, 15, 18, 31, 13, 24, 25, 34, 5, 15, 24, 16, 13, 0, 27, 37,
+			],
+		}
+    After conversions: {
+			"vecs": [
+				26, "5": 5, "32": 32, "3": 3, "15": 15, "18": 18, "31": 31, "13": 13, "24": 24, "25": 25, "34": 34, "5": 5, "15": 15, "24": 24, "16": 16, "13": 13, "0": 0, "27": 27, 37
+			]
+		}
+  WARNING: Failed to parse example in ListAt: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { li: [17, 31, 91, 18, 42, 1, 9], target: 18 }
+    After conversions: { "li": [17, "31": 31, "91": 91, "18": 18, "42": 42, "1": 1, 9], "target": 18 }
+  WARNING: Failed to parse example in ListInc: Expecting ',' delimiter: line 1 column 24 (char 23)
+    Raw value: { oldList: [321, 12, 532, 129, 9, -12, 4, 56, 90, 0] }
+    After conversions: { "oldList": [321, "12": 12, "532": 532, "129": 129, "9": 9, -12, "4": 4, "56": 56, "90": 90, 0] }
+  WARNING: Failed to parse example in ListIndex: Expecting ',' delimiter: line 1 column 17 (char 16)
+    Raw value: { li: [17, 2, 3, 9, 11, 11], index: 4 }
+    After conversions: { "li": [17, "2": 2, "3": 3, "9": 9, "11": 11, 11], "index": 4 }
+  WARNING: Failed to parse example in ListLength: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 3, 4, 5] }
+    After conversions: { "nums": [1, "2": 2, "3": 3, "4": 4, 5] }
+  WARNING: Failed to parse example in ListMax: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [3, 7, 2, 9, 1] }
+    After conversions: { "nums": [3, "7": 7, "2": 2, "9": 9, 1] }
+  WARNING: Failed to parse example in ListMin: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [3, 7, 2, 9, 1] }
+    After conversions: { "nums": [3, "7": 7, "2": 2, "9": 9, 1] }
+Current dir: /Users/josephcheng/Projects/rl-data-geneator
+Script dir: /Users/josephcheng/Projects/rl-data-geneator/build_src
+Project root: /Users/josephcheng/Projects/rl-data-geneator
+Python path: ['/Users/josephcheng/Projects/rl-data-geneator/build_src', '/opt/homebrew/anaconda3/lib/python311.zip', '/opt/homebrew/anaconda3/lib/python3.11', '/opt/homebrew/anaconda3/lib/python3.11/lib-dynload', '/opt/homebrew/anaconda3/lib/python3.11/site-packages', '/opt/homebrew/anaconda3/lib/python3.11/site-packages/aeosa', '/Users/josephcheng/Projects/rl-data-geneator']
+Loaded ratings for 463 puzzles
+Processed javascript/Abbreviate
+Processed javascript/AbsoluteValues
+Processed javascript/AddConstant
+Processed javascript/AllCubicRoots
+Processed javascript/AllEven
+Processed javascript/AllPandigitalSquares
+Processed javascript/AllPositive
+Processed javascript/AllPrefixes
+Processed javascript/AllQuadraticRoots
+Processed javascript/AlternateElements
+Processed javascript/AlternatingFactorials
+Processed javascript/AntiShuffle
+Processed javascript/AnyEdge
+Processed javascript/AnyNegative
+Processed javascript/AnyPath
+Processed javascript/AnyTriangle
+Processed javascript/ArithmeticSequence
+Processed javascript/ArrayDiff
+Processed javascript/AsciiToChar
+Processed javascript/BackWorlds
+Processed javascript/BackwardsDigits
+Processed javascript/BallotProblem
+Processed javascript/BasicStrCounts
+Processed javascript/BelowThreshold
+Processed javascript/BiPermutations
+Processed javascript/BigOdds
+Processed javascript/BiggestEven
+Processed javascript/BiggestK
+Processed javascript/BillSums
+Processed javascript/Binarize
+Processed javascript/BinaryAverage
+Processed javascript/BinarySort
+Processed javascript/BinaryStrXOR
+Processed javascript/BinomialProbabilities
+Processed javascript/BirthdayParadox
+Processed javascript/BitSum
+Processed javascript/BooleanPythagoreanTriples
+Processed javascript/BoxVolume
+Processed javascript/Buckets
+Processed javascript/CapitalizeFirstLetter
+Processed javascript/CardGame24
+Processed javascript/CatStrings
+Processed javascript/CeilingSquares
+Processed javascript/CenteredString
+Processed javascript/CertifiedGCD
+Processed javascript/ChangeBase
+Processed javascript/CharCounts
+Processed javascript/CharSum
+Processed javascript/CharToAscii
+Processed javascript/CheckersPosition
+Processed javascript/CircularShiftNum
+Processed javascript/ClampValues
+Processed javascript/ClockAngle
+Processed javascript/ClosestInteger
+Processed javascript/ClosestPalindrome
+Processed javascript/CollatzCycleUnsolved
+Processed javascript/CollatzDelay
+Processed javascript/CollatzGeneralizedUnsolved
+Processed javascript/CombinationLock
+Processed javascript/CommonCase
+Processed javascript/CommonNumbers
+Processed javascript/CompareInAnyCase
+Processed javascript/CompleteParens
+Processed javascript/CompleteSplit
+Processed javascript/ConcatStrings
+Processed javascript/ConsonantFilter
+Processed javascript/Contains
+Processed javascript/Conway99
+Processed javascript/Count47
+Processed javascript/CountConsonants
+Processed javascript/CountEven
+Processed javascript/CountOccurrences
+Processed javascript/CountOdd
+Processed javascript/CountPositive
+Processed javascript/CountSubstring
+Processed javascript/CountUnique
+Processed javascript/CountVowels
+Processed javascript/CreateRange
+Processed javascript/CubeRoot
+Processed javascript/CubicRoot
+Processed javascript/CumulativeSum
+Processed javascript/CumulativeSums
+Processed javascript/Dada
+Processed javascript/DateDiff
+Processed javascript/DecreasingCountComparison
+Processed javascript/Dedup
+Processed javascript/DeepestParens
+Processed javascript/DelPalindrome
+Processed javascript/Derivative
+Processed javascript/DiffChars
+Processed javascript/DiscreteLog
+Processed javascript/DistinctChars
+Processed javascript/DistinctDigits
+Processed javascript/DistinctOddSum
+Processed javascript/DominoTile
+Processed javascript/DoubleEvens
+Processed javascript/Drops
+Processed javascript/Easy63
+Processed javascript/EasySum
+Processed javascript/EasyTwos
+Processed javascript/EightQueensOrFewer
+Processed javascript/EndsWith
+Processed javascript/EngineerNumbers
+Processed javascript/EvaluateOperators
+Processed javascript/Even4Sum
+Processed javascript/EvenBetween
+Processed javascript/EvenOddDigits
+Processed javascript/EvenOddSum
+Processed javascript/EvenPalindromeNumbers
+Processed javascript/EvenPath
+Processed javascript/EvenSqure
+Processed javascript/EvenWords
+Processed javascript/EveryNth
+Processed javascript/ExpandSpaces
+Processed javascript/ExponentialCoinMoves
+Processed javascript/ExponentialProbability
+Processed javascript/Factor47
+Processed javascript/FactorString
+Processed javascript/Factorial
+Processed javascript/Factoring
+Processed javascript/FermatComposites
+Processed javascript/FermatsLastTheorem
+Processed javascript/Fib3
+Processed javascript/Fib4
+Processed javascript/Fibonacci
+Processed javascript/FilenameOK
+Processed javascript/FilterEven
+Processed javascript/FilterInts
+Processed javascript/FilterPositive
+Processed javascript/FindBored
+Processed javascript/FindCloseElements
+Processed javascript/FindClosePair
+Processed javascript/FindContainers
+Processed javascript/FindExtensions
+Processed javascript/FindHomogeneousSubstring
+Processed javascript/FindIndex
+Processed javascript/FindPositives
+Processed javascript/FindProductiveList
+Processed javascript/FindRepeats
+Processed javascript/FindStrangeSum
+Processed javascript/FindVowels
+Processed javascript/FirstElement
+Processed javascript/FirstNegCumulative
+Processed javascript/FivePowers
+Processed javascript/FlattenOnce
+Processed javascript/FlipCase
+Processed javascript/FloatNegSquareRoot
+Processed javascript/FloatSquareRoot
+Processed javascript/FloatWithDecimalValue
+Processed javascript/FourSquares
+Processed javascript/Frac
+Processed javascript/GCD
+Processed javascript/GCD17
+Processed javascript/GCD_multi
+Processed javascript/GeometricSequence
+Processed javascript/GetSlice
+Processed javascript/GimmeChars
+Processed javascript/Grader
+Processed javascript/GraphIsomorphism
+Processed javascript/GreatestHIndex
+Processed javascript/HalfPairs
+Processed javascript/HalfSorted
+Processed javascript/HalfTag
+Processed javascript/Harder63
+Processed javascript/HasDuplicates
+Processed javascript/HelloWorld
+Processed javascript/HeronTriangle
+Processed javascript/HexPrimes
+Processed javascript/HungryRabbits
+Processed javascript/IdentifyZeroTrips
+Processed javascript/IfCases
+Processed javascript/IfProblem
+Processed javascript/IfProblemWithAnd
+Processed javascript/IfProblemWithOr
+Processed javascript/InRange
+Processed javascript/IncDec
+Processed javascript/IncreasingViolation
+Processed javascript/IntDiv
+Processed javascript/IntDiv2
+Processed javascript/IntMul
+Processed javascript/IntNeg
+Processed javascript/IntNegSquareRoot
+Processed javascript/IntSquareRoot
+Processed javascript/IntSub
+Processed javascript/IntSub2
+Processed javascript/IntSum
+Processed javascript/IntegerDivision
+Processed javascript/IntegerLog
+Processed javascript/Intersperse
+Processed javascript/InverseSuperFactorial
+Processed javascript/InvertIndices
+Processed javascript/InvertPermutation
+Processed javascript/InvestigateCrash
+Processed javascript/IsDigit
+Processed javascript/IsEven
+Processed javascript/IsLetter
+Processed javascript/IsPositive
+Processed javascript/IsSorted
+Processed javascript/JoinStrings
+Processed javascript/Kirkman
+Processed javascript/KnightsTour
+Processed javascript/LCM
+Processed javascript/LCM_multi
+Processed javascript/LZW
+Processed javascript/LargestDivisor
+Processed javascript/LargestNegSmallestPos
+Processed javascript/LargestPrimeDigitSum
+Processed javascript/LargestPrimeFactor
+Processed javascript/LargestStringNum
+Processed javascript/LastElement
+Processed javascript/LastLetters
+Processed javascript/LearnParity
+Processed javascript/LearnParityWithNoise
+Processed javascript/Lehmer
+Processed javascript/LexPath
+Processed javascript/LineIntersection
+Processed javascript/ListAt
+Processed javascript/ListDistinctSum
+Processed javascript/ListIn
+Processed javascript/ListInc
+Processed javascript/ListIndex
+Processed javascript/ListIndex2
+Processed javascript/ListLen
+Processed javascript/ListLength
+Processed javascript/ListMax
+Processed javascript/ListMin  WARNING: Failed to parse example in ListMul: Expecting ',' delimiter: line 1 column 21 (char 20)
+    Raw value: { target: [17, 9, -1, 17, 9, -1], n: 2 }
+    After conversions: { "target": [17, "9": 9, -1, "17": 17, "9": 9, -1], "n": 2 }
+  WARNING: Failed to parse example in ListNegAt: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { li: [17, 31, 91, 18, 42, 1, 9], target: 91 }
+    After conversions: { "li": [17, "31": 31, "91": 91, "18": 18, "42": 42, "1": 1, 9], "target": 91 }
+  WARNING: Failed to parse example in ListSlice: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { li: [42, 18, 21, 103, -2, 11], target: [-2, 21, 42] }
+    After conversions: { "li": [42, "18": 18, "21": 21, "103": 103, -2, 11], "target": [-2, "21": 21, 42] }
+  WARNING: Failed to parse example in ListSum: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 3, 4, 5] }
+    After conversions: { "nums": [1, "2": 2, "3": 3, "4": 4, 5] }
+  WARNING: Failed to parse example in ListTotal: Expecting ',' delimiter: line 1 column 20 (char 19)
+    Raw value: { nums: [10, 42, 17, 9, 1315182, 184, 102, 29, 15, 39, 755] }
+    After conversions: { "nums": [10, "42": 42, "17": 17, "9": 9, "1315182": 1315182, "184": 184, "102": 102, "29": 29, "15": 15, "39": 39, 755] }
+  WARNING: Failed to parse example in LittleFermat: Expecting ',' delimiter: line 1 column 36 (char 35)
+    Raw value: { d: 74152093423, poly: [1, 6, 3, 1, 0, 4, 4] }
+    After conversions: { "d": 74152093423, "poly": [1, "6": 6, "3": 3, "1": 1, "0": 0, "4": 4, 4] }
+  WARNING: Failed to parse example in LongEarlySum: Expecting ',' delimiter: line 3 column 30 (char 42)
+    Raw value: {
+			k: 5,
+			nums: [1252, 125273523, 0, 42, 100, 214532, 2, 0, 11, 14],
+		}
+    After conversions: {
+			"k": 5,
+			"nums": [1252, "125273523": 125273523, "0": 0, "42": 42, "100": 100, "214532": 214532, "2": 2, "0": 0, "11": 11, 14]
+		}
+  WARNING: Failed to parse example in MaxConsecutiveProduct: Expecting ',' delimiter: line 4 column 19 (char 51)
+    Raw value: {
+			k: 3,
+			lower: 100000,
+			seq: [91, 1, 2, 64, 18, 91, -30, 100, 3, 65, 18],
+		}
+    After conversions: {
+			"k": 3,
+			"lower": 100000,
+			"seq": [91, "1": 1, "2": 2, "64": 64, "18": 18, "91": 91, -30, "100": 100, "3": 3, "65": 65, 18]
+		}
+  WARNING: Failed to parse example in MaxConsecutiveSum: Expecting ',' delimiter: line 4 column 18 (char 47)
+    Raw value: {
+			k: 3,
+			lower: 150,
+			seq: [3, 1, 2, 65, 18, 91, -30, 100, 0, 19, 52],
+		}
+    After conversions: {
+			"k": 3,
+			"lower": 150,
+			"seq": [3, "1": 1, "2": 2, "65": 65, "18": 18, "91": 91, -30, "100": 100, "0": 0, "19": 19, 52]
+		}
+  WARNING: Failed to parse example in MaxInt: Expecting ',' delimiter: line 3 column 12 (char 27)
+    Raw value: {
+			hello: [
+				1, 31, 3, 2, 0, 18, 32, -4, 2, -1000, 3502145, 3502145, 21, 18, 2, 60,
+			],
+		}
+    After conversions: {
+			"hello": [
+				1, "31": 31, "3": 3, "2": 2, "0": 0, "18": 18, "32": 32, -4, "2": 2, -1000, "3502145": 3502145, "3502145": 3502145, "21": 21, "18": 18, "2": 2, 60
+			]
+		}
+  WARNING: Failed to parse example in Median: Expecting ',' delimiter: line 2 column 32 (char 33)
+    Raw value: {
+			nums: [132666041, 237412, 28141, -12, 11939, 912414, 17],
+			upper: 133658965,
+		}
+    After conversions: {
+			"nums": [132666041, "237412": 237412, "28141": 28141, -12, "11939": 11939, "912414": 912414, 17],
+			"upper": 133658965
+		}
+  WARNING: Failed to parse example in MinConsecutiveSum: Expecting ',' delimiter: line 1 column 38 (char 37)
+    Raw value: { k: 3, upper: 6, seq: [17, 1, 2, 65, 18, 91, -30, 100, 3, 1, 2] }
+    After conversions: { "k": 3, "upper": 6, "seq": [17, "1": 1, "2": 2, "65": 65, "18": 18, "91": 91, -30, "100": 100, "3": 3, "1": 1, 2] }
+  WARNING: Failed to parse example in MinSquaredDeviation: Expecting ',' delimiter: line 1 column 24 (char 23)
+    Raw value: { nums: [12, -2, 14, 3, -15, 10, -45, 3, 30] }
+    After conversions: { "nums": [12, -2, "14": 14, "3": 3, -15, "10": 10, -45, "3": 3, 30] }
+  WARNING: Failed to parse example in Monotonic: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [2, 4, 17, 29, 31, 1000, 416629] }
+    After conversions: { "nums": [2, "4": 4, "17": 17, "29": 29, "31": 31, "1000": 1000, 416629] }
+  WARNING: Failed to parse example in Moving0s: Expecting ',' delimiter: line 1 column 20 (char 19)
+    Raw value: { target: [1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0], n_steps: 4 }
+    After conversions: { "target": [1, "1": 1, "1": 1, "1": 1, "0": 0, "0": 0, "0": 0, "1": 1, "1": 1, "0": 0, "0": 0, "0": 0, 0], "n_steps": 4 }
+  WARNING: Failed to parse example in MultiplyList: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 3], k: 5 }
+    After conversions: { "nums": [1, "2": 2, 3], "k": 5 }
+  WARNING: Failed to parse example in Nim: Expecting ',' delimiter: line 1 column 27 (char 26)
+    Raw value: { initial_state: [5, 9, 3, 11, 18, 25, 1, 2, 4, 1] }
+    After conversions: { "initial_state": [5, "9": 9, "3": 3, "11": 11, "18": 18, "25": 25, "1": 1, "2": 2, "4": 4, 1] }
+  WARNING: Failed to parse example in OddDegreePolynomialRoot: Expecting ',' delimiter: line 1 column 20 (char 19)
+    Raw value: { coeffs: [1, 2, 3, 17] }
+    After conversions: { "coeffs": [1, "2": 2, "3": 3, 17] }
+  WARNING: Failed to parse example in OddEvenSum: Expecting ',' delimiter: line 2 column 24 (char 25)
+    Raw value: {
+			nums: [18, 42152, 125023521, -1221873620123, 17, 19],
+		}
+    After conversions: {
+			"nums": [18, "42152": 42152, "125023521": 125023521, -1221873620123, "17": 17, 19]
+		}
+  WARNING: Failed to parse example in OptimalBridges: Expecting ',' delimiter: line 5 column 18 (char 61)
+    Raw value: {
+			H: 60,
+			alpha: 18,
+			beta: 2,
+			xs: [0, 10, 20, 30, 50, 80, 100, 120, 160, 190, 200],
+			ys: [0, 30, 10, 30, 50, 40, 10, 20, 20, 55, 10],
+			thresh: 26020,
+		}
+    After conversions: {
+			"H": 60,
+			"alpha": 18,
+			"beta": 2,
+			"xs": [0, "10": 10, "20": 20, "30": 30, "50": 50, "80": 80, "100": 100, "120": 120, "160": 160, "190": 190, 200],
+			"ys": [0, "30": 30, "10": 10, "30": 30, "50": 50, "40": 40, "10": 10, "20": 20, "20": 20, "55": 55, 10],
+			"thresh": 26020
+		}
+  WARNING: Failed to parse example in PairElements: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 3, 4] }
+    After conversions: { "nums": [1, "2": 2, "3": 3, 4] }
+  WARNING: Failed to parse example in PairZeroSum: Expecting ',' delimiter: line 1 column 31 (char 30)
+    Raw value: { nums: [12, -10452, 18242, 10440, 81, 241, 525, -18242, 91, 20] }
+    After conversions: { "nums": [12, -10452, "18242": 18242, "10440": 10440, "81": 81, "241": 241, "525": 525, -18242, "91": 91, 20] }
+  WARNING: Failed to parse example in ParityExchange: Expecting ',' delimiter: line 2 column 20 (char 21)
+    Raw value: {
+			nums1: [1, 3, 2, 4, 5, 8, 7, 11],
+			nums2: [0, 7, 0, 8, 19, 4, 41, 43, 42],
+		}
+    After conversions: {
+			"nums1": [1, "3": 3, "2": 2, "4": 4, "5": 5, "8": 8, "7": 7, 11],
+			"nums2": [0, "7": 7, "0": 0, "8": 8, "19": 19, "4": 4, "41": 41, "43": 43, 42]
+		}
+  WARNING: Failed to parse example in PickNearNeighbors: Expecting ',' delimiter: line 3 column 12 (char 29)
+    Raw value: {
+			heights: [
+				10, 2, 14, 1, 8, 19, 16, 6, 12, 3, 17, 0, 9, 18, 5, 7, 11, 13, 15, 4,
+			],
+		}
+    After conversions: {
+			"heights": [
+				10, "2": 2, "14": 14, "1": 1, "8": 8, "19": 19, "16": 16, "6": 6, "12": 12, "3": 3, "17": 17, "0": 0, "9": 9, "18": 18, "5": 5, "7": 7, "11": 11, "13": 13, "15": 15, 4
+			]
+		}
+  WARNING: Failed to parse example in PositiveDigitSums: Expecting ',' delimiter: line 1 column 24 (char 23)
+    Raw value: { nums: [-804, 9124, -945, 2410, 0, 21, -123] }
+    After conversions: { "nums": [-804, "9124": 9124, -945, "2410": 2410, "0": 0, "21": 21, -123] }
+  WARNING: Failed to parse example in PostageStamp: Expecting ',' delimiter: line 1 column 54 (char 53)
+    Raw value: { target: 80, max_stamps: 4, options: [10, 32, 8] }
+    After conversions: { "target": 80, "max_stamps": 4, "options": [10, "32": 32, 8] }
+  WARNING: Failed to parse example in PrimeSel: Expecting ',' delimiter: line 3 column 12 (char 26)
+    Raw value: {
+			nums: [
+				14, 7, 11, 13, 7, 4, 19, 2, 55, 13, 31, 14, 2, 9, -7, 0, 88, 13, 13,
+			],
+		}
+    After conversions: {
+			"nums": [
+				14, "7": 7, "11": 11, "13": 13, "7": 7, "4": 4, "19": 19, "2": 2, "55": 55, "13": 13, "31": 31, "14": 14, "2": 2, "9": 9, -7, "0": 0, "88": 88, "13": 13, 13
+			]
+		}
+  WARNING: Failed to parse example in ProductSigns: Expecting ',' delimiter: line 1 column 17 (char 16)
+    Raw value: { arr: [1, 7, -20052, 14, -3, -11, 1025235, 14] }
+    After conversions: { "arr": [1, "7": 7, -20052, "14": 14, -3, -11, "1025235": 1025235, 14] }
+  WARNING: Failed to parse example in RepeatElements: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 3], times: 3 }
+    After conversions: { "nums": [1, "2": 2, 3], "times": 3 }
+  WARNING: Failed to parse example in ReverseList: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 3, 4, 5] }
+    After conversions: { "nums": [1, "2": 2, "3": 3, "4": 4, 5] }
+  WARNING: Failed to parse example in RollingMax: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 4, 3, -6, 19] }
+    After conversions: { "nums": [1, "4": 4, "3": 3, -6, 19] }
+  WARNING: Failed to parse example in RotateSort: Expecting ',' delimiter: line 1 column 17 (char 16)
+    Raw value: { arr: [2, 3, -1, -1, 0, 1, 1] }
+    After conversions: { "arr": [2, "3": 3, -1, -1, "0": 0, "1": 1, 1] }
+  WARNING: Failed to parse example in RunningMax: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [3, 1, 4, 1, 5, 9, 2] }
+    After conversions: { "nums": [3, "1": 1, "4": 4, "1": 1, "5": 5, "9": 9, 2] }
+  WARNING: Failed to parse example in RunningMin: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [3, 1, 4, 1, 5, 9, 2] }
+    After conversions: { "nums": [3, "1": 1, "4": 4, "1": 1, "5": 5, "9": 9, 2] }
+  WARNING: Failed to parse example in SameDifferent: Expecting ',' delimiter: line 1 column 19 (char 18)
+    Raw value: { items: [5, 4, 9, 4, 5, 5, 5, 1, 5, 5], length: 4 }
+    After conversions: { "items": [5, "4": 4, "9": 9, "4": 4, "5": 5, "5": 5, "5": 5, "1": 1, "5": 5, 5], "length": 4 }
+  WARNING: Failed to parse example in SecondSmallestUnique: Expecting ',' delimiter: line 3 column 41 (char 55)
+    Raw value: {
+			nums: [
+				17, -1023589211, -293485382500, 31, -293485382500, 105762, 94328103589,
+			],
+		}
+    After conversions: {
+			"nums": [
+				17, -1023589211, -293485382500, "31": 31, -293485382500, "105762": 105762, 94328103589
+			]
+		}
+  WARNING: Failed to parse example in SlidingOne: Expecting ',' delimiter: line 3 column 12 (char 28)
+    Raw value: {
+			matrix: [
+				[0, 0, 0, 0, 0],
+				[0, 0, 0, 0, 1],
+				[0, 0, 0, 0, 0],
+				[0, 0, 0, 0, 0],
+				[0, 0, 0, 0, 0],
+			],
+			max_moves: 3,
+		}
+    After conversions: {
+			"matrix": [
+				[0, "0": 0, "0": 0, "0": 0, 0],
+				[0, "0": 0, "0": 0, "0": 0, 1],
+				[0, "0": 0, "0": 0, "0": 0, 0],
+				[0, "0": 0, "0": 0, "0": 0, 0],
+				[0, "0": 0, "0": 0, "0": 0, 0]
+			],
+			"max_moves": 3
+		}
+  WARNING: Failed to parse example in SmallestEven: Expecting ',' delimiter: line 2 column 29 (char 30)
+    Raw value: {
+			nums: [125123, 422323, 141, 5325, 812152, 9, 42145, 5313, 421, 812152],
+		}
+    After conversions: {
+			"nums": [125123, "422323": 422323, "141": 141, "5325": 5325, "812152": 812152, "9": 9, "42145": 42145, "5313": 5313, "421": 421, 812152]
+		}
+  WARNING: Failed to parse example in SortByDigitSum: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 0, -1, -100, 10, 14, 235251, 11, 10000, 2000001, -155] }
+    After conversions: { "nums": [1, "0": 0, -1, -100, "10": 10, "14": 14, "235251": 235251, "11": 11, "10000": 10000, "2000001": 2000001, -155] }
+  WARNING: Failed to parse example in SortDescending: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [3, 1, 4, 1, 5, 9, 2, 6] }
+    After conversions: { "nums": [3, "1": 1, "4": 4, "1": 1, "5": 5, "9": 9, "2": 2, 6] }
+  WARNING: Failed to parse example in SortList: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [3, 1, 4, 1, 5, 9, 2, 6] }
+    After conversions: { "nums": [3, "1": 1, "4": 4, "1": 1, "5": 5, "9": 9, "2": 2, 6] }
+  WARNING: Failed to parse example in SortedOdds: Expecting ',' delimiter: line 2 column 21 (char 22)
+    Raw value: {
+			nums: [17, 20, -100, 101, 423258, 19949, 0, 20174, 9351773, -11],
+		}
+    After conversions: {
+			"nums": [17, "20": 20, -100, "101": 101, "423258": 423258, "19949": 19949, "0": 0, "20174": 20174, "9351773": 9351773, -11]
+		}
+  WARNING: Failed to parse example in SquareList: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 3, 4] }
+    After conversions: { "nums": [1, "2": 2, "3": 3, 4] }
+  WARNING: Failed to parse example in SumPairs: Expecting ',' delimiter: line 1 column 15 (char 14)
+    Raw value: { a: [1, 2, 3], b: [4, 5, 6] }
+    After conversions: { "a": [1, "2": 2, 3], "b": [4, "5": 5, 6] }
+  WARNING: Failed to parse example in Threeples: Expecting value: line 1 column 8 (char 7)
+    Raw value: { a, count: 221 }
+    After conversions: { "a": a, "count": 221 }
+  WARNING: Failed to parse example in Triple0: Expecting ',' delimiter: line 3 column 12 (char 26)
+    Raw value: {
+			nums: [
+				[1, 2, 3],
+				[9, -2, 8],
+				[17, 2, 50],
+			],
+		}
+    After conversions: {
+			"nums": [
+				[1, "2": 2, 3],
+				[9, -2, 8],
+				[17, "2": 2, 50]
+			]
+		}
+  WARNING: Failed to parse example in TripleZeroSum: Expecting ',' delimiter: line 1 column 19 (char 18)
+    Raw value: { nums: [12, 6, 41, 15, -10452, 18242, 10440, 6, 6, 6, 6] }
+    After conversions: { "nums": [12, "6": 6, "41": 41, "15": 15, -10452, "18242": 18242, "10440": 10440, "6": 6, "6": 6, "6": 6, 6] }
+  WARNING: Failed to parse example in TwoThirdsSorted: Expecting ',' delimiter: line 1 column 22 (char 21)
+    Raw value: { orig: [1, -2, 3, 17, 8, 4, 12, 3, 18, 5, -29, 0, 0] }
+    After conversions: { "orig": [1, -2, "3": 3, "17": 17, "8": 8, "4": 4, "12": 12, "3": 3, "18": 18, "5": 5, -29, "0": 0, 0] }
+  WARNING: Failed to parse example in UnevenFind: Expecting ',' delimiter: line 2 column 22 (char 23)
+    Raw value: {
+			uneven: [[1, 3, 2, 32, 17], [17, 2, 48, 17], [], [9, 35, 4], [3, 17]],
+			target: 17,
+		}
+    After conversions: {
+			"uneven": [[1, "3": 3, "2": 2, "32": 32, 17], [17, "2": 2, "48": 48, 17], [], [9, "35": 35, 4], [3, 17]],
+			"target": 17
+		}
+  WARNING: Failed to parse example in UniqueElements: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { nums: [1, 2, 2, 3, 3, 3, 4] }
+    After conversions: { "nums": [1, "2": 2, "2": 2, "3": 3, "3": 3, "3": 3, 4] }
+  WARNING: Failed to parse example in UniqueSorted: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { orig: [1, 1, 3, 2, 0, 8, 32, -4, 0] }
+    After conversions: { "orig": [1, "1": 1, "3": 3, "2": 2, "0": 0, "8": 8, "32": 32, -4, 0] }
+  WARNING: Failed to parse example in UnitsProduct: Expecting ',' delimiter: line 1 column 20 (char 19)
+    Raw value: { nums: [17, 24, 39, 15, 11, 201, 97, 65, 18] }
+    After conversions: { "nums": [17, "24": 24, "39": 39, "15": 15, "11": 11, "201": 201, "97": 97, "65": 65, 18] }
+  WARNING: Failed to parse example in UpDownSort: Expecting ',' delimiter: line 1 column 19 (char 18)
+    Raw value: { nums: [17, 2, 3, 523, 18, -2, 0, 2, -1] }
+    After conversions: { "nums": [17, "2": 2, "3": 3, "523": 523, "18": 18, -2, "0": 0, "2": 2, -1] }
+  WARNING: Failed to parse example in WaterPouring: Expecting ',' delimiter: line 1 column 24 (char 23)
+    Raw value: { capacities: [8, 5, 3], init: [8, 0, 0], goal: [4, 4, 0] }
+    After conversions: { "capacities": [8, "5": 5, 3], "init": [8, "0": 0, 0], "goal": [4, "4": 4, 0] }
+  WARNING: Failed to parse example in WildSort: Expecting ',' delimiter: line 1 column 18 (char 17)
+    Raw value: { li: [30, 12, 42, 717, 45, 317, 200, -1, 491, 32, 15] }
+    After conversions: { "li": [30, "12": 12, "42": 42, "717": 717, "45": 45, "317": 317, "200": 200, -1, "491": 491, "32": 32, 15] }
+  WARNING: Failed to parse example in ZeroNegatives: Expecting ',' delimiter: line 1 column 22 (char 21)
+    Raw value: { nums: [1, -2, 3, -4, 5] }
+    After conversions: { "nums": [1, -2, "3": 3, -4, 5] }
+  WARNING: Failed to parse example in ZipLists: Expecting ',' delimiter: line 1 column 15 (char 14)
+    Raw value: { a: [1, 2, 3], b: [4, 5, 6] }
+    After conversions: { "a": [1, "2": 2, 3], "b": [4, "5": 5, 6] }
+
+Processed javascript/ListMul
+Processed javascript/ListNegAt
+Processed javascript/ListPosSum
+Processed javascript/ListSetLen
+Processed javascript/ListSlice
+Processed javascript/ListSum
+Processed javascript/ListTotal
+Processed javascript/LittleFermat
+Processed javascript/LongEarlySum
+Processed javascript/LongestMonotonicSubstring
+Processed javascript/LongestMonotonicSubstringTricky
+Processed javascript/LongestStr
+Processed javascript/LongestSubsetString
+Processed javascript/Lowercase
+Processed javascript/Mastermind
+Processed javascript/MatchBrackets
+Processed javascript/MatchingMarkers
+Processed javascript/MaxConsecutiveProduct
+Processed javascript/MaxConsecutiveSum
+Processed javascript/MaxDelta
+Processed javascript/MaxInt
+Processed javascript/MaxOfTwo
+Processed javascript/MaybeReversed
+Processed javascript/Median
+Processed javascript/MinBigger
+Processed javascript/MinConsecutiveSum
+Processed javascript/MinOfTwo
+Processed javascript/MinRotations
+Processed javascript/MinSquaredDeviation
+Processed javascript/MinSubArraySum
+Processed javascript/MissingBananas
+Processed javascript/Modulo
+Processed javascript/MonkeyAndCoconuts
+Processed javascript/Monotonic
+Processed javascript/MoreQueens
+Processed javascript/MostUnique
+Processed javascript/Moving0s
+Processed javascript/MultiplyList
+Processed javascript/NarrowerList
+Processed javascript/Nash
+Processed javascript/NearbyDuplicates
+Processed javascript/NecklaceSplit
+Processed javascript/Nim
+Processed javascript/No3Colinear
+Processed javascript/NoRelativePrimes
+Processed javascript/NumPasses
+Processed javascript/OddCase
+Processed javascript/OddCollatz
+Processed javascript/OddDegreePolynomialRoot
+Processed javascript/OddEvenSum
+Processed javascript/OddPath
+Processed javascript/OddProduct
+Processed javascript/OneEnded
+Processed javascript/OnesAndTwos
+Processed javascript/OptimalBridges
+Processed javascript/Oscillators
+Processed javascript/OverlappingCount
+Processed javascript/PackingHam
+Processed javascript/PairElements
+Processed javascript/PairZeroSum
+Processed javascript/Palindrome
+Processed javascript/PalindromeContaining
+Processed javascript/PandigitalSquare
+Processed javascript/ParenDepth
+Processed javascript/ParenthesesPermutation
+Processed javascript/ParityExchange
+Processed javascript/ParseMusic
+Processed javascript/PenultimateRevString
+Processed javascript/PenultimateString
+Processed javascript/PickNearNeighbors
+Processed javascript/PlanetRange
+Processed javascript/PlantedClique
+Processed javascript/PositiveDigitSums
+Processed javascript/PostageStamp
+Processed javascript/Power
+Processed javascript/PrimeFactorization
+Processed javascript/PrimeFib
+Processed javascript/PrimeIntervalIntersection
+Processed javascript/PrimeSel
+Processed javascript/PrimeWords
+Processed javascript/PrimesUpTo
+Processed javascript/ProductSigns
+Processed javascript/PythagoreanTriples
+Processed javascript/QuadraticRoot
+Processed javascript/Quine
+Processed javascript/RangeWithStart
+Processed javascript/RangeWithStep
+Processed javascript/RemoveSpaces
+Processed javascript/RemoveVowels
+Processed javascript/RepeatDec
+Processed javascript/RepeatElements
+Processed javascript/RepeatString
+Processed javascript/ReplaceMe
+Processed javascript/ReplaceString
+Processed javascript/Rescale
+Processed javascript/RevQuine
+Processed javascript/ReverseCase
+Processed javascript/ReverseCat
+Processed javascript/ReverseLifeStep
+Processed javascript/ReverseList
+Processed javascript/ReverseString
+Processed javascript/RockPaperScissors
+Processed javascript/RollingMax
+Processed javascript/RomanNumerals
+Processed javascript/RotateSort
+Processed javascript/RotateString
+Processed javascript/RunningMax
+Processed javascript/RunningMin
+Processed javascript/SameDifferent
+Processed javascript/SecondSmallestUnique
+Processed javascript/SeparateParenGroups
+Processed javascript/SevenElevenThirteen
+Processed javascript/ShiftChars
+Processed javascript/ShortIntegerPath
+Processed javascript/ShortestDecDelta
+Processed javascript/ShortestPath
+Processed javascript/SimplifyProductFraction
+Processed javascript/SlidingOne
+Processed javascript/SlidingPuzzle
+Processed javascript/SmallExponentBigSolution
+Processed javascript/SmallestEven
+Processed javascript/SortByDigitSum
+Processed javascript/SortDescending
+Processed javascript/SortList
+Processed javascript/SortNumbers
+Processed javascript/SortPlusPlus
+Processed javascript/SortedOdds
+Processed javascript/Spaceship
+Processed javascript/SpaceyRange
+Processed javascript/SplitString
+Processed javascript/SquareList
+Processed javascript/SquareTiles
+Processed javascript/SquaringTheSquare
+Processed javascript/Sssuubbstriiingg
+Processed javascript/Sstriiinggssuubb
+Processed javascript/StartsWith
+Processed javascript/StonePiles
+Processed javascript/StrAdd
+Processed javascript/StrAt
+Processed javascript/StrCount
+Processed javascript/StrIn
+Processed javascript/StrIn2
+Processed javascript/StrIndex
+Processed javascript/StrIndex2
+Processed javascript/StrJoiner
+Processed javascript/StrLen
+Processed javascript/StrLength
+Processed javascript/StrMul
+Processed javascript/StrMul2
+Processed javascript/StrNegAt
+Processed javascript/StrParts
+Processed javascript/StrSetLen
+Processed javascript/StrSlice
+Processed javascript/StrSplit
+Processed javascript/StrSplitter
+Processed javascript/StrangeSplit
+Processed javascript/StringLength
+Processed javascript/StripWhitespace
+Processed javascript/StrongestExtension
+Processed javascript/Study_1
+Processed javascript/Study_10
+Processed javascript/Study_11
+Processed javascript/Study_12
+Processed javascript/Study_13
+Processed javascript/Study_14
+Processed javascript/Study_15
+Processed javascript/Study_16
+Processed javascript/Study_17
+Processed javascript/Study_18
+Processed javascript/Study_19
+Processed javascript/Study_2
+Processed javascript/Study_20
+Processed javascript/Study_21
+Processed javascript/Study_22
+Processed javascript/Study_23
+Processed javascript/Study_24
+Processed javascript/Study_25
+Processed javascript/Study_26
+Processed javascript/Study_27
+Processed javascript/Study_28
+Processed javascript/Study_29
+Processed javascript/Study_3
+Processed javascript/Study_30
+Processed javascript/Study_4
+Processed javascript/Study_5
+Processed javascript/Study_6
+Processed javascript/Study_7
+Processed javascript/Study_8
+Processed javascript/Study_9
+Processed javascript/SublistSum
+Processed javascript/SubstitutionCypher
+Processed javascript/SubstrCount
+Processed javascript/Sudoku
+Processed javascript/SumOfDigits
+Processed javascript/SumPairs
+Processed javascript/SumProduct
+Processed javascript/ThreeCubes
+Processed javascript/ThreeCycle
+Processed javascript/ThreePrimes
+Processed javascript/ThreeWayMax
+Processed javascript/Threeples
+Processed javascript/TicTacToeO
+Processed javascript/TicTacToeX
+Processed javascript/TotalDifference
+Processed javascript/TowersOfHanoi
+Processed javascript/TowersOfHanoiArbitrary
+Processed javascript/TriangleArea
+Processed javascript/Tribonacci
+Processed javascript/Triple0
+Processed javascript/TripleDouble
+Processed javascript/TripleZeroSum
+Processed javascript/Tutorial1
+Processed javascript/Tutorial2
+Processed javascript/Tutorial3
+Processed javascript/Tutorial4
+Processed javascript/Tutorial5
+Processed javascript/TwoThirdsSorted
+Processed javascript/UNSOLVED_UncrossedKnightsPath
+Processed javascript/UncrossedKnightsPath
+Processed javascript/UnevenFind
+Processed javascript/UniqueElements
+Processed javascript/UniqueSorted
+Processed javascript/UnitsProduct
+Processed javascript/UnweightedShortestPath
+Processed javascript/UpDownSort
+Processed javascript/Uppercase
+Processed javascript/UppercaseEven
+Processed javascript/ValidBracketSubsequence
+Processed javascript/VerbalArithmetic
+Processed javascript/VowelDrop
+Processed javascript/VowelSandwich
+Processed javascript/WaterPouring
+Processed javascript/WeirdDecodeVowels
+Processed javascript/WildSort
+Processed javascript/Zarankiewicz
+Processed javascript/ZeroNegatives
+Processed javascript/ZeroSum
+Processed javascript/ZipLists
+Processed javascript/ZipStr
+Processed javascript/Znam
+Processed javascript/ZobristCollision
+Generated assets/puzzles.json

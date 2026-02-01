@@ -101,6 +101,13 @@ def extract_js_puzzle_info(file_path, puzzle_name):
     if not class_match:
         return None
 
+    # Check if the class is commented out (// before export)
+    line_start = content.rfind("\n", 0, class_match.start()) + 1
+    line_before_class = content[line_start : class_match.start()]
+    if line_before_class.strip().startswith("//"):
+        # This class is commented out, skip it
+        return None
+
     class_start = class_match.end()
 
     # Find next class or end
@@ -133,7 +140,8 @@ def extract_js_puzzle_info(file_path, puzzle_name):
     # Extract getExample and update sol parameters
     example_inputs = {}
     # Find getExample() method and extract the returned value
-    getex_match = re.search(r"getExample\s*\(\)\s*\{", class_content)
+    # More flexible regex to handle different formatting
+    getex_match = re.search(r"getExample\s*\(\s*\)\s*\{", class_content)
     if getex_match:
         # Find the return statement within the method
         start_pos = getex_match.end()
@@ -149,10 +157,18 @@ def extract_js_puzzle_info(file_path, puzzle_name):
                 try:
                     # Convert JavaScript object syntax to valid JSON
                     js_obj_str = value_str
+                    # Remove trailing commas before ] or }
+                    js_obj_str = re.sub(r",(\s*[}\]])", r"\1", js_obj_str)
+                    # Fix float literals with trailing dots: 0. -> 0.0, -1. -> -1.0
+                    js_obj_str = re.sub(r"(\d)\.(\s*[,\]\}])", r"\1.0\2", js_obj_str)
                     # Add quotes around unquoted object keys: { key: value } -> { "key": value }
-                    js_obj_str = re.sub(r"(\w+):", r'"\1":', js_obj_str)
-                    # Replace single quotes with double quotes
-                    js_obj_str = js_obj_str.replace("'", '"')
+                    # Match identifiers OR numbers, but only when preceded by { or ,
+                    js_obj_str = re.sub(
+                        r"([{,]\s*)([a-zA-Z_]\w*|[0-9]+)(:)", r'\1"\2"\3', js_obj_str
+                    )
+                    # Replace single-quoted strings with double-quoted strings
+                    # Only match single quotes that delimit strings (not inside double-quoted strings)
+                    js_obj_str = re.sub(r"'([^']*)'", r'"\1"', js_obj_str)
 
                     # Parse as JSON
                     import json
@@ -187,8 +203,15 @@ def extract_js_puzzle_info(file_path, puzzle_name):
                                     if params:
                                         sol = f"function sol({params})"
                 except Exception as e:
-                    # Silently fail - keep empty example_inputs
-                    pass
+                    # Log the error for debugging
+                    import traceback
+
+                    print(
+                        f"  WARNING: Failed to parse example in {puzzle_name}: {e}",
+                        file=sys.stderr,
+                    )
+                    print(f"    Raw value: {value_str}", file=sys.stderr)
+                    print(f"    After conversions: {js_obj_str}", file=sys.stderr)
 
     return {
         "docstring": docstring,
@@ -338,6 +361,10 @@ def generate_puzzle_assets(output_dir="assets"):
                 for file_path in js_generators_dir.glob("*.js"):
                     info = extract_js_puzzle_info(file_path, puzzle_name)
                     if info:
+                        # Skip puzzles with null rating
+                        rating = ratings.get(puzzle_name, None)
+                        if rating is None:
+                            break
                         # Get ans_type from Python version
                         py_ans_type = python_ans_types.get(puzzle_name, "any")
                         ans_type = type_map.get(py_ans_type, py_ans_type)
@@ -348,7 +375,7 @@ def generate_puzzle_assets(output_dir="assets"):
                             "sat": info["sat"],
                             "sol": info["sol"],
                             "ans_type": ans_type,
-                            "rating": ratings.get(puzzle_name, None),
+                            "rating": rating,
                             "example": info.get("example", {}),
                         }
                         print(f"Processed {language}/{puzzle_name}")
@@ -359,6 +386,10 @@ def generate_puzzle_assets(output_dir="assets"):
                     if file_path.name != "__init__.py":
                         info = extract_python_puzzle_info(file_path, puzzle_name)
                         if info:
+                            # Skip puzzles with null rating
+                            rating = ratings.get(puzzle_name, None)
+                            if rating is None:
+                                break
                             all_puzzles[language][puzzle_name] = {
                                 "name": puzzle_name,
                                 "language": language,
@@ -366,7 +397,7 @@ def generate_puzzle_assets(output_dir="assets"):
                                 "sat": info["sat"],
                                 "sol": info["sol"],
                                 "ans_type": info["ans_type"],
-                                "rating": ratings.get(puzzle_name, None),
+                                "rating": rating,
                             }
                             break
 

@@ -150,7 +150,7 @@ export {
 	BiggestEven,
 	BiggestK,
 	BigOdds,
-	Binarize,
+	// Binarize, Bigint in param
 	BinaryAverage,
 	BinarySort,
 	BinaryStrXOR,

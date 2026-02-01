@@ -3983,58 +3983,58 @@ export class HexPrimes extends PuzzleGenerator {
 	}
 }
 
-export class Binarize extends PuzzleGenerator {
-	/** Inspired by HumanEval #79 */
-	static docstring = "* Write n base 2 followed and preceded by 'bits'\n        Sample Input:\n        2\n\n        Sample Output:\n        bits10bits";
-	static sat (b, n = 5324680297138495285n) {
-		/**
-		 * Write n base 2 followed and preceded by 'bits'
-		 * Sample Input:
-		 * 2
-		 *
-		 * Sample Output:
-		 * bits10bits
-		 */
-		const targetN = BigInt(n);
+// export class Binarize extends PuzzleGenerator {
+// 	/** Inspired by HumanEval #79 */
+// 	static docstring = "* Write n base 2 followed and preceded by 'bits'\n        Sample Input:\n        2\n\n        Sample Output:\n        bits10bits";
+// 	static sat (b, n = 5324680297138495285n) {
+// 		/**
+// 		 * Write n base 2 followed and preceded by 'bits'
+// 		 * Sample Input:
+// 		 * 2
+// 		 *
+// 		 * Sample Output:
+// 		 * bits10bits
+// 		 */
+// 		const targetN = BigInt(n);
 
-		// Check prefix and suffix
-		if (!b.startsWith("bits") || !b.endsWith("bits")) return false;
-		if (b.length < 8) return false;
+// 		// Check prefix and suffix
+// 		if (!b.startsWith("bits") || !b.endsWith("bits")) return false;
+// 		if (b.length < 8) return false;
 
-		const inside = b.slice(4, -4);
+// 		const inside = b.slice(4, -4);
 
-		// Check binary characters
-		if (!/^[01]+$/.test(inside)) return false;
+// 		// Check binary characters
+// 		if (!/^[01]+$/.test(inside)) return false;
 
-		// Check for leading zeros (unless the string is just "0")
-		if (inside.length > 1 && inside[0] === "0") return false;
+// 		// Check for leading zeros (unless the string is just "0")
+// 		if (inside.length > 1 && inside[0] === "0") return false;
 
-		// Convert binary string to BigInt
-		let m = 0n;
-		for (let c of inside) {
-			m = 2n * m + BigInt(c);
-		}
+// 		// Convert binary string to BigInt
+// 		let m = 0n;
+// 		for (let c of inside) {
+// 			m = 2n * m + BigInt(c);
+// 		}
 
-		return m === targetN;
-	}
+// 		return m === targetN;
+// 	}
 
-	static sol (n) {
-		const s = BigInt(n).toString(2);
-		return `bits${s}bits`;
-	}
+// 	static sol (n) {
+// 		const s = BigInt(n).toString(2);
+// 		return `bits${s}bits`;
+// 	}
 
-	getExample () {
-		return { n: 5324680297138495285n };
-	}
+// 	getExample () {
+// 		return { n: 5324680297138495285n };
+// 	}
 
-	genRandom () {
-		const digits = Math.floor(this.random() * 30);
-		// Generating large random numbers in JS
-		const max = 10n ** BigInt(digits);
-		const n = BigInt(Math.floor(this.random() * Number(max)));
-		this.add({ n: n });
-	}
-}
+// 	genRandom () {
+// 		const digits = Math.floor(this.random() * 30);
+// 		// Generating large random numbers in JS
+// 		const max = 10n ** BigInt(digits);
+// 		const n = BigInt(Math.floor(this.random() * Number(max)));
+// 		this.add({ n: n });
+// 	}
+// }
 
 export class NearbyDuplicates extends PuzzleGenerator {
 	/** Inspired by HumanEval #80 */
@@ -7020,10 +7020,7 @@ export class Threeples extends PuzzleGenerator {
 	}
 
 	getExample () {
-		const a = [
-			1, 0, -17, 42, 321, 36, 429, 35, 10, 923, 35, 18, 0, 17, 24, 32, 8,
-		];
-		return { a, count: 221 };
+		return { a: [1, 0, -17, 42, 321, 36, 429, 35, 10, 923, 35, 18, 0, 17, 24, 32, 8], count: 221 };
 	}
 
 	genRandom () {

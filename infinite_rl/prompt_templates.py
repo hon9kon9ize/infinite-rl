@@ -58,6 +58,7 @@ def format_puzzle_prompt(
     language: str,
     answer_tag: str = "answer",
     think_tag: str = "think",
+    one_shot: bool = False,
 ) -> str:
     """Format a puzzle prompt for the model.
 
@@ -68,6 +69,7 @@ def format_puzzle_prompt(
         language: Programming language for the puzzle (javascript or python)
         answer_tag: XML tag name for wrapping the answer (default: "answer")
         think_tag: XML tag name for wrapping reasoning (default: "think")
+        one_shot: Whether to include a one-shot example (default: False)
 
     Returns:
         Formatted prompt string with puzzle specification and solution template
@@ -77,7 +79,81 @@ def format_puzzle_prompt(
     sat_func = puzzle_data.get("sat", "")
     sol_func = puzzle_data.get("sol", "")
 
+    # One-shot example section
+    one_shot_example = ""
+    if one_shot:
+        if language == "python":
+            one_shot_example = """
+**Example Puzzle and Solution:**
+
+# Sum of Two Numbers
+
+Write a function that returns the sum of two integers.
+
+Condition:
+```python
+def sat(result: int, a=5, b=3):
+    return result == a + b
+```
+
+Your solution should be:
+```python
+def sol(a, b):
+    pass
+```
+
+<think>
+To solve this puzzle, I need to write a function that takes two parameters a and b and returns their sum. The sat function checks if the result equals a + b, so my solution should simply return a + b.
+</think>
+
+<answer>
+```python
+def sol(a, b):
+    return a + b
+```
+</answer>
+
+---
+"""
+        else:  # javascript
+            one_shot_example = """
+**Example Puzzle and Solution:**
+
+# Sum of Two Numbers
+
+Write a function that returns the sum of two integers.
+
+Condition:
+```javascript
+function sat(result, a=5, b=3) {
+    return result === a + b;
+}
+```
+
+Your solution should be:
+```javascript
+function sol(a, b) {
+    // your code here
+}
+```
+
+<think>
+To solve this puzzle, I need to write a function that takes two parameters a and b and returns their sum. The sat function checks if the result equals a + b, so my solution should simply return a + b.
+</think>
+
+<answer>
+```javascript
+function sol(a, b) {
+    return a + b;
+}
+```
+</answer>
+
+---
+"""
+
     prompt = f"""Solve this programming puzzle:
+{one_shot_example}
 
 # {name}
 

@@ -174,6 +174,46 @@ class TestFormatPuzzlePrompt(unittest.TestCase):
         self.assertIn("<think>", result)
         self.assertIn("<answer>", result)
 
+    def test_puzzle_one_shot_disabled(self):
+        """Test puzzle prompt without one-shot example."""
+        result = format_puzzle_prompt(self.puzzle_data, "python", one_shot=False)
+
+        # Should NOT contain example section
+        self.assertNotIn("Example Puzzle and Solution", result)
+        self.assertNotIn("Sum of Two Numbers", result)
+
+    def test_puzzle_one_shot_python(self):
+        """Test puzzle prompt with Python one-shot example."""
+        result = format_puzzle_prompt(self.puzzle_data, "python", one_shot=True)
+
+        # Should contain example section
+        self.assertIn("Example Puzzle and Solution", result)
+        self.assertIn("Sum of Two Numbers", result)
+        self.assertIn("def sol(a, b):", result)
+        self.assertIn("return a + b", result)
+        # Should still contain the actual puzzle
+        self.assertIn("fibonacci", result)
+
+    def test_puzzle_one_shot_javascript(self):
+        """Test puzzle prompt with JavaScript one-shot example."""
+        result = format_puzzle_prompt(self.puzzle_data, "javascript", one_shot=True)
+
+        # Should contain example section
+        self.assertIn("Example Puzzle and Solution", result)
+        self.assertIn("Sum of Two Numbers", result)
+        self.assertIn("function sol(a, b)", result)
+        self.assertIn("return a + b", result)
+        # Should still contain the actual puzzle
+        self.assertIn("fibonacci", result)
+
+    def test_puzzle_one_shot_default_false(self):
+        """Test that one_shot parameter defaults to False."""
+        result = format_puzzle_prompt(self.puzzle_data, "python")
+
+        # Should NOT contain example by default
+        self.assertNotIn("Example Puzzle and Solution", result)
+        self.assertNotIn("Sum of Two Numbers", result)
+
 
 class TestFormatReflectiveMathPrompt(unittest.TestCase):
     """Test cases for format_reflective_math_prompt function."""

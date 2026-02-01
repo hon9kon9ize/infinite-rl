@@ -52,6 +52,7 @@ class CurriculumLearning:
         reflective_learning_rate: float = 0.2,
         level_change_cooldown: int = 5,
         num_generations: int = 4,
+        puzzle_one_shot: bool = False,
     ):
         """
         Initialize curriculum learning.
@@ -80,10 +81,12 @@ class CurriculumLearning:
             reflective_learning_rate: Probability of triggering reflective learning on format failures (default: 0.1). Set to 0 to disable.
             level_change_cooldown: Minimum steps between level changes to prevent rapid fluctuations (default: 5)
             num_generations: Number of generations per prompt for GRPO batching (default: 4)
+            puzzle_one_shot: Whether to include one-shot examples in puzzle prompts (default: False)
         """
         self.timeout = timeout
         self.answer_tag = answer_tag
         self.think_tag = think_tag
+        self.puzzle_one_shot = puzzle_one_shot
         self.aux_weight = aux_weight
         self.reward_functions = get_reward_functions(
             timeout=timeout, answer_tag=answer_tag, think_tag=think_tag
@@ -1047,7 +1050,11 @@ class CurriculumLearning:
             task_name = selected_task["puzzle_name"]
             language = selected_task["language"]  # javascript or python
             prompt = format_puzzle_prompt(
-                puzzle_data, language, self.answer_tag, self.think_tag
+                puzzle_data,
+                language,
+                self.answer_tag,
+                self.think_tag,
+                self.puzzle_one_shot,
             )
             puzzle_inputs = extract_puzzle_inputs(puzzle_data, language)
             expected_output = {

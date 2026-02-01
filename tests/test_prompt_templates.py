@@ -266,15 +266,15 @@ class TestFormatReflectiveMathPrompt(unittest.TestCase):
         self.assertIn(original, result)
         self.assertIn(previous, result)
 
-    def test_reflective_problem_appears_twice(self):
-        """Test that original problem appears twice (context + task)."""
+    def test_reflective_problem_appears_once(self):
+        """Test that original problem appears once in context."""
         original = "Unique problem statement #12345"
         previous = "Attempt"
         result = format_reflective_math_prompt(original, previous)
 
-        # Should appear at least twice
+        # Should appear exactly once (in context section)
         count = result.count(original)
-        self.assertGreaterEqual(count, 2)
+        self.assertEqual(count, 1)
 
 
 class TestFormatReflectivePuzzlePrompt(unittest.TestCase):
@@ -353,14 +353,14 @@ class TestFormatReflectivePuzzlePrompt(unittest.TestCase):
         self.assertIn(original, result)
         self.assertIn(previous, result)
 
-    def test_reflective_puzzle_problem_appears_twice(self):
-        """Test that original problem appears twice."""
+    def test_reflective_puzzle_problem_appears_once(self):
+        """Test that original problem appears once."""
         original = "Unique problem #54321"
         previous = "Attempt"
         result = format_reflective_puzzle_prompt(original, previous)
 
         count = result.count(original)
-        self.assertGreaterEqual(count, 2)
+        self.assertEqual(count, 1)
 
 
 class TestLanguageMapping(unittest.TestCase):

@@ -92,7 +92,7 @@ class InfiniteRLConfig:
     success_rate_threshold: float = 0.7
     variance_threshold: float = 0.15
     demote_threshold: float = 0.4
-    warmup_step: int = 32
+    warmup_step: int = 100
     level_change_cooldown: int = 5
     reflective_learning_rate: float = 0.2
     num_generations: int = 4

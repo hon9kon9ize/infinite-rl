@@ -369,6 +369,45 @@ class CurriculumLearning:
         for level in range(0, 7):
             print(f"  Level {level}: {len(self.tasks_by_level[level])} tasks")
 
+    def _apply_leaky_gate(self, format_valid: bool, primary_score: float) -> float:
+        """Apply leaky gate strategy during warmup phase to solve cold start problem.
+
+        During warmup (steps 0 to warmup_step), allow partial rewards:
+        - Wrong Format + Wrong Answer: 0.0
+        - Right Format + Wrong Answer: 0.1 (encourages proper XML formatting)
+        - Wrong Format + Right Answer: 0.2 (encourages task correctness)
+        - Right Format + Right Answer: 1.0 (perfect)
+
+        After warmup, enforce strict gates (both must be correct).
+
+        Args:
+            format_valid: Whether format validation passed
+            primary_score: Primary correctness score (0.0 or 1.0)
+
+        Returns:
+            Adjusted score with leaky gate applied (if in warmup phase)
+        """
+        # Only apply leaky gate during warmup phase
+        if not self.is_warmup():
+            # After warmup: strict gate (must have both)
+            if format_valid and primary_score > 0.5:
+                return primary_score
+            else:
+                return 0.0
+
+        # During warmup: leaky gate allows partial credit
+        has_format = format_valid
+        has_correctness = primary_score > 0.5
+
+        if has_format and has_correctness:
+            return 1.0  # Jackpot: both correct
+        elif has_format:
+            return 0.1  # Partial credit: at least got the format right
+        elif has_correctness:
+            return 0.2  # Partial credit: at least got the answer right
+        else:
+            return 0.0  # Nothing correct
+
     def _get_format_failure_tasks(self) -> List[Task]:
         """Get list of tasks that failed format validation.
 
@@ -568,12 +607,76 @@ class CurriculumLearning:
                         format_failure_reason = format_result.info
                         break
 
-        # If format is invalid, skip primary evaluation and return 0
-        if not format_valid:
+        # Get appropriate reward function and compute primary score
+        if task_type not in self.reward_functions:
+            raise ValueError(f"Unknown task type: {task_type}")
+
+        reward_fn = self.reward_functions[task_type]
+
+        # Compute primary reward (regardless of format for leaky gate logic)
+        result = reward_fn.compute_reward(task)
+        primary_score = result.score
+        primary_info = result.info
+
+        # LEAKY GATE STRATEGY: Apply during warmup to solve cold start problem
+        # This provides "breadcrumbs" when both format and correctness gates are strict
+        leaky_gated_score = self._apply_leaky_gate(format_valid, primary_score)
+
+        # If we're using leaky gate and got partial credit, skip full format validation
+        if self.is_warmup() and leaky_gated_score > 0.0 and leaky_gated_score < 1.0:
+            # Leaky gate gave partial credit - don't fail the task
+            score = leaky_gated_score
+            is_correct = False
             primary_reward = RewardFunctionScore(
-                score=0.0,
+                score=primary_score,
                 reward_function_name="primary",
-                info=f"Format validation failed: {format_failure_reason}",
+                info=primary_info or "",
+            )
+            task_rewards = [primary_reward]
+
+            # Add format feedback
+            if not format_valid:
+                task_rewards.append(
+                    RewardFunctionScore(
+                        score=0.0,
+                        reward_function_name="format",
+                        info=f"Format validation failed (leaky gate gives 0.1 credit): {format_failure_reason}",
+                    )
+                )
+
+            # Compute auxiliary rewards with capped positives (primary failed)
+            aux_score_dict_raw = self.get_aux_reward_scores(
+                model_output, task, is_correct=False
+            )
+            aux_score_dict = {
+                name: {
+                    "score": min(0.0, data["score"]),
+                    "info": (
+                        data["info"]
+                        if data["score"] < 0
+                        else "Primary task failed, positive auxiliary reward capped at 0"
+                    ),
+                }
+                for name, data in aux_score_dict_raw.items()
+            }
+
+            # Add auxiliary rewards to task_rewards
+            for name, data in aux_score_dict.items():
+                aux_reward = RewardFunctionScore(
+                    score=data["score"],
+                    reward_function_name=name,
+                    info=data["info"] or "",
+                )
+                task_rewards.append(aux_reward)
+
+            # Combined score is the leaky gated score (no auxiliary blending)
+            combined_score = leaky_gated_score
+        elif leaky_gated_score == 0.0:
+            # Failed both gates (or after warmup)
+            primary_reward = RewardFunctionScore(
+                score=primary_score,
+                reward_function_name="primary",
+                info=primary_info or "",
             )
             task_rewards = [primary_reward]
 
@@ -602,36 +705,25 @@ class CurriculumLearning:
             else:
                 combined_score = 0.0
 
-            # Skip to end of reward computation
             score = 0.0
             is_correct = False
         else:
-            # Get appropriate reward function
-            if task_type not in self.reward_functions:
-                raise ValueError(f"Unknown task type: {task_type}")
-
-            reward_fn = self.reward_functions[task_type]
-
-            # Compute primary reward
-            result = reward_fn.compute_reward(task)
-            score = result.score
-            primary_info = result.info
-
+            # Leaky gate gave full credit (1.0) - both format and correctness passed
             # Create primary reward
             primary_reward = RewardFunctionScore(
-                score=score,
+                score=primary_score,
                 reward_function_name="primary",
                 info=primary_info or "",
             )
             task_rewards = [primary_reward]
 
             # Compute auxiliary rewards and combine them
-            is_correct = score == 1  # Threshold for success
+            is_correct = primary_score == 1  # Threshold for success
 
             # If primary score is 0, compute aux scores but cap positive ones at 0
             # This preserves negative penalties (like lang_consistency = -1.0)
             # while preventing positive auxiliary rewards when the main task failed
-            if score == 0:
+            if primary_score == 0:
                 aux_score_dict_raw = self.get_aux_reward_scores(
                     model_output, task, is_correct=is_correct
                 )
@@ -670,9 +762,13 @@ class CurriculumLearning:
                 # Clip auxiliary average to [-1.0, 1.0] to prevent extreme penalties/bonuses
                 aux_avg = max(-1.0, min(1.0, aux_avg))
                 primary_weight = 1.0 - self.aux_weight
-                combined_score = primary_weight * score + self.aux_weight * aux_avg
+                combined_score = (
+                    primary_weight * primary_score + self.aux_weight * aux_avg
+                )
             else:
-                combined_score = score
+                combined_score = primary_score
+
+            score = primary_score
 
         # GRPO batch accumulation: collect scores until group is complete
         # Extract base task_id (remove instance counter)

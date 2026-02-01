@@ -122,10 +122,10 @@ print(f"Score: {result.score}")
 ```
 
 **Getting Puzzle Prompts:**
-You can access the puzzle prompts programmatically to understand what problems are available or to inspect puzzle specifications:
+You can access the puzzle data programmatically to understand what problems are available or to inspect puzzle specifications:
 
 ```python
-from infinite_rl.puzzles import get_puzzle_prompt, get_available_puzzles
+from infinite_rl.puzzles import get_puzzle_data, get_available_puzzles
 
 # Get all available JavaScript puzzles
 js_puzzles = get_available_puzzles("javascript")
@@ -136,11 +136,12 @@ print(f"First few: {js_puzzles[:5]}")
 py_puzzles = get_available_puzzles("python")
 print(f"Available Python puzzles: {len(py_puzzles)}")
 
-# Get a specific puzzle prompt
-prompt = get_puzzle_prompt("QuadraticRoot", "javascript")
-if prompt:
-    print("QuadraticRoot puzzle prompt:")
-    print(prompt[:200] + "..." if len(prompt) > 200 else prompt)
+# Get a specific puzzle's data (includes sat, sol, docstring, example, etc.)
+puzzle_data = get_puzzle_data("QuadraticRoot", "javascript")
+if puzzle_data:
+    print("QuadraticRoot puzzle data:")
+    print(f"Docstring: {puzzle_data['docstring']}")
+    print(f"Example inputs: {puzzle_data.get('example', {})}")
 else:
     print("Puzzle not found")
 ```

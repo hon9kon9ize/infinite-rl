@@ -224,8 +224,6 @@ Please review the following guidelines carefully when solving the problem again:
 1. Pay attention to the format requirements
 2. Provide your answer in <answer> tags with just the numeric or symbolic result
 3. Ensure your response follows the specified format structure
-
-{original_prompt}
 """
     return reflective_prompt
 
@@ -265,7 +263,5 @@ Please review the following guidelines carefully when solving this puzzle again:
 1. Pay attention to the format requirements
 2. Provide your code solution in <answer> tags with a code block
 3. Ensure your solution follows the specified format structure
-
-{original_prompt}
 """
     return reflective_prompt

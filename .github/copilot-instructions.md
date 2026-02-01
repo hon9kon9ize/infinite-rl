@@ -78,7 +78,9 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 - CI specifics: `.github/workflows/ci.yml` installs `nodejs`, `openjdk-17`, `g++` and runs the example suite, then `unittest` discovery.
 
 ## Project-specific conventions & patterns
-- Strict output format: the parser looks for `[PROMPT]/[ANSWER]/[RESPONSE]` headers and `<answer>` tags; changing parsing requires updating `infinite_rl/parser.py` and tests.
+- Strict output format: the parser looks for `<answer>` tags; changing parsing requires updating tests.
+- **Prompt generation**: Use `format_puzzle_prompt()` and `format_math_prompt()` from `infinite_rl.prompt_templates` to create prompts.
+- **Puzzle data access**: Use `get_puzzle_data()` and `get_available_puzzles()` from `infinite_rl.puzzles` to access puzzle metadata.
 - When adding a new task type:
   - Add a reward function class under `infinite_rl/reward_functions/` and expose it in `get_reward_functions()`.
 

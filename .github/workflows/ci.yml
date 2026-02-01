@@ -176,7 +176,7 @@ jobs:
       - name: Run unit tests with coverage
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         run: |
-          python -m pytest
+          python -m pytest --cov=infinite_rl --cov-report=xml --cov-report=term-missing
 
       - name: Set coverage status check
         if: ${{ needs.version-check.outputs.release_exists == 'true' && always() }}
@@ -214,7 +214,11 @@ jobs:
       - name: Update coverage badge in README
         if: ${{ needs.version-check.outputs.release_exists == 'true' && github.ref == 'refs/heads/main' }}
         run: |
-          python tests/update_coverage_badge.py
+          if [ -f coverage.xml ]; then
+            python tests/update_coverage_badge.py
+          else
+            echo "WARNING: coverage.xml not found, skipping badge update"
+          fi
 
   schedule_retry:
     needs: version-check

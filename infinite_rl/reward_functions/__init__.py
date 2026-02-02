@@ -1,6 +1,12 @@
 from .reward_function import RewardFunctionScore
 from .math import MathRewardFunction
 from .puzzle import PuzzleRewardFunction
+from .lang_consistency import LangConsistencyRewardFunction
+from .reasoning_steps import ReasoningStepsRewardFunction
+from .repetition import RepetitionRewardFunction
+from .length import LengthRewardFunction
+from .format import FormatRewardFunction
+from .whitespace_collapse import WhitespaceCollapseRewardFunction
 
 
 def get_reward_functions(

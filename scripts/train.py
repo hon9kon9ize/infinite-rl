@@ -88,12 +88,12 @@ class InfiniteRLConfig:
     """Configuration for Infinite-RL curriculum integration."""
 
     # Curriculum parameters
-    window_size: int = 50
-    success_rate_threshold: float = 0.7
+    window_size: int = 80
+    success_rate_threshold: float = 0.65
     variance_threshold: float = 0.15
     demote_threshold: float = 0.4
     warmup_step: int = 100
-    level_change_cooldown: int = 5
+    level_change_cooldown: int = 10
     reflective_learning_rate: float = 0.2
     num_generations: int = 4
 
@@ -348,7 +348,7 @@ def setup_training_args(
         max_completion_length=max_completion_length,
         gradient_accumulation_steps=gradient_accumulation_steps,
         warmup_steps=warmup_steps,
-        temperature=1.2,
+        temperature=1.0,
         top_p=1.0,
         repetition_penalty=1.1,
         # vLLM COLOCATE mode is always enabled

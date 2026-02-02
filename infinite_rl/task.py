@@ -22,6 +22,7 @@ class Task:
         created_at: Optional[datetime.datetime] = None,
         first_response_at: Optional[datetime.datetime] = None,
         language: Optional[str] = None,
+        reasoning_language: Optional[str] = None,
     ):
         self.task_id = task_id
         self.task_name = task_name
@@ -35,6 +36,9 @@ class Task:
         self.created_at: datetime.datetime = created_at or datetime.datetime.now()
         self.first_response_at: Optional[datetime.datetime] = first_response_at
         self.language: Optional[str] = language
+        # For puzzles: language is programming language (javascript/python), reasoning_language is the <think> tag language
+        # For math: language is reasoning language, reasoning_language defaults to same
+        self.reasoning_language: Optional[str] = reasoning_language or language or "en"
 
     def add_reward(
         self, task_reward: RewardFunctionScore, is_correct: bool = False
@@ -66,6 +70,7 @@ class Task:
             "task_type": self.task_type,
             "level": self.level,
             "language": self.language,
+            "reasoning_language": self.reasoning_language,
             "prompt": self.prompt,
             "expected_answer": self.expected_answer,
             "model_output": self.model_output,

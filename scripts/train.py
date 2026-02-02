@@ -348,8 +348,9 @@ def setup_training_args(
         max_completion_length=max_completion_length,
         gradient_accumulation_steps=gradient_accumulation_steps,
         warmup_steps=warmup_steps,
-        temperature=1.0,
+        temperature=1.2,
         top_p=1.0,
+        repetition_penalty=1.1,
         # vLLM COLOCATE mode is always enabled
         use_vllm=True,
         vllm_gpu_memory_utilization=0.5,

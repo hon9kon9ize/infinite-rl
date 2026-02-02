@@ -38,11 +38,14 @@ class CurriculumLearning:
         use_format: bool = True,
         use_reasoning_steps: bool = False,
         use_length: bool = False,
+        use_whitespace_collapse: bool = True,
+        reasoning_language: str = "en",
         lang_consistency_kwargs: Optional[Dict[str, Any]] = None,
         repetition_kwargs: Optional[Dict[str, Any]] = None,
         format_kwargs: Optional[Dict[str, Any]] = None,
         reasoning_steps_kwargs: Optional[Dict[str, Any]] = None,
         length_kwargs: Optional[Dict[str, Any]] = None,
+        whitespace_collapse_kwargs: Optional[Dict[str, Any]] = None,
         log_file: Optional[str] = None,
         window_size: int = 50,
         success_rate_threshold: float = 0.7,
@@ -67,11 +70,14 @@ class CurriculumLearning:
             use_format: Enable format validation auxiliary reward
             use_reasoning_steps: Enable chain-of-thought reasoning steps bonus
             use_length: Enable response length regularizer
+            use_whitespace_collapse: Enable whitespace collapse detector (default: True)
+            reasoning_language: ISO language code for reasoning analysis (default: "en")
             lang_consistency_kwargs: Keyword arguments for LangConsistencyRewardFunction
             repetition_kwargs: Keyword arguments for RepetitionRewardFunction
             format_kwargs: Keyword arguments for FormatRewardFunction
             reasoning_steps_kwargs: Keyword arguments for ReasoningStepsRewardFunction
             length_kwargs: Keyword arguments for LengthRewardFunction
+            whitespace_collapse_kwargs: Keyword arguments for WhitespaceCollapseRewardFunction
             log_file: Path to the logging file (JSON Lines format). If None, defaults to 'curriculum_log.jsonl' in the module directory.
             window_size: Size of the sliding window for success rate tracking (default: 50)
             success_rate_threshold: Required success rate for difficulty increase (default: 0.7 = 70%)
@@ -88,6 +94,7 @@ class CurriculumLearning:
         self.think_tag = think_tag
         self.puzzle_one_shot = puzzle_one_shot
         self.aux_weight = aux_weight
+        self.reasoning_language = reasoning_language
         self.reward_functions = get_reward_functions(
             timeout=timeout, answer_tag=answer_tag, think_tag=think_tag
         )
@@ -98,11 +105,13 @@ class CurriculumLearning:
         self.use_format = use_format
         self.use_reasoning_steps = use_reasoning_steps
         self.use_length = use_length
+        self.use_whitespace_collapse = use_whitespace_collapse
         self.lang_consistency_kwargs = lang_consistency_kwargs or {}
         self.repetition_kwargs = repetition_kwargs or {}
         self.format_kwargs = format_kwargs or {}
         self.reasoning_steps_kwargs = reasoning_steps_kwargs or {}
         self.length_kwargs = length_kwargs or {}
+        self.whitespace_collapse_kwargs = whitespace_collapse_kwargs or {}
 
         # Initialize auxiliary reward functions
         self.aux_reward_functions: Dict[str, Any] = {}
@@ -244,6 +253,25 @@ class CurriculumLearning:
                 )
             except Exception as e:
                 print(f"Warning: Could not initialize LengthRewardFunction: {e}")
+
+        if self.use_whitespace_collapse:
+            try:
+                from .reward_functions import WhitespaceCollapseRewardFunction
+
+                self.aux_reward_functions["whitespace_collapse"] = (
+                    WhitespaceCollapseRewardFunction(
+                        task_name="whitespace_collapse",
+                        timeout=self.timeout,
+                        answer_tag=self.answer_tag,
+                        think_tag=self.think_tag,
+                        reasoning_language=self.reasoning_language,
+                        **self.whitespace_collapse_kwargs,
+                    )
+                )
+            except Exception as e:
+                print(
+                    f"Warning: Could not initialize WhitespaceCollapseRewardFunction: {e}"
+                )
 
     def _load_available_tasks(self):
         """Load all available tasks and their ratings."""
@@ -1275,6 +1303,7 @@ class CurriculumLearning:
             Dictionary mapping auxiliary reward function names to dicts with 'score' and 'info'
         """
         aux_scores = {}
+
         for aux_name, aux_fn in self.aux_reward_functions.items():
             try:
                 # All auxiliary functions now accept task as first parameter

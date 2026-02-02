@@ -40,12 +40,12 @@ def format_math_prompt(
 {problem_statement}
 
 **Instructions:**
-1. **Reasoning**: You MUST perform your step-by-step reasoning in **English** inside <{think_tag}> tags.
-3. **Final Answer:** Wrap the final numeric value inside <{answer_tag}> tags.
+1. **Reasoning**: You MUST perform your step-by-step reasoning in **English** inside <{think_tag}> tags. Write naturally with proper spaces and punctuation—do NOT remove spaces to compress text.
+2. **Final Answer:** Wrap the final numeric value inside <{answer_tag}> tags.
 
 **Response Structure:**
 <{think_tag}>
-[Reasoning steps in English...]
+[Reasoning steps in English, with proper spaces and punctuation...]
 </{think_tag}>
 
 <{answer_tag}>[Final numeric result]</{answer_tag}>
@@ -171,13 +171,17 @@ Your solution should be a {language} function with this signature:
 {sol_func}
 ```
 
-First, show your reasoning and approach in <{think_tag}> tags:
+First, show your reasoning and approach in <{think_tag}> tags (write naturally with proper spaces and punctuation):
 
 <{think_tag}>
-[Reasoning steps here, must be in English]
+[Reasoning steps here, must be in English, with proper spacing]
 </{think_tag}>
 
-Then provide your solution in <{answer_tag}> tags with a triple-backtick code block:
+Then provide your solution in <{answer_tag}> tags. IMPORTANT: Put ONLY the raw code (no markdown backticks) inside the answer tags:
+
+<{answer_tag}>
+[Your {language} function code here - no triple backticks]
+</{answer_tag}>
 
 <{answer_tag}>
 ```{language}

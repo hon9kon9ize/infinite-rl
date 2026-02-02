@@ -967,9 +967,21 @@ class TestCurriculumLearning(unittest.TestCase):
             use_format=False,
             use_reasoning_steps=False,
             use_length=False,
+            use_whitespace_collapse=False,
         )
 
-        scores = cl.get_aux_reward_scores("response", "expected")
+        # Create a simple task object for testing
+        task = Task(
+            task_id="test_1",
+            task_name="test",
+            task_type="math",
+            level=0,
+            prompt="test",
+            expected_answer="42",
+        )
+        task.model_output = "response"
+
+        scores = cl.get_aux_reward_scores("response", task)
         self.assertEqual(scores, {})
 
     def test_level_advancement_boundary(self):

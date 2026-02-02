@@ -152,6 +152,9 @@ class CurriculumLearning:
         self.grpo_batch_primary_scores: Dict[str, List[float]] = (
             {}
         )  # Maps task_id -> list of primary scores (for curriculum)
+        self.grpo_batch_outputs: Dict[str, List[str]] = (
+            {}
+        )  # Maps task_id -> list of model outputs (for logging all generations)
         self.num_generations: int = (
             num_generations  # Number of generations per prompt (configurable)
         )
@@ -173,6 +176,7 @@ class CurriculumLearning:
                         think_tag=self.think_tag,
                         tag_excluded=False,
                         target_tag=self.think_tag,
+                        target_language=self.reasoning_language,
                         **self.lang_consistency_kwargs,
                     )
                 )
@@ -818,9 +822,11 @@ class CurriculumLearning:
         if base_task_id not in self.grpo_batch_scores:
             self.grpo_batch_scores[base_task_id] = []
             self.grpo_batch_primary_scores[base_task_id] = []
+            self.grpo_batch_outputs[base_task_id] = []
 
         self.grpo_batch_scores[base_task_id].append(combined_score)
         self.grpo_batch_primary_scores[base_task_id].append(score)
+        self.grpo_batch_outputs[base_task_id].append(model_output)
 
         # Check if we have a complete group (GRPO batch size)
         if len(self.grpo_batch_scores[base_task_id]) >= self.num_generations:
@@ -855,6 +861,7 @@ class CurriculumLearning:
                 log_entry["grpo_batch_size"] = len(primary_scores)
                 log_entry["grpo_primary_scores"] = primary_scores
                 log_entry["grpo_combined_scores"] = group_scores
+                log_entry["grpo_model_outputs"] = self.grpo_batch_outputs[base_task_id]
                 with open(self.log_file, "a", encoding="utf-8") as f:
                     json.dump(log_entry, f, ensure_ascii=False)
                     f.write("\n")
@@ -862,6 +869,7 @@ class CurriculumLearning:
             # Clean up completed batch
             del self.grpo_batch_scores[base_task_id]
             del self.grpo_batch_primary_scores[base_task_id]
+            del self.grpo_batch_outputs[base_task_id]
         elif self.num_generations == 1:
             # Single evaluation mode (non-GRPO): log immediately
             self._track_success_group(task.level, [combined_score], [score])
@@ -944,6 +952,11 @@ class CurriculumLearning:
                 stale_count = len(sorted_batches) - 20
                 for batch_id, _ in sorted_batches[:stale_count]:
                     del self.grpo_batch_scores[batch_id]
+                    # Only delete if key exists (may not exist if batch was created in test/externally)
+                    if batch_id in self.grpo_batch_primary_scores:
+                        del self.grpo_batch_primary_scores[batch_id]
+                    if batch_id in self.grpo_batch_outputs:
+                        del self.grpo_batch_outputs[batch_id]
                 print(f"Cleaned up {stale_count} stale batches")
 
         # Save rewards to session

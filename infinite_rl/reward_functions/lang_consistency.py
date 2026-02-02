@@ -18,6 +18,7 @@ class LangConsistencyRewardFunction(RewardFunction):
         task_name: str = "lang_consistency",
         tag_excluded=False,
         multiplier: float = 4.0,
+        target_language: str = "en",
         **kwargs,
     ):
         from cantonesedetect import CantoneseDetector
@@ -26,6 +27,7 @@ class LangConsistencyRewardFunction(RewardFunction):
         self.yue_detector = CantoneseDetector(split_seg=True, get_analysis=True)
         self.tag_excluded = tag_excluded
         self.multiplier = multiplier
+        self.target_language = target_language
 
     def initialize(self):
         self.initialized = True
@@ -47,8 +49,8 @@ class LangConsistencyRewardFunction(RewardFunction):
         if not self.initialized:
             self.initialize()
 
-        # Get expected language from task
-        expected_output = task.language
+        # Get expected language from curriculum config (not task.language which may be programming language)
+        expected_output = self.target_language
 
         # Extract content using tag_excluded parameter
         content = extract_tag_util(

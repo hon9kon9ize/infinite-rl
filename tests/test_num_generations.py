@@ -35,74 +35,160 @@ class TestNumGenerations(unittest.TestCase):
 
     def test_num_generations_batch_accumulation(self):
         """Test that GRPO batch accumulates up to num_generations."""
-        curriculum = CurriculumLearning(num_generations=2)
+        # Mock truthy task loading to avoid llm_judge requirement
+        with patch(
+            "infinite_rl.curriculum.CurriculumLearning._load_available_tasks"
+        ) as mock_load:
+            mock_load.return_value = None
+            curriculum = CurriculumLearning(num_generations=2)
 
-        # Add a task to the session
-        curriculum.get_prompt()
-        task_id = list(curriculum.session.tasks.keys())[0]
-        base_task_id = task_id.rsplit("_", 1)[0] if "_" in task_id else task_id
+            # Add tasks to the session manually (with proper ID format for base_task_id extraction)
+            base_task_id = "math_test"
+            task1 = Task(
+                task_id=f"{base_task_id}_0",
+                task_name="Test",
+                task_type="math",
+                level=0,
+                prompt="Test",
+                expected_answer="4",
+            )
+            curriculum.session.add_task(task1)
 
-        # First response - batch should accumulate
-        curriculum.compute_reward(task_id, "response 1")
-        self.assertIn(base_task_id, curriculum.grpo_batch_scores)
-        self.assertEqual(len(curriculum.grpo_batch_scores[base_task_id]), 1)
+            # First response - batch should accumulate
+            with patch.object(
+                curriculum.reward_functions["math"], "compute_reward"
+            ) as mock_reward:
+                mock_result = MagicMock()
+                mock_result.score = 1.0
+                mock_result.info = ""
+                mock_reward.return_value = mock_result
 
-        # Second response - batch should still have 1 (previous was cleared after it hit num_generations)
-        # Actually, we need to create a second task instance
-        curriculum.get_prompt()
-        task_id_2 = list(curriculum.session.tasks.keys())[-1]
-        base_task_id_2 = task_id_2.rsplit("_", 1)[0] if "_" in task_id_2 else task_id_2
+                curriculum.compute_reward(
+                    f"{base_task_id}_0", "<think>test</think>\n<answer>4</answer>"
+                )
+                self.assertIn(base_task_id, curriculum.grpo_batch_primary_scores)
+                self.assertEqual(
+                    len(curriculum.grpo_batch_primary_scores[base_task_id]), 1
+                )
 
-        if base_task_id_2 == base_task_id:
-            curriculum.compute_reward(task_id_2, "response 2")
-            # Should have triggered level update since we reached num_generations
-            self.assertNotIn(base_task_id, curriculum.grpo_batch_scores)
+            # Add a second task for batch accumulation
+            task2 = Task(
+                task_id=f"{base_task_id}_1",
+                task_name="Test",
+                task_type="math",
+                level=0,
+                prompt="Test",
+                expected_answer="4",
+            )
+            curriculum.session.add_task(task2)
+
+            # Second response - should trigger level update since batch is complete
+            with patch.object(
+                curriculum.reward_functions["math"], "compute_reward"
+            ) as mock_reward:
+                mock_result = MagicMock()
+                mock_result.score = 1.0
+                mock_result.info = ""
+                mock_reward.return_value = mock_result
+
+                curriculum.compute_reward(
+                    f"{base_task_id}_1", "<think>test</think>\n<answer>4</answer>"
+                )
+                # Should have triggered level update since we reached num_generations
+                self.assertNotIn(base_task_id, curriculum.grpo_batch_primary_scores)
 
     def test_num_generations_level_update_trigger(self):
         """Test that level update is triggered when num_generations responses are accumulated."""
-        curriculum = CurriculumLearning(
-            num_generations=2,
-            window_size=10,
-            warmup_step=0,  # Disable warmup for this test
+        # Mock truthy task loading to avoid llm_judge requirement
+        with patch(
+            "infinite_rl.curriculum.CurriculumLearning._load_available_tasks"
+        ) as mock_load:
+            mock_load.return_value = None
+            curriculum = CurriculumLearning(
+                num_generations=2,
+                window_size=10,
+                warmup_step=0,  # Disable warmup for this test
+            )
+
+        # Create and add a task manually
+        task = Task(
+            task_id="math_0_0",
+            task_name="Test",
+            task_type="math",
+            level=0,
+            prompt="Test",
+            expected_answer="4",
         )
+        curriculum.session.add_task(task)
+        base_task_id = "math_0"
 
-        # Get one prompt
-        task = curriculum.get_prompt()
-        self.assertIsNotNone(task)
-        base_task_id = task.task_id.rsplit("_", 1)[0]
+        # Mock reward function
+        with patch.object(
+            curriculum.reward_functions["math"], "compute_reward"
+        ) as mock_reward:
+            mock_result = MagicMock()
+            mock_result.score = 1.0
+            mock_result.info = ""
+            mock_reward.return_value = mock_result
 
-        # Submit 2 responses for the same task (complete batch for num_generations=2)
-        initial_step = curriculum.global_step
-        curriculum.compute_reward(task.task_id, "test response 1")
-        # Still incomplete batch - step shouldn't increment yet
-        self.assertEqual(curriculum.global_step, initial_step)
+            # Submit first response
+            initial_step = curriculum.global_step
+            curriculum.compute_reward(
+                "math_0_0", "<think>test</think>\n<answer>4</answer>"
+            )
+            # Still incomplete batch - step shouldn't increment yet
+            self.assertEqual(curriculum.global_step, initial_step)
 
-        # Add second response with same base_task_id (simulating GRPO)
-        task_id_2 = f"{base_task_id}_1"
-        # Need to add this task to session for compute_reward to work
-        task2 = Task(
-            task_id=task_id_2,
-            task_name=task.task_name,
-            task_type=task.task_type,
-            level=task.level,
-            prompt=task.prompt,
-            expected_answer=task.expected_answer,
-        )
-        curriculum.session.add_task(task2)
+            # Add second task for batch completion
+            task2 = Task(
+                task_id="math_0_1",
+                task_name="Test",
+                task_type="math",
+                level=0,
+                prompt="Test",
+                expected_answer="4",
+            )
+            curriculum.session.add_task(task2)
 
-        curriculum.compute_reward(task_id_2, "test response 2")
+            # Submit second response (completes batch)
+            curriculum.compute_reward(
+                "math_0_1", "<think>test</think>\n<answer>4</answer>"
+            )
 
-        # global_step should have incremented by 1 (once per complete batch)
-        self.assertEqual(curriculum.global_step, initial_step + 1)
+            # global_step should have incremented by 1 (once per complete batch)
+            self.assertEqual(curriculum.global_step, initial_step + 1)
 
     def test_num_generations_one(self):
         """Test behavior with num_generations=1 (immediate level updates)."""
-        curriculum = CurriculumLearning(
-            num_generations=1, warmup_step=0  # Disable warmup
-        )
+        # Mock truthy task loading to avoid llm_judge requirement
+        with patch(
+            "infinite_rl.curriculum.CurriculumLearning._load_available_tasks"
+        ) as mock_load:
+            mock_load.return_value = None
+            curriculum = CurriculumLearning(
+                num_generations=1, warmup_step=0  # Disable warmup
+            )
 
-        task = curriculum.get_prompt()
-        self.assertIsNotNone(task)
+            # Mock reward function to avoid actual computation
+            with patch.object(
+                curriculum.reward_functions["math"], "compute_reward"
+            ) as mock_reward:
+                mock_result = MagicMock()
+                mock_result.score = 1.0
+                mock_result.info = ""
+                mock_reward.return_value = mock_result
+
+                # Create a task manually since get_prompt would trigger uninitialized tasks
+                task = Task(
+                    task_id="math_test_0",
+                    task_name="Test",
+                    task_type="math",
+                    level=0,
+                    prompt="Test",
+                    expected_answer="4",
+                )
+                curriculum.session.add_task(task)
+                self.assertIsNotNone(task)
 
         # With num_generations=1, a single response should trigger level update
         # (batch should complete immediately)
@@ -112,7 +198,7 @@ class TestNumGenerations(unittest.TestCase):
         base_task_id = (
             task.task_id.rsplit("_", 1)[0] if "_" in task.task_id else task.task_id
         )
-        self.assertNotIn(base_task_id, curriculum.grpo_batch_scores)
+        self.assertNotIn(base_task_id, curriculum.grpo_batch_primary_scores)
 
     def test_num_generations_with_different_initialization(self):
         """Test initialization with other parameters and num_generations."""
@@ -174,22 +260,28 @@ class TestGRPOBatching(unittest.TestCase):
 
             # Response 1
             self.curriculum.compute_reward(f"{base_task_id}_0", "<answer>4</answer>")
-            self.assertIn(base_task_id, self.curriculum.grpo_batch_scores)
-            self.assertEqual(len(self.curriculum.grpo_batch_scores[base_task_id]), 1)
+            self.assertIn(base_task_id, self.curriculum.grpo_batch_primary_scores)
+            self.assertEqual(
+                len(self.curriculum.grpo_batch_primary_scores[base_task_id]), 1
+            )
             self.assertEqual(
                 self.curriculum.global_step, initial_step
             )  # Not incremented yet
 
             # Response 2
             self.curriculum.compute_reward(f"{base_task_id}_1", "<answer>4</answer>")
-            self.assertEqual(len(self.curriculum.grpo_batch_scores[base_task_id]), 2)
+            self.assertEqual(
+                len(self.curriculum.grpo_batch_primary_scores[base_task_id]), 2
+            )
             self.assertEqual(
                 self.curriculum.global_step, initial_step
             )  # Still not incremented
 
             # Response 3
             self.curriculum.compute_reward(f"{base_task_id}_2", "<answer>4</answer>")
-            self.assertEqual(len(self.curriculum.grpo_batch_scores[base_task_id]), 3)
+            self.assertEqual(
+                len(self.curriculum.grpo_batch_primary_scores[base_task_id]), 3
+            )
             self.assertEqual(
                 self.curriculum.global_step, initial_step
             )  # Still not incremented
@@ -198,7 +290,7 @@ class TestGRPOBatching(unittest.TestCase):
             self.curriculum.compute_reward(f"{base_task_id}_3", "<answer>4</answer>")
 
             # Batch should be cleared
-            self.assertNotIn(base_task_id, self.curriculum.grpo_batch_scores)
+            self.assertNotIn(base_task_id, self.curriculum.grpo_batch_primary_scores)
 
             # global_step should increment ONCE for the entire batch
             self.assertEqual(self.curriculum.global_step, initial_step + 1)
@@ -246,13 +338,13 @@ class TestGRPOBatching(unittest.TestCase):
 
             # Level should NOT change with incomplete batch
             self.assertEqual(curriculum.current_level, initial_level)
-            self.assertIn(base_task_id, curriculum.grpo_batch_scores)
+            self.assertIn(base_task_id, curriculum.grpo_batch_primary_scores)
 
             # Complete the batch
             curriculum.compute_reward(f"{base_task_id}_3", "<answer>4</answer>")
 
             # Now the batch is complete and should be processed
-            self.assertNotIn(base_task_id, curriculum.grpo_batch_scores)
+            self.assertNotIn(base_task_id, curriculum.grpo_batch_primary_scores)
 
     def test_grpo_batch_handles_oversized_batch(self):
         """Test that oversized batches (more responses than expected) are handled."""
@@ -286,8 +378,10 @@ class TestGRPOBatching(unittest.TestCase):
 
             # Should have processed the first 4 and cleared the batch
             # The 5th response would start a new batch (with 1 score in it)
-            self.assertIn(base_task_id, self.curriculum.grpo_batch_scores)
-            self.assertEqual(len(self.curriculum.grpo_batch_scores[base_task_id]), 1)
+            self.assertIn(base_task_id, self.curriculum.grpo_batch_primary_scores)
+            self.assertEqual(
+                len(self.curriculum.grpo_batch_primary_scores[base_task_id]), 1
+            )
             self.assertEqual(self.curriculum.global_step, initial_step + 1)
 
     def test_grpo_batch_different_tasks_independent(self):
@@ -334,10 +428,14 @@ class TestGRPOBatching(unittest.TestCase):
             self.curriculum.compute_reward(f"{base_task_id2}_2", "<answer>6</answer>")
 
             # Both should have independent counters
-            self.assertIn(base_task_id1, self.curriculum.grpo_batch_scores)
-            self.assertIn(base_task_id2, self.curriculum.grpo_batch_scores)
-            self.assertEqual(len(self.curriculum.grpo_batch_scores[base_task_id1]), 2)
-            self.assertEqual(len(self.curriculum.grpo_batch_scores[base_task_id2]), 3)
+            self.assertIn(base_task_id1, self.curriculum.grpo_batch_primary_scores)
+            self.assertIn(base_task_id2, self.curriculum.grpo_batch_primary_scores)
+            self.assertEqual(
+                len(self.curriculum.grpo_batch_primary_scores[base_task_id1]), 2
+            )
+            self.assertEqual(
+                len(self.curriculum.grpo_batch_primary_scores[base_task_id2]), 3
+            )
 
     def test_grpo_batch_cleanup_stale_batches(self):
         """Test that stale incomplete batches are cleaned up periodically."""
@@ -353,7 +451,7 @@ class TestGRPOBatching(unittest.TestCase):
 
         # Artificially create many incomplete batches
         for i in range(60):
-            curriculum.grpo_batch_scores[f"stale_task_{i}"] = [0.5]
+            curriculum.grpo_batch_primary_scores[f"stale_task_{i}"] = [0.5]
 
         # Create tasks for all 4 responses
         base_task_id = "math_test_999"
@@ -384,9 +482,9 @@ class TestGRPOBatching(unittest.TestCase):
                 curriculum.compute_reward(f"{base_task_id}_{i}", "<answer>4</answer>")
 
             # Should have triggered cleanup since global_step % 100 == 0
-            # and len(grpo_batch_scores) > 50
+            # and len(grpo_batch_primary_scores) > 50
             # Cleanup should keep only 20 most recent
-            self.assertLessEqual(len(curriculum.grpo_batch_scores), 20)
+            self.assertLessEqual(len(curriculum.grpo_batch_primary_scores), 20)
 
     def test_grpo_global_step_increments_once_per_batch(self):
         """Test that global_step increments only once per complete batch, not per response."""

@@ -89,6 +89,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y nodejs openjdk-17-jdk g++
 
+      - name: Build datasets
+        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install datasets huggingface_hub pandas
+          python build_src/dataset.py
+
       - name: Install Python package from current commit
         if: ${{ needs.version-check.outputs.release_exists == 'true' }}
         env:

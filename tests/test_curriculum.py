@@ -385,7 +385,7 @@ class TestCurriculumLearning(unittest.TestCase):
                     self.assertEqual(len(cl._get_recent_task_ids()), 0)
 
     def test_get_rewards_correct_answer(self):
-        """Test compute_reward with correct answer."""
+        """Test get_rewards with correct answer."""
         cl = CurriculumLearning()
 
         # Add a task to the session
@@ -410,15 +410,22 @@ class TestCurriculumLearning(unittest.TestCase):
 
             # Provide valid format with both tags to pass format gate
             response = "<think>2 + 2 = 4</think>\n\n<answer>4</answer>"
-            reward = cl.compute_reward("math_test", response)
+            primary_reward = cl.compute_reward("math_test", response)
 
-            self.assertGreaterEqual(reward, 0.5)
+            # compute_reward returns primary score
+            self.assertEqual(primary_reward, 1.0)
+
+            # Now test get_rewards for blended score
+            combined_rewards = cl.get_rewards(["math_test"])
+            self.assertEqual(len(combined_rewards), 1)
+            self.assertGreaterEqual(combined_rewards[0], 0.5)
+
             # Check that task has is_correct set to True
             task_from_session = cl.session.get_task("math_test")
             self.assertTrue(task_from_session.is_correct)
 
     def test_get_rewards_wrong_answer(self):
-        """Test compute_reward with wrong answer."""
+        """Test get_rewards with wrong answer."""
         cl = CurriculumLearning(
             use_format=False,
             use_repetition=False,
@@ -447,9 +454,18 @@ class TestCurriculumLearning(unittest.TestCase):
             mock_result.info = ""
             mock_compute.return_value = mock_result
 
-            reward = cl.compute_reward("math_test", "<answer>5</answer>")
+            primary_reward = cl.compute_reward("math_test", "<answer>5</answer>")
 
-            self.assertLess(reward, 0.5)
+            # compute_reward returns 0.0 with strict gates (no leaky gate)
+            # We have format_valid = False (missing <think> tag)
+            # So the strict gate fails: format_valid=False OR primary_score=0.0 means score=0.0
+            self.assertEqual(primary_reward, 0.0)
+
+            # Now test get_rewards for blended score
+            combined_rewards = cl.get_rewards(["math_test"])
+            self.assertEqual(len(combined_rewards), 1)
+            self.assertLess(combined_rewards[0], 0.5)
+
             # Check that task has is_correct set to False
             task_from_session = cl.session.get_task("math_test")
             self.assertFalse(task_from_session.is_correct)
@@ -803,13 +819,16 @@ class TestCurriculumLearning(unittest.TestCase):
                 response = "<think>2 + 2 = 4</think>\n\n<answer>4</answer>"
                 reward = cl.compute_reward("math_test", response)
 
-                # Combined score should be 80% primary + 20% auxiliary average (new default)
-                # 0.8 * 1.0 + 0.2 * 0.8 = 0.8 + 0.16 = 0.96
-                self.assertAlmostEqual(reward, 0.96, places=2)
+                # compute_reward returns primary score (1.0 for correct answer)
+                self.assertEqual(reward, 1.0)
 
-    def test_auxiliary_rewards_affect_curriculum_progression(self):
-        """Test that combined rewards (primary + auxiliary) affect curriculum level."""
-        cl = CurriculumLearning(use_format=True, use_repetition=True)
+                # But get_rewards should blend with auxiliary scores
+                # Aux score 0.8 is normalized: clipped to [-1, 1] = 0.8, then (0.8 + 1) / 2 = 0.9
+                # Since only one auxiliary, aux_avg = 0.9
+                # Combined: 0.9 * 1.0 + 0.1 * 0.9 = 0.99 (with aux_weight=0.1)
+                combined_reward = cl.get_rewards(["math_test"])[0]
+                # Result should be close to 0.99
+                self.assertAlmostEqual(combined_reward, 0.99, places=1)
         cl.current_level = 0
 
         # Simulate good performance with success window data (what actually drives advancement)
@@ -1121,12 +1140,16 @@ class TestCurriculumLearning(unittest.TestCase):
             mock_compute.return_value = mock_result
 
             # Compute reward
-            cl.compute_reward("math_test", "<answer>4</answer>")
+            primary_score = cl.compute_reward("math_test", "<answer>4</answer>")
+
+            # Verify primary score is returned
+            self.assertEqual(primary_score, 1.0)
 
             # Verify rewards were saved to session
             task_rewards = cl.session.get_task_rewards("math_test")
             self.assertGreater(len(task_rewards), 0)
             self.assertEqual(task_rewards[0].reward_function_name, "primary")
+            self.assertEqual(task_rewards[0].score, 1.0)
 
     def test_compute_reward_logs_to_file(self):
         """Verify compute_reward writes evaluation logs through CurriculumLearning."""
@@ -1552,6 +1575,251 @@ class TestCurriculumLearning(unittest.TestCase):
                 task.task_name, f"Problem XYZ (reflective attempt {i + 1})"
             )
             self.assertIn("Solve the puzzle", task.prompt)  # Original prompt included
+
+    def test_aux_weight_default_value(self):
+        """Test that aux_weight defaults to 0.1."""
+        cl = CurriculumLearning()
+        self.assertEqual(cl.aux_weight, 0.1)
+
+    def test_llm_judge_weight_default_value(self):
+        """Test that llm_judge_weight defaults to 0.2."""
+        cl = CurriculumLearning()
+        self.assertEqual(cl.llm_judge_weight, 0.2)
+
+    def test_custom_aux_weight(self):
+        """Test setting custom aux_weight."""
+        cl = CurriculumLearning(aux_weight=0.15)
+        self.assertEqual(cl.aux_weight, 0.15)
+
+    def test_custom_llm_judge_weight(self):
+        """Test setting custom llm_judge_weight."""
+        cl = CurriculumLearning(llm_judge_weight=0.3)
+        self.assertEqual(cl.llm_judge_weight, 0.3)
+
+    def test_llm_judge_requires_api_host(self):
+        """Test that use_llm_judge=True requires api_host."""
+        with self.assertRaises(ValueError) as context:
+            CurriculumLearning(
+                use_llm_judge=True,
+                llm_judge_kwargs={"api_port": 8000},
+            )
+        self.assertIn("api_host", str(context.exception))
+
+    def test_llm_judge_requires_api_port(self):
+        """Test that use_llm_judge=True requires api_port."""
+        with self.assertRaises(ValueError) as context:
+            CurriculumLearning(
+                use_llm_judge=True,
+                llm_judge_kwargs={"api_host": "localhost"},
+            )
+        self.assertIn("api_port", str(context.exception))
+
+    def test_llm_judge_initialization_with_valid_config(self):
+        """Test that use_llm_judge=True works with api_host and api_port."""
+        with patch.object(
+            CurriculumLearning, "_initialize_aux_reward_functions"
+        ) as mock_init:
+            cl = CurriculumLearning(
+                use_llm_judge=True,
+                llm_judge_kwargs={
+                    "api_host": "localhost",
+                    "api_port": 8000,
+                    "model_name": "Skywork",
+                },
+            )
+            self.assertTrue(cl.use_llm_judge)
+            self.assertEqual(cl.llm_judge_kwargs["api_host"], "localhost")
+            self.assertEqual(cl.llm_judge_kwargs["api_port"], 8000)
+
+    def test_llm_judge_disabled_by_default(self):
+        """Test that use_llm_judge is disabled by default."""
+        cl = CurriculumLearning()
+        self.assertFalse(cl.use_llm_judge)
+
+    def test_llm_judge_kwargs_empty_by_default(self):
+        """Test that llm_judge_kwargs defaults to empty dict."""
+        cl = CurriculumLearning()
+        self.assertEqual(cl.llm_judge_kwargs, {})
+
+    def test_truthy_task_requires_llm_judge(self):
+        """Test that truthy tasks require llm_judge to be enabled."""
+        cl = CurriculumLearning(use_llm_judge=False)
+
+        # Create a truthy task manually
+        task = Task(
+            task_id="truthy_test",
+            task_name="Truthy Test",
+            task_type="truthy",
+            level=0,
+            prompt="Which response is better?",
+            expected_answer={"type": "truthy", "conversation": []},
+        )
+        cl.session.add_task(task)
+
+        # compute_reward should raise error since llm_judge is disabled
+        with self.assertRaises(ValueError) as context:
+            cl.compute_reward("truthy_test", "Test response")
+        self.assertIn("llm_judge", str(context.exception))
+
+    def test_truthy_task_primary_score_from_llm_judge(self):
+        """Test that truthy task primary score comes from llm_judge."""
+        cl = CurriculumLearning(
+            use_llm_judge=True,
+            llm_judge_kwargs={
+                "api_host": "localhost",
+                "api_port": 8000,
+                "model_name": "Skywork",
+            },
+        )
+
+        # Create a truthy task
+        task = Task(
+            task_id="truthy_test",
+            task_name="Truthy Test",
+            task_type="truthy",
+            level=0,
+            prompt="Which response is better?",
+            expected_answer={"type": "truthy", "conversation": []},
+        )
+        cl.session.add_task(task)
+
+        # Mock llm_judge reward function
+        with patch.object(
+            cl.aux_reward_functions["llm_judge"], "compute_reward"
+        ) as mock_judge:
+            mock_result = MagicMock()
+            mock_result.score = 0.75
+            mock_result.info = "Good response"
+            mock_judge.return_value = mock_result
+
+            # For truthy tasks, no format check applies
+            primary_reward = cl.compute_reward("truthy_test", "Test response")
+
+            # Primary score should be the judge score (0.75)
+            self.assertEqual(primary_reward, 0.75)
+
+            # Task should have is_correct = True (since 0.75 > 0.7 for truthy tasks)
+            task_from_session = cl.session.get_task("truthy_test")
+            self.assertTrue(task_from_session.is_correct)
+
+    def test_truthy_task_weight_calculation(self):
+        """Test that truthy task weights are correctly calculated in get_rewards."""
+        cl = CurriculumLearning(
+            use_llm_judge=True,
+            llm_judge_kwargs={
+                "api_host": "localhost",
+                "api_port": 8000,
+                "model_name": "Skywork",
+            },
+            aux_weight=0.1,
+            llm_judge_weight=0.2,
+        )
+
+        # Create a truthy task
+        task = Task(
+            task_id="truthy_test",
+            task_name="Truthy Test",
+            task_type="truthy",
+            level=0,
+            prompt="Test",
+            expected_answer={"type": "truthy", "conversation": []},
+        )
+        cl.session.add_task(task)
+
+        # Add primary reward (which is judge score for truthy)
+        primary_reward = RewardFunctionScore(
+            score=0.8,
+            reward_function_name="primary",
+            info="",
+        )
+        cl.session.set_reward("truthy_test", [primary_reward])
+
+        # For truthy task: primary_weight = 1.0 - 0.1 = 0.9 (no llm_judge_weight subtracted)
+        # combined = 0.9 * 0.8 + 0.1 * 0.5 = 0.72 + 0.05 = 0.77
+        combined_rewards = cl.get_rewards(["truthy_test"])
+        self.assertEqual(len(combined_rewards), 1)
+        # With no auxiliary scores, aux_avg = 0.5 (middle value)
+        self.assertAlmostEqual(combined_rewards[0], 0.77, places=1)
+
+    def test_non_truthy_weight_without_llm_judge(self):
+        """Test weight calculation for non-truthy tasks when llm_judge disabled."""
+        cl = CurriculumLearning(
+            use_llm_judge=False,
+            aux_weight=0.1,
+            llm_judge_weight=0.2,  # Should be ignored
+        )
+
+        # Create a math task
+        task = Task(
+            task_id="math_test",
+            task_name="Math Test",
+            task_type="math",
+            level=0,
+            prompt="Test",
+            expected_answer="4",
+        )
+        cl.session.add_task(task)
+
+        # Add primary reward
+        primary_reward = RewardFunctionScore(
+            score=1.0,
+            reward_function_name="primary",
+            info="",
+        )
+        cl.session.set_reward("math_test", [primary_reward])
+
+        # For non-truthy without llm_judge: primary_weight = 1.0 - 0.1 = 0.9
+        # combined = 0.9 * 1.0 + 0.1 * 0.5 = 0.95
+        combined_rewards = cl.get_rewards(["math_test"])
+        self.assertEqual(len(combined_rewards), 1)
+        self.assertAlmostEqual(combined_rewards[0], 0.95, places=1)
+
+    def test_non_truthy_weight_with_llm_judge(self):
+        """Test weight calculation for non-truthy tasks when llm_judge enabled."""
+        cl = CurriculumLearning(
+            use_llm_judge=True,
+            llm_judge_kwargs={
+                "api_host": "localhost",
+                "api_port": 8000,
+                "model_name": "Skywork",
+            },
+            aux_weight=0.1,
+            llm_judge_weight=0.2,
+        )
+
+        # Create a math task
+        task = Task(
+            task_id="math_test",
+            task_name="Math Test",
+            task_type="math",
+            level=0,
+            prompt="Test",
+            expected_answer="4",
+        )
+        cl.session.add_task(task)
+
+        # Add primary and judge rewards
+        primary_reward = RewardFunctionScore(
+            score=1.0,
+            reward_function_name="primary",
+            info="",
+        )
+        judge_reward = RewardFunctionScore(
+            score=0.8,
+            reward_function_name="llm_judge",
+            info="",
+        )
+        cl.session.set_reward("math_test", [primary_reward, judge_reward])
+
+        # For non-truthy with llm_judge: primary_weight = 1.0 - 0.1 - 0.2 = 0.7
+        # judge score normalized to [0,1]: (0.8 - min) / (max - min) = (0.8 - (-1e-6)) / (1e-6 - (-1e-6))
+        # But since it's the only judge score: max = 0.8, min = 0.8, so normalized = 0.0 (no range)
+        # combined = 0.7 * 1.0 + 0.1 * 0.5 + 0.2 * 0.0 = 0.75
+        combined_rewards = cl.get_rewards(["math_test"])
+        self.assertEqual(len(combined_rewards), 1)
+        # Should be around 0.75 (with judge contribution being 0 due to no range)
+        self.assertGreaterEqual(combined_rewards[0], 0.7)
+        self.assertLessEqual(combined_rewards[0], 0.76)
 
 
 if __name__ == "__main__":

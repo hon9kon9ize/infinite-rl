@@ -17,16 +17,14 @@ class LangConsistencyRewardFunction(RewardFunction):
         self,
         task_name: str = "lang_consistency",
         tag_excluded=False,
-        multiplier: float = 4.0,
         target_language: str = "en",
         **kwargs,
     ):
-        from cantonesedetect import CantoneseDetector
+        from cantofilter import judge as yue_detector
 
         super().__init__(task_name, **kwargs)
-        self.yue_detector = CantoneseDetector(split_seg=True, get_analysis=True)
+        self.yue_detector = yue_detector
         self.tag_excluded = tag_excluded
-        self.multiplier = multiplier
         self.target_language = target_language
 
     def initialize(self):
@@ -34,8 +32,9 @@ class LangConsistencyRewardFunction(RewardFunction):
 
     def _is_cantonese(self, text: str) -> bool:
         """Return True if the text is Cantonese, False otherwise."""
-        judgement, _ = self.yue_detector.judge(text)
-        return judgement in ["cantonese", "neutral"]
+        judgement = self.yue_detector(text)
+        print(judgement)
+        return judgement in ["cantonese", "mixed", "neutral"]
 
     def compute_reward(
         self,
@@ -81,7 +80,7 @@ class LangConsistencyRewardFunction(RewardFunction):
 
         if not norm_detected:
             return RewardFunctionScore(
-                score=-1.0 * self.multiplier,
+                score=-1.0,
                 info=f"Failed to detect language of the response inside <{self.target_tag}>.",
             )
 
@@ -91,12 +90,12 @@ class LangConsistencyRewardFunction(RewardFunction):
             if is_cantonese:
                 norm_detected = "yue"
 
-        # Simple binary scoring: 1.0 if match, -multiplier if mismatch
+        # Simple binary scoring: 1.0 if match, -1.0 if mismatch
         if norm_expected == norm_detected:
             final_score = 1.0
             info_msg = ""
         else:
-            final_score = -1.0 * self.multiplier
+            final_score = -1.0
             info_msg = f"Detected language '{norm_detected}' does not match expected '{norm_expected}'."
 
         return RewardFunctionScore(

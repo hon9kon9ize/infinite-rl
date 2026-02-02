@@ -178,7 +178,8 @@ def create_curriculum_reward_func(
     """Create a reward function compatible with GRPOTrainer.
 
     The reward function wraps Infinite-RL's curriculum reward computation
-    and returns scores in the range [0, 1] as expected by GRPO.
+    using curriculum.compute_reward() for each completion, then retrieves
+    normalized scores via curriculum.get_reward(task_id).
 
     Args:
         curriculum: Initialized CurriculumLearning instance
@@ -202,9 +203,9 @@ def create_curriculum_reward_func(
             **kwargs: Additional arguments from trainer (ignored)
 
         Returns:
-            List of reward scores in range [0, 1]
+            List of reward scores in range [0, 1] (normalized via get_rewards)
         """
-        rewards = []
+        task_ids = []
 
         for idx, completion in enumerate(completions):
             try:
@@ -216,6 +217,7 @@ def create_curriculum_reward_func(
                     else {}
                 )
                 task_id = meta.get("task_id", f"task_{idx}")
+                task_ids.append(task_id)
 
                 # Extract content from TRL's chat format
                 # Completions come as: [{'role': 'assistant', 'content': '...'}]
@@ -232,18 +234,19 @@ def create_curriculum_reward_func(
                     print(
                         f"Warning: Completion for task {idx} is not a string after extraction. Type: {type(completion_text)}"
                     )
-                    rewards.append(0.0)
                     continue
 
                 # Compute reward using curriculum
-                reward = curriculum.compute_reward(task_id, completion_text)
-                rewards.append(float(reward))
+                # This computes and stores the reward internally, tracking curriculum progress
+                curriculum.compute_reward(task_id, completion_text)
 
             except Exception as e:
                 print(f"Warning: Error computing reward for task {idx}: {e}")
-                rewards.append(0.0)
 
-        return rewards
+        # Retrieve normalized rewards for all tasks after computing all rewards
+        # This allows centralized score normalization logic in get_rewards()
+        normalized_rewards = curriculum.get_rewards(task_ids)
+        return [float(r) for r in normalized_rewards]
 
     return reward_func
 

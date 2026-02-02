@@ -163,7 +163,39 @@ result = math_fn.compute_reward(
 print(f"Correctness: {result.score}") 
 ```
 
-### 3. Reasoning Steps (encouragement bonus)
+### 3. Truthy Task
+Conversation-based quality evaluation using LLM Judge as the primary evaluator. Supports multilingual quality assessment (Cantonese, Chinese, English) from truthy-dpo and yue-truthy datasets.
+
+**Features:**
+- LLM Judge (Skywork Reward Model) provides continuous quality score (0.0-1.0)
+- Conversation format: system prompt + user prompt + model response
+- Distributed across all difficulty levels (not rating-limited)
+- 20% weight in task selection during training
+- Multilingual support (yue, zh, en)
+
+**Requirements:**
+- Running sglang server with Skywork Reward Model
+- `use_llm_judge=True` with `api_host`, `api_port`, `model_name` configured
+
+**Example:**
+```python
+from infinite_rl import CurriculumLearning
+
+# Initialize with truthy task support
+cl = CurriculumLearning(
+    use_llm_judge=True,
+    llm_judge_kwargs={
+        "api_host": "localhost",
+        "api_port": 8000,
+        "model_name": "Skywork/Skywork-Reward-Llama-3.1-8B"
+    }
+)
+
+task = cl.get_prompt()
+if task.task_type == "truthy":
+    print(f"System: {task.expected_answer['conversation'][0]['content']}")
+    print(f"User: {task.prompt}")
+```
 A small encouragement reward that detects explicit chain-of-thought style reasoning placed inside a `<think>...</think>` block. The `ReasoningStepsRewardFunction` looks for common reasoning indicators (e.g., "first", "second", "finally", "therefore") and awards a modest bonus when multiple indicators are present.
 
 **Behavior:**
@@ -183,8 +215,36 @@ score = reason_fn.compute_reward(model_out, expected_output=None)
 print(f"Reasoning bonus: {score.score}")
 ```
 
+### 4. LLM Judge (Remote Quality Evaluation)
+Uses a remote LLM-based reward model to evaluate response quality continuously. The `LLMJudgeRewardFunction` integrates with sglang server running the Skywork Reward Model (V2-Qwen3-4B) to score responses on a continuous scale.
 
+**Requirements:**
+- Running sglang server with Skywork Reward Model
+- Network access to the sglang API endpoint
 
+**Features:**
+- Continuous quality scoring (not binary correct/incorrect)
+- Flexible score normalization (raw or tanh-based [0, 1] mapping)
+- Configurable API endpoint, timeout, and score thresholds
+- Graceful error handling when API unavailable
+
+**Example:**
+```python
+from infinite_rl.reward_functions import LLMJudgeRewardFunction
+
+judge = LLMJudgeRewardFunction(
+    api_host="localhost",
+    api_port=8000,
+    normalize=True  # Normalize to [0, 1]
+)
+judge.initialize()
+
+result = judge.compute_reward(task)
+print(f"Quality score: {result.score:.4f}")
+```
+
+**Setup Instructions:**
+See `docs/LLM_JUDGE_REWARD_FUNCTION.md` for detailed setup, configuration, and integration guide.
 
 
 ## Curriculum Learning

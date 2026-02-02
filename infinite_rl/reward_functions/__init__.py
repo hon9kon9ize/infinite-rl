@@ -7,6 +7,7 @@ from .repetition import RepetitionRewardFunction
 from .length import LengthRewardFunction
 from .format import FormatRewardFunction
 from .whitespace_collapse import WhitespaceCollapseRewardFunction
+from .llm_judge import LLMJudgeRewardFunction
 
 
 def get_reward_functions(

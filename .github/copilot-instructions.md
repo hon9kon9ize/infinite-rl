@@ -5,15 +5,17 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 ## Big picture
 - The repo provides a modular **reward functions toolbox** for LLM Reinforcement Learning and fine-tuning frameworks like Tunix.
 - **Supported task types**: 
-  - **Math** (Level 0): Problem-solving using symbolic computation (SymPy). All math tasks are at level 0, sourced from GSM8K filtered for easy mathematical problems.
+  - **Math** (Level 0): Problem-solving using symbolic computation. All math tasks are at level 0, sourced from GSM8K filtered for easy mathematical problems.
   - **Puzzle** (Levels 1-5): Programming challenges in Python (subprocess) and JavaScript (WASM runtime). Difficulty rated 1-5 scale.
+  - **Truthy** (All Levels, 20% weight): Conversation-based quality evaluation with multilingual support (yue, zh, en). Primary score from LLM Judge (Skywork Reward Model).
 - Key components:
   1. **Reward functions** in `infinite_rl/reward_functions/`:
      - `MathRewardFunction`: Validates mathematical solutions using symbolic equivalence
      - `PuzzleRewardFunction`: Executes and validates code against puzzle specifications
+     - `LLMJudgeRewardFunction`: Uses remote LLM-based reward model (Skywork Reward V2-Qwen3-4B) via sglang API for continuous quality scoring
   2. **Execution engines**:
      - Puzzle execution: JavaScript via WASM (`infinite_rl/executor.py` + `puzzle_js.wasm`), Python via subprocess (`infinite_rl/runner.py`)
-     - Math evaluation: Uses `sympy` for symbolic computation, references `math.json` for task data (all tasks at level 0)
+     - Math evaluation: Symbolic validation of mathematical solutions, references `math.json` for task data (all tasks at level 0)
   3. **Curriculum learning** (`infinite_rl/curriculum.py`): Adaptive difficulty progression using **sliding window success rates**:
      - Starts at level 0 (math tasks only)
      - Progresses through levels 1-5 (programming puzzles) based on success rates
@@ -26,6 +28,13 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 - Reward functions are designed to integrate with fine-tuning frameworks (e.g., Tunix).
 - **Math tasks**: `MathRewardFunction` expects the answer tag to contain a numeric value or symbolic expression that can be parsed and compared symbolically.
 - **Puzzle tasks**: `PuzzleRewardFunction` expects the answer tag to contain a code block (triple-backtick) with valid Python or JavaScript code. The code is executed against the puzzle's SAT (satisfaction) function to determine correctness.
+- **Truthy tasks**: Conversation-based quality evaluation where the **primary score IS the LLM Judge score** (not binary). System prompt + prompt + chosen/rejected are provided in conversation format. Requires `use_llm_judge=True` with `api_host`, `api_port`, and `model_name`.
+- **LLM Judge** serves two roles:
+  1. **Primary evaluator for truthy tasks**: Rates quality on continuous scale (0.0-1.0)
+  2. **Auxiliary evaluator for math/puzzle tasks**: Provides quality feedback independent of correctness gates
+  - Requires sglang server running Skywork model (V2-Qwen3-4B)
+  - Supports configurable score normalization
+  - See `docs/LLM_JUDGE_REWARD_FUNCTION.md` for setup instructions
 - Reward functions return a `RewardFunctionScore(score, info)` with score ranging from 0.0 to 1.0 and `info` holding diagnostic text.
 - **Curriculum learning** uses sliding window success rates:
   - `_track_success()` records 1 (success) or 0 (failure) per task type
@@ -81,8 +90,10 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 - Strict output format: the parser looks for `<answer>` tags; changing parsing requires updating tests.
 - **Prompt generation**: Use `format_puzzle_prompt()` and `format_math_prompt()` from `infinite_rl.prompt_templates` to create prompts.
 - **Puzzle data access**: Use `get_puzzle_data()` and `get_available_puzzles()` from `infinite_rl.puzzles` to access puzzle metadata.
+- **Auxiliary reward functions**: Additional metrics like `FormatRewardFunction`, `LangConsistencyRewardFunction`, `ReasoningStepsRewardFunction`, `RepetitionRewardFunction`, `LengthRewardFunction`, and `LLMJudgeRewardFunction` are initialized via `CurriculumLearning._initialize_aux_reward_functions()` and blended with primary rewards.
 - When adding a new task type:
-  - Add a reward function class under `infinite_rl/reward_functions/` and expose it in `get_reward_functions()`.
+  - Add a reward function class under `infinite_rl/reward_functions/` and expose it in `get_reward_functions()` for primary tasks.
+  - For auxiliary metrics, add to `_initialize_aux_reward_functions()` in curriculum.py and add configuration handling.
 
 ## Integration points & dependencies
 - Code execution: `wasmtime` + packaged WASM runtimes (`puzzle_js.wasm`) in `infinite_rl/runtimes`. The `Executor` exposes `javascript` for puzzles; Python puzzles use local subprocess execution via `infinite_rl/runner.py`.
@@ -102,7 +113,7 @@ pip install git+https://github.com/owner/repo@runtimes-v1.2.3
 # Or using the environment helper
 RUNTIME_RELEASE_TAG=v1.2.3 RUNTIME_GITHUB_REPO=owner/repo python -m pip install .
 ```
-- Math reward: `sympy` is used for symbolic checks. The `math.json` dataset (downloaded during installation) contains math task examples for reference or testing.
+- Math reward: Symbolic validation is used for checking mathematical correctness. The `math.json` dataset contains math task examples for reference or testing.
 - CI installs some language toolchains (Node, Java, g++) even though project currently focuses on Python/JS/TypeScript and math; update CI if you remove language support.
 
 ## Quick checks agents should run before PRs

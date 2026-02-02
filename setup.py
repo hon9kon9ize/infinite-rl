@@ -10,7 +10,7 @@ RUNTIME_FILES = ["puzzle_js.wasm"]
 PUZZLE_FILES = ["puzzles.json", "math.json"]
 GITHUB_REPO = os.environ.get("RUNTIME_GITHUB_REPO", "hon9kon9ize/infinite-rl")
 # Use a known-good tag if the version-specific one fails
-FALLBACK_TAG = "runtimes-v0.1.21"
+FALLBACK_TAG = "runtimes-v0.1.22"
 
 
 def get_version():
@@ -18,7 +18,7 @@ def get_version():
         with open("VERSION.txt", "r") as f:
             return f.read().strip()
     except:
-        return "0.1.21"
+        return "0.1.22"
 
 
 PACKAGE_VERSION = get_version()
@@ -81,11 +81,10 @@ setup(
     python_requires=">=3.11",
     install_requires=[
         "wasmtime",
-        "sympy",
         "antlr4-python3-runtime==4.11.1",
         "pycld2",
         "pylatexenc",
-        "cantonesedetect",
+        "canto-filter",
     ],
     cmdclass={"build_py": build_py},
 )

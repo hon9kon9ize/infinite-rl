@@ -83,23 +83,12 @@ jobs:
           echo "Release runtimes-${{ steps.get_version.outputs.version }} already exists. Skipping export/build and upload."
           exit 0
 
-      - name: Download math dataset
+      - name: Build datasets(math.json and truthy.json) needed for runtimes
         if: steps.check_release.outputs.release_exists == 'false'
         run: |
-          pip install datasets pandas
-          mkdir -p assets
-          python -c "
-          from datasets import load_dataset
-          import json
-          ds = load_dataset('hon9kon9ize/infinite-rl')
-          df = ds['train'].to_pandas()
-          df_math = df[df['task'] == 'math']
-          df_math['rating'] = 0
-          records = df_math.to_dict(orient='records')
-          with open('assets/math.json', 'w') as f:
-              json.dump(records, f)
-          print(f'Successfully wrote {len(records)} math problems to assets/math.json')
-          "
+          python -m pip install --upgrade pip
+          pip install datasets huggingface_hub pandas
+          python build_src/dataset.py
 
       # 5. Build WASM Runtimes - only run when we need to create release
       - name: Make build script executable
@@ -155,4 +144,15 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: assets/math.json
           asset_name: math.json
+          asset_content_type: application/json
+
+      - name: Upload truthy.json
+        if: steps.check_release.outputs.release_exists == 'false'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: assets/truthy.json
+          asset_name: truthy.json
           asset_content_type: application/json

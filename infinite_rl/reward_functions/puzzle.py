@@ -60,11 +60,11 @@ class PuzzleRewardFunction(RewardFunction):
             # For simulation, score based on format and code content
             tag_start = f"<{self.target_tag}>"
             tag_end = f"</{self.target_tag}>"
-            
+
             # Debug: print what we're looking for
             # print(f"DEBUG: Looking for tags: {tag_start}...{tag_end}")
             # print(f"DEBUG: Model output: {task.model_output[:200]}")
-            
+
             if tag_start not in task.model_output or tag_end not in task.model_output:
                 return RewardFunctionScore(
                     score=0.0,
@@ -72,8 +72,11 @@ class PuzzleRewardFunction(RewardFunction):
                 )
             # Extract code
             import re as re_module
+
             pattern = f"{re_module.escape(tag_start)}(.*?){re_module.escape(tag_end)}"
-            raw_matches = re_module.findall(pattern, task.model_output, re_module.DOTALL)
+            raw_matches = re_module.findall(
+                pattern, task.model_output, re_module.DOTALL
+            )
             if not raw_matches:
                 return RewardFunctionScore(
                     score=0.0,
@@ -102,8 +105,6 @@ class PuzzleRewardFunction(RewardFunction):
                     score=0.0,
                     info="Dummy puzzle simulation - incorrect",
                 )
-
-        if not puzzle_name:
 
         # 1. Format Objective: Check for tags
         # First, check if raw answer tags exist

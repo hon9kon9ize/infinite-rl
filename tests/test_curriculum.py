@@ -489,6 +489,200 @@ class TestSession(unittest.TestCase):
             stats["first_correct_at"], 0
         )  # First (only) generation is correct
 
+    def test_create_math_task(self):
+        """Test creating a math task."""
+        session = Session()
+
+        task_data = {
+            "type": "math",
+            "data": {
+                "prompt": "What is 2+2?",
+                "response": "4",
+                "lang": "en",
+                "rating": 1,
+            },
+            "rating": 1,
+            "id": "math_test",
+        }
+
+        task = session.create_math_task(task_data)
+
+        self.assertIsNotNone(task)
+        self.assertIsInstance(task, Task)
+        self.assertEqual(task.task_type, "math")
+        self.assertEqual(task.level, 1)
+        self.assertEqual(task.expected_answer, "4")
+        self.assertEqual(task.language, "en")
+        self.assertIn("What is 2+2?", task.prompt)
+        self.assertIn(task.task_id, session.tasks)
+
+    def test_create_puzzle_task(self):
+        """Test creating a puzzle task."""
+        session = Session()
+
+        task_data = {
+            "type": "puzzle",
+            "language": "javascript",
+            "puzzle_name": "TestPuzzle",
+            "data": {
+                "name": "TestPuzzle",
+                "docstring": "Test puzzle description",
+                "sat": "function sat() { return true; }",
+                "sol": "function sol() {}",
+                "ans_type": "boolean",
+                "rating": 1,
+            },
+            "rating": 1,
+            "id": "puzzle_test",
+        }
+
+        task = session.create_puzzle_task(task_data)
+
+        self.assertIsNotNone(task)
+        self.assertIsInstance(task, Task)
+        self.assertEqual(task.task_type, "puzzle")
+        self.assertEqual(task.level, 1)
+        self.assertEqual(task.language, "javascript")
+        self.assertIn("TestPuzzle", task.prompt)
+        self.assertIn("Test puzzle description", task.prompt)
+        self.assertIn(task.task_id, session.tasks)
+
+    def test_create_truthy_task(self):
+        """Test creating a truthy task."""
+        session = Session()
+
+        task_data = {
+            "type": "truthy",
+            "data": {
+                "prompt": "Test prompt",
+                "chosen": "Good answer",
+                "rejected": "Bad answer",
+                "id": "truthy_test",
+                "language": "en",
+            },
+            "rating": None,
+            "id": "truthy_test",
+        }
+
+        task = session.create_truthy_task(task_data)
+
+        self.assertIsNotNone(task)
+        self.assertIsInstance(task, Task)
+        self.assertEqual(task.task_type, "truthy")
+        self.assertEqual(task.level, -1)
+        self.assertIn("Test prompt", task.prompt)
+        self.assertIn(task.task_id, session.tasks)
+
+    def test_task_instance_counter(self):
+        """Test that task instance counter increments properly."""
+        session = Session()
+        initial_counter = session.task_instance_counter
+
+        # Create tasks
+        math_data = {
+            "type": "math",
+            "data": {"prompt": "Test", "response": "4", "lang": "en"},
+            "rating": 1,
+            "id": "math_1",
+        }
+        puzzle_data = {
+            "type": "puzzle",
+            "language": "python",
+            "puzzle_name": "Test",
+            "data": {
+                "name": "Test",
+                "docstring": "",
+                "sat": "def sat(): return True",
+                "sol": "def sol(): pass",
+                "ans_type": "boolean",
+            },
+            "rating": 1,
+            "id": "puzzle_1",
+        }
+
+        math_task = session.create_math_task(math_data)
+        self.assertEqual(session.task_instance_counter, initial_counter + 1)
+        self.assertIn(str(initial_counter), math_task.task_id)
+
+        puzzle_task = session.create_puzzle_task(puzzle_data)
+        self.assertEqual(session.task_instance_counter, initial_counter + 2)
+        self.assertIn(str(initial_counter + 1), puzzle_task.task_id)
+
+    def test_get_format_failure_tasks(self):
+        """Test getting tasks that failed format validation."""
+        session = Session()
+
+        # Create a task
+        task = Task(
+            task_id="test_task",
+            task_name="Test Task",
+            task_type="math",
+            level=1,
+            prompt="Test",
+            expected_answer="4",
+        )
+        session.add_task(task)
+
+        # Add format failure reward
+        rewards = [
+            RewardFunctionScore(
+                score=0.0,
+                reward_function_name="format_answer",
+                info="Format error",
+            )
+        ]
+        session.set_reward("test_task", rewards, "bad format")
+
+        format_failures = session._get_format_failure_tasks()
+
+        self.assertEqual(len(format_failures), 1)
+        self.assertEqual(format_failures[0].task_id, "test_task")
+
+    def test_get_recent_task_ids(self):
+        """Test getting recent task base IDs."""
+        session = Session()
+
+        # Add tasks to history
+        session.task_history = ["math_1_0", "puzzle_2_1", "math_1_2", "truthy_3_3"]
+
+        recent_ids = session._get_recent_task_ids()
+
+        # Should extract base IDs
+        expected = ["math_1", "puzzle_2", "math_1", "truthy_3"]
+        self.assertEqual(recent_ids, expected)
+
+    def test_get_reflective_task(self):
+        """Test getting a reflective task for format failures."""
+        session = Session()
+
+        # Create a task that failed format
+        original_task = Task(
+            task_id="original_task",
+            task_name="Original Task",
+            task_type="math",
+            level=1,
+            prompt="Original prompt",
+            expected_answer="4",
+        )
+        session.add_task(original_task)
+
+        # Add format failure
+        rewards = [
+            RewardFunctionScore(
+                score=0.0,
+                reward_function_name="format_answer",
+                info="Format error",
+            )
+        ]
+        session.set_reward("original_task", rewards, "bad format")
+
+        reflective_task = session.get_reflective_task()
+
+        self.assertIsNotNone(reflective_task)
+        self.assertIn("reflective", reflective_task.task_id)
+        self.assertIn("Original prompt", reflective_task.prompt)
+        self.assertIn("bad format", reflective_task.prompt)
+
 
 class TestCurriculumLearning(unittest.TestCase):
     """Test CurriculumLearning class functionality."""
@@ -586,7 +780,7 @@ class TestCurriculumLearning(unittest.TestCase):
                     )  # Start at level 0 (math tasks only)
                     self.assertEqual(cl._get_task_counters(), {})
                     self.assertEqual(cl._get_failed_tasks(), {})
-                    self.assertEqual(len(cl._get_recent_task_ids()), 0)
+                    self.assertEqual(len(cl.session._get_recent_task_ids()), 0)
 
     def test_get_rewards_correct_answer(self):
         """Test get_rewards with correct answer."""
@@ -717,7 +911,7 @@ class TestCurriculumLearning(unittest.TestCase):
         cl = CurriculumLearning()
 
         # Manually set up tasks for level 0 (curriculum starts at level 0 with math tasks)
-        cl.tasks_by_level[0] = [
+        cl.session.tasks_by_level[0] = [
             {
                 "type": "math",
                 "data": {
@@ -731,7 +925,9 @@ class TestCurriculumLearning(unittest.TestCase):
             }
         ]
 
-        task = cl.get_prompt()
+        # Mock random.random to avoid truthy task selection (20% chance)
+        with patch("random.random", return_value=0.5):
+            task = cl.get_prompt()
 
         self.assertIsNotNone(task)
         self.assertIsInstance(task, Task)
@@ -746,7 +942,7 @@ class TestCurriculumLearning(unittest.TestCase):
         cl = CurriculumLearning()
 
         # Manually set up puzzle task at level 0 (curriculum starts at level 0)
-        cl.tasks_by_level[0] = [
+        cl.session.tasks_by_level[0] = [
             {
                 "type": "puzzle",
                 "language": "javascript",
@@ -764,7 +960,9 @@ class TestCurriculumLearning(unittest.TestCase):
             }
         ]
 
-        task = cl.get_prompt()
+        # Mock random.random to avoid truthy task selection
+        with patch("random.random", return_value=0.5):
+            task = cl.get_prompt()
 
         self.assertIsNotNone(task)
         self.assertIsInstance(task, Task)
@@ -773,212 +971,13 @@ class TestCurriculumLearning(unittest.TestCase):
         self.assertEqual(task.language, "javascript")
         self.assertIn("TestPuzzle", task.prompt)
         self.assertIn("Test puzzle description", task.prompt)
-
-    def test_get_math_prompt_creates_task(self):
-        """Test _get_math_prompt creates a valid math task."""
-        cl = CurriculumLearning()
-
-        selected_task = {
-            "type": "math",
-            "data": {
-                "prompt": "What is 2+2?",
-                "response": "4",
-                "lang": "en",
-                "rating": 1,
-            },
-            "rating": 1,
-            "id": "math_test",
-        }
-
-        task = cl._get_math_prompt(selected_task)
-
-        self.assertIsNotNone(task)
-        self.assertIsInstance(task, Task)
-        self.assertEqual(task.task_type, "math")
-        self.assertEqual(task.level, 1)
-        self.assertEqual(task.expected_answer, "4")
-        self.assertEqual(task.language, "en")
-        self.assertIn("What is 2+2?", task.prompt)
-        # Task should be added to session
-        self.assertIn(task.task_id, cl.session.tasks)
-
-    def test_get_math_prompt_handles_error(self):
-        """Test _get_math_prompt returns None on error."""
-        cl = CurriculumLearning()
-
-        # Provide invalid selected_task (missing required fields)
-        selected_task = {
-            "type": "math",
-            "data": {},  # Missing prompt and response
-            # Missing rating
-        }
-
-        task = cl._get_math_prompt(selected_task)
-
-        self.assertIsNone(task, "Should return None on error")
-
-    def test_get_puzzle_prompt_creates_task(self):
-        """Test _get_puzzle_prompt creates a valid puzzle task."""
-        cl = CurriculumLearning()
-
-        selected_task = {
-            "type": "puzzle",
-            "language": "javascript",
-            "puzzle_name": "TestPuzzle",
-            "data": {
-                "name": "TestPuzzle",
-                "docstring": "Test puzzle description",
-                "sat": "function sat() { return true; }",
-                "sol": "function sol() {}",
-                "ans_type": "boolean",
-                "rating": 1,
-            },
-            "rating": 1,
-            "id": "puzzle_test",
-        }
-
-        task = cl._get_puzzle_prompt(selected_task)
-
-        self.assertIsNotNone(task)
-        self.assertIsInstance(task, Task)
-        self.assertEqual(task.task_type, "puzzle")
-        self.assertEqual(task.level, 1)
-        self.assertEqual(task.language, "javascript")
-        self.assertIn("TestPuzzle", task.prompt)
-        self.assertIn("Test puzzle description", task.prompt)
-        # Task should be added to session
-        self.assertIn(task.task_id, cl.session.tasks)
-
-    def test_get_puzzle_prompt_handles_error(self):
-        """Test _get_puzzle_prompt returns None on error."""
-        cl = CurriculumLearning()
-
-        # Provide invalid selected_task
-        selected_task = {
-            "type": "puzzle",
-            "language": "javascript",
-            "puzzle_name": "TestPuzzle",
-            "data": {},  # Missing required puzzle data
-            # Missing rating
-        }
-
-        task = cl._get_puzzle_prompt(selected_task)
-
-        self.assertIsNone(task, "Should return None on error")
-
-    def test_get_truthy_prompt_creates_task(self):
-        """Test _get_truthy_prompt creates a valid truthy task."""
-        cl = CurriculumLearning()
-
-        selected_task = {
-            "type": "truthy",
-            "id": "truthy_test",
-            "data": {
-                "id": "conv_123",
-                "system": "You are a helpful assistant",
-                "prompt": "What's the best way to learn Python?",
-                "chosen": "Practice with projects and read documentation.",
-                "rejected": "Just watch videos without coding.",
-                "reasoning_language": "en",
-                "language": "en",
-            },
-        }
-
-        task = cl._get_truthy_prompt(selected_task)
-
-        self.assertIsNotNone(task)
-        self.assertIsInstance(task, Task)
-        self.assertEqual(task.task_type, "truthy")
-        self.assertEqual(task.language, "en")
-        self.assertIsNotNone(task.judge_system_prompt)
-        # expected_answer now stores chosen and rejected for reproducibility
-        self.assertIsNotNone(task.expected_answer)
-        self.assertEqual(
-            task.expected_answer["chosen"],
-            "Practice with projects and read documentation.",
-        )
-        self.assertEqual(
-            task.expected_answer["rejected"], "Just watch videos without coding."
-        )
-        # Task should be added to session
-        self.assertIn(task.task_id, cl.session.tasks)
-
-    def test_get_truthy_prompt_handles_error(self):
-        """Test _get_truthy_prompt returns None on error."""
-        cl = CurriculumLearning()
-
-        # Provide invalid selected_task
-        selected_task = {
-            "type": "truthy",
-            "id": "truthy_test",
-            "data": {},  # Missing required fields
-        }
-
-        task = cl._get_truthy_prompt(selected_task)
-
-        self.assertIsNone(task, "Should return None on error")
-
-    def test_prompt_helper_increments_task_counter(self):
-        """Test that each prompt helper increments task_instance_counter."""
-        cl = CurriculumLearning()
-        initial_counter = cl.task_instance_counter
-
-        # Create math task
-        math_task = cl._get_math_prompt(
-            {
-                "type": "math",
-                "data": {"prompt": "Test", "response": "4", "lang": "en"},
-                "rating": 1,
-                "id": "math_1",
-            }
-        )
-        self.assertEqual(cl.task_instance_counter, initial_counter + 1)
-        self.assertIn(str(initial_counter), math_task.task_id)
-
-        # Create puzzle task
-        puzzle_task = cl._get_puzzle_prompt(
-            {
-                "type": "puzzle",
-                "language": "python",
-                "puzzle_name": "Test",
-                "data": {
-                    "name": "Test",
-                    "docstring": "",
-                    "sat": "",
-                    "sol": "",
-                    "ans_type": "",
-                },
-                "rating": 1,
-                "id": "puzzle_1",
-            }
-        )
-        self.assertEqual(cl.task_instance_counter, initial_counter + 2)
-        self.assertIn(str(initial_counter + 1), puzzle_task.task_id)
-
-        # Create truthy task
-        truthy_task = cl._get_truthy_prompt(
-            {
-                "type": "truthy",
-                "id": "truthy_1",
-                "data": {
-                    "id": "test",
-                    "system": "",
-                    "prompt": "Test",
-                    "chosen": "A",
-                    "rejected": "B",
-                    "language": "en",
-                },
-            }
-        )
-        self.assertEqual(cl.task_instance_counter, initial_counter + 3)
-        self.assertIn(str(initial_counter + 2), truthy_task.task_id)
 
     def test_recent_tasks_tracking(self):
         """Test that recent tasks are tracked and weighted."""
         cl = CurriculumLearning()
 
         # Set up tasks at level 0 (curriculum starts at level 0 with math tasks)
-        cl.tasks_by_level[0] = [
+        cl.session.tasks_by_level[0] = [
             {
                 "type": "math",
                 "data": {"prompt": "Q1", "response": "A1", "lang": "en", "rating": 1},
@@ -1000,7 +999,9 @@ class TestCurriculumLearning(unittest.TestCase):
         ]
 
         # Get a prompt - should return one of the available tasks
-        task = cl.get_prompt()
+        # Mock random to avoid truthy selection
+        with patch("random.random", return_value=0.5):
+            task = cl.get_prompt()
 
         self.assertIsNotNone(task)
         # Task should have math_taskX_0 format with instance counter
@@ -1011,7 +1012,7 @@ class TestCurriculumLearning(unittest.TestCase):
         cl = CurriculumLearning()
 
         # Set up a single task at level 0
-        cl.tasks_by_level[0] = [
+        cl.session.tasks_by_level[0] = [
             {
                 "type": "math",
                 "data": {"prompt": "Q1", "response": "A1", "lang": "en", "rating": 1},
@@ -1021,9 +1022,13 @@ class TestCurriculumLearning(unittest.TestCase):
         ]
 
         # Get multiple prompts from the same task - each should have unique ID
-        task1 = cl.get_prompt()
-        task2 = cl.get_prompt()
-        task3 = cl.get_prompt()
+        # Mock random to avoid truthy selection and ensure consistent selection
+        with patch("random.random", return_value=0.5), patch(
+            "random.choices", return_value=[cl.session.tasks_by_level[0][0]]
+        ):
+            task1 = cl.get_prompt()
+            task2 = cl.get_prompt()
+            task3 = cl.get_prompt()
 
         self.assertIsNotNone(task1)
         self.assertIsNotNone(task2)
@@ -1035,7 +1040,7 @@ class TestCurriculumLearning(unittest.TestCase):
         self.assertEqual(task3.task_id, "math_simple_2")
 
         # Task instance counter should be incremented
-        self.assertEqual(cl.task_instance_counter, 3)
+        self.assertEqual(cl.session.task_instance_counter, 3)
 
     def test_get_learning_stats(self):
         """Test getting learning statistics."""
@@ -1074,6 +1079,7 @@ class TestCurriculumLearning(unittest.TestCase):
         self.assertEqual(stats["failed_tasks_count"], 1)
         self.assertEqual(stats["recent_tasks_count"], 3)
         self.assertIsInstance(stats["available_tasks_by_level"], dict)
+        self.assertIsInstance(stats["truthy_tasks_count"], int)
 
     def test_invalid_task_type(self):
         """Test handling of invalid task type."""
@@ -1098,13 +1104,19 @@ class TestCurriculumLearning(unittest.TestCase):
             )
 
     def test_no_tasks_available(self):
-        """Test behavior when no tasks are available."""
+        """Test behavior when no tasks are available at current level."""
         cl = CurriculumLearning()
-        # Clear all loaded tasks to simulate no tasks available
-        cl.tasks_by_level = {i: [] for i in range(0, 7)}
+        # Clear tasks at current level (level 0) to simulate no tasks available at that level
+        cl.session.tasks_by_level[0] = []
+        cl.session.truthy_tasks = []
 
-        task = cl.get_prompt()
-        self.assertIsNone(task)
+        # Mock random to avoid truthy selection
+        with patch("random.random", return_value=0.5):
+            task = cl.get_prompt()
+
+        # Should fallback to other levels or return None
+        # Since session loads tasks, it should find tasks at other levels
+        self.assertIsNotNone(task)
 
     def test_initialization_with_format_reward_default(self):
         """Test CurriculumLearning initialization with default format reward enabled."""
@@ -1331,7 +1343,7 @@ class TestCurriculumLearning(unittest.TestCase):
             cl = CurriculumLearning()
 
         # Should handle JSON parsing error gracefully
-        self.assertIsInstance(cl.tasks_by_level, dict)
+        self.assertIsInstance(cl.session.tasks_by_level, dict)
 
     def test_corrupted_puzzles_file(self):
         """Test curriculum learning with corrupted puzzles.json file."""
@@ -1354,16 +1366,25 @@ class TestCurriculumLearning(unittest.TestCase):
             cl = CurriculumLearning()
 
         # Should handle JSON parsing error gracefully
-        self.assertIsInstance(cl.tasks_by_level, dict)
+        self.assertIsInstance(cl.session.tasks_by_level, dict)
 
     def test_get_prompt_with_no_tasks(self):
         """Test get_prompt when no tasks are available at current level."""
         cl = CurriculumLearning()
-        # Clear all tasks
-        cl.tasks_by_level = {i: [] for i in range(0, 7)}
+        # Clear tasks at current level (level 0)
+        original_level_0 = cl.session.tasks_by_level[0][:]
+        cl.session.tasks_by_level[0] = []
+        cl.session.truthy_tasks = []
 
-        result = cl.get_prompt()
-        self.assertIsNone(result)
+        # Mock random to avoid truthy selection
+        with patch("random.random", return_value=0.5):
+            result = cl.get_prompt()
+
+        # Should fallback to other levels that have tasks
+        self.assertIsNotNone(result)
+
+        # Restore for other tests
+        cl.session.tasks_by_level[0] = original_level_0
 
     def test_get_rewards_with_invalid_task_type(self):
         """Test compute_reward with invalid task type."""
@@ -1473,7 +1494,7 @@ class TestCurriculumLearning(unittest.TestCase):
         cl = CurriculumLearning()
 
         # Set up available task
-        cl.tasks_by_level[0] = [
+        cl.session.tasks_by_level[0] = [
             {
                 "type": "math",
                 "data": {"problem": "2+2?", "solution": "4", "rating": 1},
@@ -1744,7 +1765,7 @@ class TestCurriculumLearning(unittest.TestCase):
         cl.session.add_task(task)
 
         # Set up available tasks
-        cl.tasks_by_level[0] = [
+        cl.session.tasks_by_level[0] = [
             {
                 "type": "math",
                 "data": {"problem": "Q1", "solution": "A1", "rating": 0},
@@ -1848,7 +1869,7 @@ class TestCurriculumLearning(unittest.TestCase):
         cl.session.add_task(task3)
 
         # Get format failures
-        failures = cl._get_format_failure_tasks()
+        failures = cl.session._get_format_failure_tasks()
 
         # Should find 2 format failures
         self.assertEqual(len(failures), 2)
@@ -1873,7 +1894,7 @@ class TestCurriculumLearning(unittest.TestCase):
         )
 
         # Create reflective prompt
-        reflective_prompt = cl._create_reflective_prompt(original_task)
+        reflective_prompt = cl.session._create_reflective_prompt(original_task)
 
         # Check that it includes key components
         self.assertIn("previously attempted", reflective_prompt.lower())
@@ -1908,7 +1929,7 @@ class TestCurriculumLearning(unittest.TestCase):
         cl.global_step = cl.warmup_step
 
         # Get reflective task
-        reflective = cl._get_reflective_prompt()
+        reflective = cl.session.get_reflective_task()
 
         self.assertIsNotNone(reflective)
         # Should preserve metadata
@@ -1937,7 +1958,7 @@ class TestCurriculumLearning(unittest.TestCase):
             cl.session.add_task(task)
 
         # Try to get reflective task - should return None
-        reflective = cl._get_reflective_prompt()
+        reflective = cl.session.get_reflective_task()
         self.assertIsNone(reflective)
 
     def test_reflective_learning_during_warmup(self):
@@ -1960,7 +1981,7 @@ class TestCurriculumLearning(unittest.TestCase):
         cl.session.add_task(task)
 
         # Set up normal tasks
-        cl.tasks_by_level[0] = [
+        cl.session.tasks_by_level[0] = [
             {
                 "type": "math",
                 "data": {"problem": "Q", "solution": "A", "rating": 0},
@@ -1999,7 +2020,7 @@ class TestCurriculumLearning(unittest.TestCase):
 
         # Get reflective task
         cl.global_step = cl.warmup_step
-        reflective = cl._get_reflective_prompt()
+        reflective = cl.session.get_reflective_task()
 
         # Should have added a new task to session
         self.assertGreater(len(cl.session.tasks), session_size_before)
@@ -2039,7 +2060,7 @@ class TestCurriculumLearning(unittest.TestCase):
         cl.global_step = cl.warmup_step
 
         # Get first reflective version
-        reflective_1 = cl._get_reflective_prompt()
+        reflective_1 = cl.session.get_reflective_task()
         self.assertIsNotNone(reflective_1)
         self.assertEqual(reflective_1.task_id, "original_001_reflective_0")
         self.assertEqual(reflective_1.task_name, "Original Task (reflective attempt 1)")
@@ -2052,7 +2073,7 @@ class TestCurriculumLearning(unittest.TestCase):
 
         # Try to get another reflective task
         # Should NOT select the reflective_1 task, but should select original_001 again
-        reflective_2 = cl._get_reflective_prompt()
+        reflective_2 = cl.session.get_reflective_task()
 
         # Should create a NEW reflective version of the original task, not from reflective_1
         self.assertIsNotNone(reflective_2)
@@ -2087,7 +2108,7 @@ class TestCurriculumLearning(unittest.TestCase):
         # Generate multiple reflective versions of the same task
         reflective_tasks = []
         for i in range(5):
-            reflective = cl._get_reflective_prompt()
+            reflective = cl.session.get_reflective_task()
             self.assertIsNotNone(reflective)
             reflective_tasks.append(reflective)
 

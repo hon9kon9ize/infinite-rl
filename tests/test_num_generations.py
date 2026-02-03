@@ -36,9 +36,7 @@ class TestNumGenerations(unittest.TestCase):
     def test_num_generations_batch_accumulation(self):
         """Test that GRPO batch accumulates up to num_generations."""
         # Mock truthy task loading to avoid llm_judge requirement
-        with patch(
-            "infinite_rl.curriculum.CurriculumLearning._load_available_tasks"
-        ) as mock_load:
+        with patch("infinite_rl.session.Session._load_available_tasks") as mock_load:
             mock_load.return_value = None
             curriculum = CurriculumLearning(num_generations=2)
 
@@ -94,9 +92,7 @@ class TestNumGenerations(unittest.TestCase):
     def test_num_generations_level_update_trigger(self):
         """Test that level update is triggered when num_generations responses are accumulated."""
         # Mock truthy task loading to avoid llm_judge requirement
-        with patch(
-            "infinite_rl.curriculum.CurriculumLearning._load_available_tasks"
-        ) as mock_load:
+        with patch("infinite_rl.session.Session._load_available_tasks") as mock_load:
             mock_load.return_value = None
             curriculum = CurriculumLearning(
                 num_generations=2,
@@ -151,9 +147,7 @@ class TestNumGenerations(unittest.TestCase):
     def test_num_generations_one(self):
         """Test behavior with num_generations=1 (immediate level updates)."""
         # Mock truthy task loading to avoid llm_judge requirement
-        with patch(
-            "infinite_rl.curriculum.CurriculumLearning._load_available_tasks"
-        ) as mock_load:
+        with patch("infinite_rl.session.Session._load_available_tasks") as mock_load:
             mock_load.return_value = None
             curriculum = CurriculumLearning(
                 num_generations=1, warmup_step=0  # Disable warmup

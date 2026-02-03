@@ -12,6 +12,7 @@ import unittest
 import tempfile
 import json
 from pathlib import Path
+from unittest.mock import patch
 from infinite_rl.curriculum import CurriculumLearning, Task
 from infinite_rl.utils.param_extractor import extract_puzzle_inputs
 
@@ -27,10 +28,10 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
         # Note: Puzzles start at level 1; level 0 is reserved for math tasks
         for level in range(0, 7):
             if level != 1:
-                cl.tasks_by_level[level] = []
+                cl.session.tasks_by_level[level] = []
 
         # Manually set up a puzzle task with parameters in sat() at level 1
-        cl.tasks_by_level[1] = [
+        cl.session.tasks_by_level[1] = [
             {
                 "type": "puzzle",
                 "language": "javascript",
@@ -48,7 +49,9 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
             }
         ]
 
-        task = cl.get_prompt()
+        # Mock random to avoid truthy task selection
+        with patch("random.random", return_value=0.5):
+            task = cl.get_prompt()
 
         # Verify task was created
         self.assertIsNotNone(task)
@@ -76,9 +79,9 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
         # Clear all levels except 1 to ensure we get only our mock task
         for level in range(0, 7):
             if level != 1:
-                cl.tasks_by_level[level] = []
+                cl.session.tasks_by_level[level] = []
 
-        cl.tasks_by_level[1] = [
+        cl.session.tasks_by_level[1] = [
             {
                 "type": "puzzle",
                 "language": "python",
@@ -96,7 +99,9 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
             }
         ]
 
-        task = cl.get_prompt()
+        # Mock random to avoid truthy task selection
+        with patch("random.random", return_value=0.5):
+            task = cl.get_prompt()
 
         expected_answer = task.expected_answer
         self.assertNotEqual(expected_answer["inputs"], {})
@@ -110,9 +115,9 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
         # Clear all levels except 1 to ensure we get only our mock task
         for level in range(0, 7):
             if level != 1:
-                cl.tasks_by_level[level] = []
+                cl.session.tasks_by_level[level] = []
 
-        cl.tasks_by_level[1] = [
+        cl.session.tasks_by_level[1] = [
             {
                 "type": "puzzle",
                 "language": "javascript",
@@ -130,7 +135,9 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
             }
         ]
 
-        task = cl.get_prompt()
+        # Mock random to avoid truthy task selection
+        with patch("random.random", return_value=0.5):
+            task = cl.get_prompt()
 
         # With no default parameters, inputs should be empty
         # (first param 'result' is what sol() returns, not an input)
@@ -171,9 +178,9 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
                 # Clear all levels except 1 to ensure we get only our mock task
                 for level in range(0, 7):
                     if level != 1:
-                        cl.tasks_by_level[level] = []
+                        cl.session.tasks_by_level[level] = []
 
-                cl.tasks_by_level[1] = [
+                cl.session.tasks_by_level[1] = [
                     {
                         "type": "puzzle",
                         "language": tc["language"],
@@ -191,7 +198,9 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
                     }
                 ]
 
-                task = cl.get_prompt()
+                # Mock random to avoid truthy task selection
+                with patch("random.random", return_value=0.5):
+                    task = cl.get_prompt()
                 inputs = task.expected_answer["inputs"]
 
                 self.assertEqual(
@@ -207,9 +216,9 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
         # Clear all levels except 1 to ensure we get only our mock task
         for level in range(0, 7):
             if level != 1:
-                cl.tasks_by_level[level] = []
+                cl.session.tasks_by_level[level] = []
 
-        cl.tasks_by_level[1] = [
+        cl.session.tasks_by_level[1] = [
             {
                 "type": "puzzle",
                 "language": "javascript",
@@ -227,7 +236,9 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
             }
         ]
 
-        task = cl.get_prompt()
+        # Mock random to avoid truthy task selection
+        with patch("random.random", return_value=0.5):
+            task = cl.get_prompt()
         inputs = task.expected_answer["inputs"]
 
         # Verify complex values are properly extracted
@@ -243,9 +254,9 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
         # Clear all levels except 1 to ensure we get only our mock task
         for level in range(0, 7):
             if level != 1:
-                cl.tasks_by_level[level] = []
+                cl.session.tasks_by_level[level] = []
 
-        cl.tasks_by_level[1] = [
+        cl.session.tasks_by_level[1] = [
             {
                 "type": "puzzle",
                 "language": "javascript",
@@ -263,7 +274,9 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
             }
         ]
 
-        task = cl.get_prompt()
+        # Mock random to avoid truthy task selection
+        with patch("random.random", return_value=0.5):
+            task = cl.get_prompt()
         expected_answer = task.expected_answer
 
         # Verify expected_answer structure

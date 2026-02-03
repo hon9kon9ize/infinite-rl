@@ -335,35 +335,23 @@ class CurriculumLearning:
                             .joinpath(filename)
                             .read_text(encoding="utf-8")
                         )
-                        print(
-                            f"DEBUG: Loaded {filename} via importlib.resources (Python 3.9+)"
-                        )
                         return json.loads(data_text)
                     except AttributeError:
                         # Python 3.7-3.8 API
                         data_text = resources.read_text(
                             "infinite_rl.runtimes", filename, encoding="utf-8"
                         )
-                        print(
-                            f"DEBUG: Loaded {filename} via importlib.resources (Python 3.7-3.8)"
-                        )
                         return json.loads(data_text)
                 except Exception as resources_error:
-                    print(
-                        f"DEBUG: importlib.resources failed for {filename}: {resources_error}"
-                    )
+                    pass
 
                 # Method 2: Fallback to Path-based loading
                 file_path = Path(__file__).parent / "runtimes" / filename
-                print(f"DEBUG: Trying Path-based loading: {file_path}")
-                print(f"DEBUG: File exists: {file_path.exists()}")
                 if file_path.exists():
                     with open(file_path, "r", encoding="utf-8") as f:
                         data = json.load(f)
-                        print(f"DEBUG: Loaded {filename} via Path-based loading")
                         return data
                 else:
-                    print(f"DEBUG: {filename} not found at {file_path}")
                     return None
             except Exception as e:
                 print(f"ERROR: Could not load {filename}: {e}")
@@ -376,7 +364,6 @@ class CurriculumLearning:
         math_data = load_runtime_json("math.json")
         if math_data:
             try:
-                print(f"DEBUG: Processing {len(math_data)} math items")
                 for item in math_data:
                     task_info = {
                         "type": "math",
@@ -396,14 +383,10 @@ class CurriculumLearning:
         puzzles_data = load_runtime_json("puzzles.json")
         if puzzles_data:
             try:
-                print(
-                    f"DEBUG: Processing puzzles data, keys: {puzzles_data.keys() if isinstance(puzzles_data, dict) else 'not a dict'}"
-                )
 
                 for lang in ["javascript", "python"]:
                     if lang in puzzles_data:
                         puzzles_list = puzzles_data[lang]
-                        print(f"DEBUG: Found {len(puzzles_list)} {lang} puzzles")
                         puzzle_count = 0
                         for puzzle_name, puzzle_info in puzzles_list.items():
                             if (
@@ -421,7 +404,6 @@ class CurriculumLearning:
                                 level = min(task_info["rating"], 6)
                                 self.tasks_by_level[level].append(task_info)
                                 puzzle_count += 1
-                        print(f"DEBUG: Added {puzzle_count} {lang} puzzles to tasks")
             except Exception as e:
                 print(f"Warning: Could not process puzzle tasks: {e}")
                 import traceback
@@ -444,7 +426,6 @@ class CurriculumLearning:
                         else []
                     )
 
-                print(f"DEBUG: Found {len(truthy_list)} truthy tasks")
                 truthy_count = 0
 
                 for idx, truthy_item in enumerate(truthy_list):
@@ -667,10 +648,13 @@ class CurriculumLearning:
                 self._compute_reward_standard(task)
             )
 
-        # GRPO batch accumulation and curriculum tracking
-        return self._finalize_reward_batch(
-            task, task_id, score, is_correct, task_rewards, aux_score_dict, model_output
+        # Accumulate generation and save rewards
+        task.add_generation(model_output, task_rewards, score)
+        self.session.set_reward(
+            task_id, task_rewards, model_output=task.model_output, is_correct=is_correct
         )
+
+        return score
 
     def _compute_reward_truthy(self, task: Task) -> tuple:
         """
@@ -858,156 +842,59 @@ class CurriculumLearning:
 
         return format_think_valid and format_answer_valid, failure_reason
 
-    def _finalize_reward_batch(
-        self,
-        task: Task,
-        task_id: str,
-        score: float,
-        is_correct: bool,
-        task_rewards: List[RewardFunctionScore],
-        aux_score_dict: Dict[str, Dict[str, Any]],
-        model_output: str,
-    ) -> float:
-        """
-        Finalize reward computation: GRPO batching, curriculum tracking, and logging.
-
-        Handles GRPO batch accumulation and triggers level updates when batch completes.
-        Only non-truthy tasks (math/puzzle) contribute to curriculum success windows.
+    def _log_completed_task(self, task: Task, primary_scores: List[float]) -> None:
+        """Log a completed task batch to the log file.
 
         Args:
-            task: Task object
-            task_id: Task identifier
-            score: Primary score from _compute_reward_* method
-            is_correct: Success flag from _compute_reward_* method
-            task_rewards: List of RewardFunctionScore objects
-            aux_score_dict: Dictionary of auxiliary scores
-            model_output: Raw model response for generation tracking
-
-        Returns:
-            Score for this evaluation
+            task: The completed task
+            primary_scores: List of primary scores for the batch
         """
-        # Extract primary_reward for logging
-        primary_reward = (
-            task_rewards[0]
-            if task_rewards
-            else RewardFunctionScore(score=0.0, reward_function_name="primary", info="")
-        )
+        if self.log_file is None:
+            return
 
-        # GRPO batch accumulation: collect scores until group is complete
-        # Extract base task_id (remove instance counter)
-        base_task_id = task_id.rsplit("_", 1)[0] if "_" in task_id else task_id
+        log_entry = task.to_dict()
+        log_entry["timestamp"] = datetime.datetime.now().isoformat()
 
-        # ADD generation to task (instead of dicts)
-        task.add_generation(model_output, task_rewards, score)
+        # Get primary score and info
+        primary_score = None
+        primary_info = ""
+        for reward in task.task_rewards:
+            if reward.reward_function_name == "primary":
+                primary_score = reward.score
+                primary_info = reward.info or ""
+                break
+        if primary_score is None:
+            primary_score = 0.0
 
-        # Check if we have a complete group (GRPO batch size)
-        if len(task.generations) >= self.num_generations:
-            # Complete group: track success at prompt level
-            primary_scores = [g.primary_score for g in task.generations]
-            if task.task_type != "truthy":
-                self._track_success_group(task.level, primary_scores)
+        log_entry["primary_score"] = primary_score
+        # For truthy tasks, primary score IS the judge score
+        if task.task_type == "truthy":
+            for reward in task.task_rewards:
+                if reward.reward_function_name == "llm_judge":
+                    log_entry["primary_score"] = reward.score
+                    break
 
-            # Increment step counter ONCE per complete prompt group
-            self.global_step += 1
+        # Build aux_scores and info from task_rewards (excluding primary and format)
+        aux_scores = {}
+        aux_info = {}
+        for reward in task.task_rewards:
+            if reward.reward_function_name not in ["primary", "format"]:
+                aux_scores[reward.reward_function_name] = reward.score
+                aux_info[f"aux_{reward.reward_function_name}"] = reward.info or ""
 
-            # Check if we should advance/demote level
-            self._update_level()
+        log_entry["aux_scores"] = aux_scores
+        log_entry["info"] = {
+            "primary": primary_info,
+            **aux_info,
+        }
 
-            # Log evaluation if configured (only when batch is complete)
-            if self.log_file is not None:
-                log_entry = task.to_dict()
-                log_entry["timestamp"] = datetime.datetime.now().isoformat()
-                log_entry["primary_score"] = primary_reward.score
-                log_entry["aux_scores"] = {
-                    name: data["score"] for name, data in aux_score_dict.items()
-                }
-                log_entry["info"] = {
-                    "primary": primary_reward.info,
-                    **{
-                        f"aux_{name}": data["info"]
-                        for name, data in aux_score_dict.items()
-                    },
-                }
-                # Add GRPO batch information (now from task.generations)
-                log_entry["grpo_batch_size"] = len(primary_scores)
-                log_entry["grpo_primary_scores"] = primary_scores
-                log_entry["grpo_model_outputs"] = [g.output for g in task.generations]
-                with open(self.log_file, "a", encoding="utf-8") as f:
-                    json.dump(log_entry, f, ensure_ascii=False)
-                    f.write("\n")
-
-            # NO cleanup needed - task owns its generations!
-        elif self.num_generations == 1:
-            # Single evaluation mode (non-GRPO): log immediately
-            if task.task_type != "truthy":
-                self._track_success_group(task.level, [score])
-            self.global_step += 1
-            self._update_level()
-
-            # Log evaluation if configured
-            if self.log_file is not None:
-                log_entry = task.to_dict()
-                log_entry["timestamp"] = datetime.datetime.now().isoformat()
-                log_entry["primary_score"] = primary_reward.score
-                log_entry["aux_scores"] = {
-                    name: data["score"] for name, data in aux_score_dict.items()
-                }
-                log_entry["info"] = {
-                    "primary": primary_reward.info,
-                    **{
-                        f"aux_{name}": data["info"]
-                        for name, data in aux_score_dict.items()
-                    },
-                }
-                with open(self.log_file, "a", encoding="utf-8") as f:
-                    json.dump(log_entry, f, ensure_ascii=False)
-                    f.write("\n")
-        elif len(task.generations) > self.num_generations:
-            # Safety: If we somehow got MORE than expected, process anyway
-            print(
-                f"Warning: Task {base_task_id} has {len(task.generations)} responses "
-                f"(expected {self.num_generations}). Processing batch anyway."
-            )
-            primary_scores = [
-                g.primary_score for g in task.generations[: self.num_generations]
-            ]
-            if task.task_type != "truthy":
-                self._track_success_group(task.level, primary_scores)
-            self.global_step += 1
-            self._update_level()
-
-            # Log evaluation if configured (only when batch is complete)
-            if self.log_file is not None:
-                log_entry = task.to_dict()
-                log_entry["timestamp"] = datetime.datetime.now().isoformat()
-                log_entry["primary_score"] = primary_reward.score
-                log_entry["aux_scores"] = {
-                    name: data["score"] for name, data in aux_score_dict.items()
-                }
-                log_entry["info"] = {
-                    "primary": primary_reward.info,
-                    **{
-                        f"aux_{name}": data["info"]
-                        for name, data in aux_score_dict.items()
-                    },
-                }
-                # Add GRPO batch information
-                log_entry["grpo_batch_size"] = len(primary_scores)
-                log_entry["grpo_primary_scores"] = primary_scores
-                with open(self.log_file, "a", encoding="utf-8") as f:
-                    json.dump(log_entry, f, ensure_ascii=False)
-                    f.write("\n")
-        else:
-            # Incomplete group: still accumulating responses
-            # Don't update level yet, just wait for more responses
-            pass
-
-        # Save rewards to session (pass is_correct explicitly)
-        self.session.set_reward(
-            task_id, task_rewards, model_output=task.model_output, is_correct=is_correct
-        )
-
-        return score
+        # Add GRPO batch information
+        log_entry["grpo_batch_size"] = len(primary_scores)
+        log_entry["grpo_primary_scores"] = primary_scores
+        log_entry["grpo_model_outputs"] = [g.output for g in task.generations]
+        with open(self.log_file, "a", encoding="utf-8") as f:
+            json.dump(log_entry, f, ensure_ascii=False)
+            f.write("\n")
 
     def _update_level(self):
         """Update difficulty level based on prompt-level success rate (optimized for GRPO).
@@ -1026,9 +913,6 @@ class CurriculumLearning:
         # Check if we're in cooldown period
         steps_since_change = self.global_step - self.last_level_change_step
         if steps_since_change < self.level_change_cooldown:
-            print(
-                f"DEBUG: In cooldown - steps_since_change={steps_since_change} < cooldown={self.level_change_cooldown}"
-            )
             return False
 
         # Minimum samples required (10 prompts = ~40 responses for GRPO)
@@ -1037,19 +921,12 @@ class CurriculumLearning:
         # Only check CURRENT level's success rate
         current_window = self.success_windows.get(self.current_level)
         if current_window is None or len(current_window) < min_samples:
-            print(
-                f"DEBUG: Not enough samples - window for level {self.current_level}: {list(current_window) if current_window else None} (len={len(current_window) if current_window else 0})"
-            )
             return False
 
         # Calculate success rate for current level only
         current_success_rate = sum(current_window) / len(current_window)
         variance = (
             statistics.variance(current_window) if len(current_window) > 1 else 0.0
-        )
-
-        print(
-            f"DEBUG: Level {self.current_level} - success_rate={current_success_rate:.1%}, variance={variance:.4f}"
         )
 
         # ADVANCE: High success rate at current level
@@ -1634,6 +1511,31 @@ class CurriculumLearning:
         """
         # Batch process LLM Judge for all tasks (for efficiency)
         self._compute_batch_llm_judge(task_ids)
+
+        # Finalize completed batches: curriculum tracking and logging
+        for task_id in task_ids:
+            task = self.session.get_task(task_id)
+            if task is None:
+                continue
+
+            if len(task.generations) >= self.num_generations:
+                if len(task.generations) > self.num_generations:
+                    raise ValueError(
+                        f"Task {task_id} has {len(task.generations)} generations, expected {self.num_generations}"
+                    )
+                # Complete group: track success at prompt level
+                primary_scores = [g.primary_score for g in task.generations]
+                if task.task_type != "truthy":
+                    self._track_success_group(task.level, primary_scores)
+
+                # Increment step counter ONCE per complete prompt group
+                self.global_step += 1
+
+                # Check if we should advance/demote level
+                self._update_level()
+
+                # Log evaluation if configured
+                self._log_completed_task(task, primary_scores)
 
         combined_rewards = []
 

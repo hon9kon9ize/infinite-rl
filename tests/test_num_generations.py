@@ -83,6 +83,8 @@ class TestNumGenerations(unittest.TestCase):
                 curriculum.compute_reward(
                     task_id, "<think>test</think>\n<answer>4</answer>"
                 )
+                # Call get_rewards to finalize the batch
+                curriculum.get_rewards([task_id])
                 # Should have triggered level update since we reached num_generations
                 task = curriculum.session.get_task(task_id)
                 self.assertEqual(len(task.generations), 2)
@@ -138,6 +140,9 @@ class TestNumGenerations(unittest.TestCase):
                 task_id, "<think>test</think>\n<answer>4</answer>"
             )
 
+            # Call get_rewards to finalize
+            curriculum.get_rewards([task_id])
+
             # global_step should have incremented by 1 (once per complete batch)
             self.assertEqual(curriculum.global_step, initial_step + 1)
             task = curriculum.session.get_task(task_id)
@@ -179,6 +184,9 @@ class TestNumGenerations(unittest.TestCase):
         # (batch should complete immediately)
         initial_step = curriculum.global_step
         curriculum.compute_reward(task.task_id, "response")
+
+        # Call get_rewards to finalize
+        curriculum.get_rewards([task.task_id])
 
         # Verify batch was completed (task should have 1 generation and global_step should increment)
         task = curriculum.session.get_task(task.task_id)
@@ -269,6 +277,9 @@ class TestGRPOBatching(unittest.TestCase):
             # Response 4 - should trigger batch completion
             self.curriculum.compute_reward(task_id, "<answer>4</answer>")
 
+            # Call get_rewards to finalize
+            self.curriculum.get_rewards([task_id])
+
             # Task should have all 4 generations
             task = self.curriculum.session.get_task(task_id)
             self.assertEqual(len(task.generations), 4)
@@ -328,7 +339,7 @@ class TestGRPOBatching(unittest.TestCase):
             self.assertEqual(len(task.generations), 4)
 
     def test_grpo_batch_handles_oversized_batch(self):
-        """Test that oversized batches (more responses than expected) are handled."""
+        """Test that oversized batches (more responses than expected) raise error."""
         task_id = "math_test_789"
         task = Task(
             task_id=task_id,
@@ -350,14 +361,21 @@ class TestGRPOBatching(unittest.TestCase):
 
             initial_step = self.curriculum.global_step
 
-            # Submit 5 responses (1 more than num_generations=4)
-            for i in range(5):
+            # Submit 4 responses (exact num_generations)
+            for i in range(4):
                 self.curriculum.compute_reward(task_id, "<answer>4</answer>")
 
-            # Should have processed the first 4 and kept accumulating
-            # The 5th response adds to the existing task's generations and triggers another processing
-            self.assertEqual(len(task.generations), 5)
-            self.assertEqual(self.curriculum.global_step, initial_step + 2)
+            # Call get_rewards to finalize the first batch
+            self.curriculum.get_rewards([task_id])
+            self.assertEqual(self.curriculum.global_step, initial_step + 1)
+
+            # Submit 5th response - should accumulate
+            self.curriculum.compute_reward(task_id, "<answer>4</answer>")
+
+            # Now call get_rewards - should raise ValueError
+            with self.assertRaises(ValueError) as cm:
+                self.curriculum.get_rewards([task_id])
+            self.assertIn("has 5 generations, expected 4", str(cm.exception))
 
     def test_grpo_batch_different_tasks_independent(self):
         """Test that different tasks maintain independent batch counters."""
@@ -430,6 +448,9 @@ class TestGRPOBatching(unittest.TestCase):
             # Submit all 4 responses
             for i in range(4):
                 self.curriculum.compute_reward(task_id, "<answer>4</answer>")
+
+            # Call get_rewards to finalize
+            self.curriculum.get_rewards([task_id])
 
             # global_step should have incremented exactly once
             self.assertEqual(self.curriculum.global_step, initial_step + 1)

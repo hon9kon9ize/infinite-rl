@@ -1587,6 +1587,9 @@ class TestCurriculumLearning(unittest.TestCase):
             self.assertFalse(os.path.exists(self.log_file))
             cl.compute_reward("math_log", "<answer>2</answer>")
 
+            # Call get_rewards to trigger logging (logging moved there)
+            cl.get_rewards(["math_log"])
+
         self.assertTrue(os.path.exists(self.log_file))
         with open(self.log_file, "r", encoding="utf-8") as f:
             log_entry = json.loads(f.readline())
@@ -1595,6 +1598,129 @@ class TestCurriculumLearning(unittest.TestCase):
         self.assertEqual(log_entry["model_output"], "<answer>2</answer>")
         self.assertEqual(log_entry["primary_score"], 1.0)
         self.assertEqual(log_entry["info"]["primary"], "logged")
+
+    def test_log_completed_task(self):
+        """Test _log_completed_task logs task details correctly."""
+        cl = CurriculumLearning(
+            log_file=self.log_file,
+            use_format=False,
+            use_repetition=False,
+            use_reasoning_steps=False,
+            use_length=False,
+            use_lang_consistency=False,
+            num_generations=2,
+        )
+
+        # Create a task with rewards and generations
+        task = Task(
+            task_id="test_task",
+            task_name="Test Task",
+            task_type="math",
+            level=1,
+            prompt="2+2?",
+            expected_answer="4",
+        )
+        cl.session.add_task(task)
+
+        # Add some rewards
+        primary_reward = RewardFunctionScore(
+            score=1.0,
+            reward_function_name="primary",
+            info="Correct answer",
+        )
+        aux_reward = RewardFunctionScore(
+            score=0.8,
+            reward_function_name="format_answer",
+            info="Good format",
+        )
+        task.add_reward(primary_reward)
+        task.add_reward(aux_reward)
+
+        # Add generations
+        task.add_generation("Response 1", [primary_reward, aux_reward], 1.0)
+        task.add_generation("Response 2", [primary_reward, aux_reward], 1.0)
+
+        # Call _log_completed_task
+        primary_scores = [1.0, 1.0]
+        cl._log_completed_task(task, primary_scores)
+
+        # Check log file
+        self.assertTrue(os.path.exists(self.log_file))
+        with open(self.log_file, "r", encoding="utf-8") as f:
+            log_entry = json.loads(f.readline())
+
+        # Verify log entry contents
+        self.assertEqual(log_entry["task_id"], "test_task")
+        self.assertEqual(log_entry["task_name"], "Test Task")
+        self.assertEqual(log_entry["task_type"], "math")
+        self.assertEqual(log_entry["level"], 1)
+        self.assertEqual(log_entry["prompt"], "2+2?")
+        self.assertEqual(log_entry["expected_answer"], "4")
+        self.assertEqual(log_entry["primary_score"], 1.0)
+        self.assertEqual(log_entry["aux_scores"]["format_answer"], 0.8)
+        self.assertEqual(log_entry["info"]["primary"], "Correct answer")
+        self.assertEqual(log_entry["info"]["aux_format_answer"], "Good format")
+        self.assertEqual(log_entry["grpo_batch_size"], 2)
+        self.assertEqual(log_entry["grpo_primary_scores"], [1.0, 1.0])
+        self.assertEqual(log_entry["grpo_model_outputs"], ["Response 1", "Response 2"])
+        self.assertIn("timestamp", log_entry)
+
+    def test_log_completed_task_truthy(self):
+        """Test _log_completed_task handles truthy tasks with judge score override."""
+        cl = CurriculumLearning(
+            log_file=self.log_file,
+            use_llm_judge=True,
+            llm_judge_kwargs={
+                "api_host": "localhost",
+                "api_port": 8000,
+                "model_name": "test_model",
+            },
+            num_generations=1,
+        )
+
+        # Create a truthy task
+        task = Task(
+            task_id="truthy_task",
+            task_name="Truthy Task",
+            task_type="truthy",
+            level=0,
+            prompt="Which is better?",
+            expected_answer={"chosen": "A", "rejected": "B"},
+        )
+        cl.session.add_task(task)
+
+        # Add rewards: primary placeholder and llm_judge
+        primary_reward = RewardFunctionScore(
+            score=0.5,
+            reward_function_name="primary",
+            info="Placeholder",
+        )
+        judge_reward = RewardFunctionScore(
+            score=0.9,
+            reward_function_name="llm_judge",
+            info="Good quality",
+        )
+        task.add_reward(primary_reward)
+        task.add_reward(judge_reward)
+
+        # Add generation
+        task.add_generation("Response", [primary_reward, judge_reward], 0.9)
+
+        # Call _log_completed_task
+        primary_scores = [0.9]
+        cl._log_completed_task(task, primary_scores)
+
+        # Check log file
+        self.assertTrue(os.path.exists(self.log_file))
+        with open(self.log_file, "r", encoding="utf-8") as f:
+            log_entry = json.loads(f.readline())
+
+        # For truthy tasks, primary_score should be the judge score
+        self.assertEqual(log_entry["primary_score"], 0.9)
+        self.assertEqual(log_entry["task_type"], "truthy")
+        self.assertEqual(log_entry["aux_scores"]["llm_judge"], 0.9)
+        self.assertEqual(log_entry["info"]["primary"], "Placeholder")  # Original info
+        self.assertEqual(log_entry["info"]["aux_llm_judge"], "Good quality")
 
     def test_reflective_learning_disabled(self):
         """Test that reflective learning is disabled when rate is 0."""
@@ -2733,8 +2859,8 @@ class TestCurriculumLearning(unittest.TestCase):
                 self.assertIn("think", reason, "Reason should mention think tag")
 
     def test_finalize_reward_batch_single_generation(self):
-        """Test _finalize_reward_batch with single generation (no GRPO batching)."""
-        cl = CurriculumLearning(num_generations=1)
+        """Test get_rewards with single generation (no GRPO batching)."""
+        cl = CurriculumLearning(num_generations=1, aux_weight=0.0)
         cl.current_level = 0
 
         task = Task(
@@ -2747,31 +2873,42 @@ class TestCurriculumLearning(unittest.TestCase):
         )
         cl.session.add_task(task)
 
-        # Create mock reward
-        primary_reward = RewardFunctionScore(
-            score=1.0,
-            reward_function_name="primary",
-            info="Correct",
-        )
-        task_rewards = [primary_reward]
-        aux_score_dict = {}
+        # Mock the reward function
+        with patch.object(
+            cl.reward_functions["math"], "compute_reward"
+        ) as mock_compute:
+            mock_result = MagicMock()
+            mock_result.score = 1.0
+            mock_result.info = "Correct"
+            mock_compute.return_value = mock_result
 
-        # Finalize reward
-        score = cl._finalize_reward_batch(
-            task, "math_test", 1.0, True, task_rewards, aux_score_dict, "4"
-        )
+            # Compute reward (adds to task.generations)
+            score = cl.compute_reward("math_test", "4")
 
-        # Should immediately trigger success tracking
-        self.assertEqual(score, 1.0)
-        # Check that success was tracked (indirectly via step counter)
-        self.assertEqual(cl.global_step, 1, "Should increment global_step immediately")
+            # Call get_rewards to finalize (equivalent to old _finalize_reward_batch)
+            rewards = cl.get_rewards(["math_test"])
+
+        # Should return the combined reward
+        self.assertEqual(len(rewards), 1)
+        self.assertEqual(rewards[0], 1.0)
+        # Check that success was tracked (via step counter)
+        self.assertEqual(cl.global_step, 1, "Should increment global_step after batch")
 
     def test_finalize_reward_batch_grpo_accumulation(self):
-        """Test _finalize_reward_batch accumulates GRPO responses until batch complete."""
-        cl = CurriculumLearning(num_generations=3)
+        """Test get_rewards accumulates GRPO responses until batch complete."""
+        cl = CurriculumLearning(
+            num_generations=3,
+            aux_weight=0.0,  # Disable auxiliary blending for clean test
+            use_format=False,
+            use_repetition=False,
+            use_lang_consistency=False,
+            use_whitespace_collapse=False,
+            use_length=False,
+            use_reasoning_steps=False,
+        )
         cl.current_level = 0
 
-        # Create 3 responses for same prompt
+        # Create task
         base_task_id = "prompt_base"
         task = Task(
             task_id=base_task_id,
@@ -2783,22 +2920,27 @@ class TestCurriculumLearning(unittest.TestCase):
         )
         cl.session.add_task(task)
 
-        # Simulate 3 generations for the same task
-        for i in range(3):
-            primary_reward = RewardFunctionScore(
-                score=1.0,
-                reward_function_name="primary",
-                info="Correct",
-            )
-            task_rewards = [primary_reward]
+        # Mock the reward function
+        with patch.object(
+            cl.reward_functions["math"], "compute_reward"
+        ) as mock_compute:
+            mock_result = MagicMock()
+            mock_result.score = 1.0
+            mock_result.info = "Correct"
+            mock_compute.return_value = mock_result
 
-            # Finalize each response (only the last one should complete the batch)
-            cl._finalize_reward_batch(
-                task, base_task_id, 1.0, True, task_rewards, {}, f"Response {i}"
-            )
+            # Simulate 3 generations for the same task
+            for i in range(3):
+                cl.compute_reward(base_task_id, f"Response {i}")
 
-        # After 3 responses (batch complete), level should have been checked
-        # and global_step should be 1 (one batch processed)
+            # Call get_rewards to finalize the batch
+            rewards = cl.get_rewards([base_task_id])
+
+        # Should return combined reward for the batch
+        self.assertEqual(len(rewards), 1)
+        self.assertEqual(rewards[0], 1.0)
+
+        # After batch complete, global_step should be 1 (one batch processed)
         self.assertEqual(cl.global_step, 1, "Batch complete should increment step once")
 
         # Task should have accumulated all 3 generations
@@ -2808,7 +2950,7 @@ class TestCurriculumLearning(unittest.TestCase):
         self.assertEqual(task.generations[2].output, "Response 2")
 
     def test_finalize_reward_batch_excludes_truthy_from_curriculum(self):
-        """Test _finalize_reward_batch excludes truthy tasks from success tracking."""
+        """Test get_rewards excludes truthy tasks from success tracking."""
         cl = CurriculumLearning(
             use_llm_judge=True,
             llm_judge_kwargs={
@@ -2830,23 +2972,20 @@ class TestCurriculumLearning(unittest.TestCase):
         )
         cl.session.add_task(task)
 
-        # Evaluate truthy task
-        primary_reward = RewardFunctionScore(
-            score=0.9,
-            reward_function_name="primary",
-            info="Good",
-        )
-        task_rewards = [primary_reward]
+        # Mock LLM Judge for truthy
+        with patch.object(
+            cl.aux_reward_functions["llm_judge"], "compute_reward"
+        ) as mock_judge:
+            mock_result = MagicMock()
+            mock_result.score = 0.9
+            mock_result.info = "Good"
+            mock_judge.return_value = mock_result
 
-        cl._finalize_reward_batch(
-            task,
-            "truthy_test",
-            0.9,
-            False,
-            task_rewards,
-            {},  # is_correct=False for truthy
-            "Some response",
-        )
+            # Compute reward (for truthy, this sets up the task)
+            score = cl.compute_reward("truthy_test", "Some response")
+
+            # Call get_rewards to finalize (this should not affect curriculum for truthy)
+            rewards = cl.get_rewards(["truthy_test"])
 
         # Truthy should NOT contribute to success windows
         # Level should remain at 0 (no advancement from truthy alone)

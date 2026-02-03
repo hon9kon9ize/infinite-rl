@@ -110,6 +110,12 @@ class InfiniteRLConfig:
     use_repetition: bool = True
     aux_weight: float = 0.2
 
+    # LLM Judge configuration
+    use_llm_judge: bool = False
+    llm_judge_host: str = "localhost"
+    llm_judge_port: int = 8000
+    llm_judge_model: str = "Skywork/Skywork-Reward-V2-Qwen3-4B"
+
     # Output
     log_file: Optional[str] = "curriculum_learning_log.jsonl"
 
@@ -123,6 +129,15 @@ def create_curriculum(config: InfiniteRLConfig) -> CurriculumLearning:
     Returns:
         Initialized CurriculumLearning instance
     """
+    # Prepare LLM Judge kwargs if enabled
+    llm_judge_kwargs = {}
+    if config.use_llm_judge:
+        llm_judge_kwargs = {
+            "api_host": config.llm_judge_host,
+            "api_port": config.llm_judge_port,
+            "model_name": config.llm_judge_model,
+        }
+
     curriculum = CurriculumLearning(
         timeout=config.timeout,
         answer_tag=config.answer_tag,
@@ -133,6 +148,8 @@ def create_curriculum(config: InfiniteRLConfig) -> CurriculumLearning:
         use_length=config.use_length,
         use_lang_consistency=config.use_lang_consistency,
         use_repetition=config.use_repetition,
+        use_llm_judge=config.use_llm_judge,
+        llm_judge_kwargs=llm_judge_kwargs,
         window_size=config.window_size,
         success_rate_threshold=config.success_rate_threshold,
         variance_threshold=config.variance_threshold,
@@ -593,6 +610,31 @@ def main():
         help="Log curriculum stats to W&B every N training steps (default: 10)",
     )
 
+    # LLM Judge arguments
+    parser.add_argument(
+        "--use_llm_judge",
+        action="store_true",
+        help="Enable LLM Judge for auxiliary reward scoring (requires running sglang server)",
+    )
+    parser.add_argument(
+        "--llm_judge_host",
+        type=str,
+        default="localhost",
+        help="Host address of the sglang LLM Judge server (default: localhost)",
+    )
+    parser.add_argument(
+        "--llm_judge_port",
+        type=int,
+        default=8000,
+        help="Port of the sglang LLM Judge server (default: 8000)",
+    )
+    parser.add_argument(
+        "--llm_judge_model",
+        type=str,
+        default="Skywork/Skywork-Reward-V2-Qwen3-4B",
+        help="Model name for LLM Judge (default: Skywork/Skywork-Reward-V2-Qwen3-4B)",
+    )
+
     # LoRA/PEFT arguments
     parser.add_argument(
         "--use_lora",
@@ -727,6 +769,10 @@ def main():
         variance_threshold=args.variance_threshold,
         demote_threshold=args.demote_threshold,
         num_generations=args.num_generations,
+        use_llm_judge=args.use_llm_judge,
+        llm_judge_host=args.llm_judge_host,
+        llm_judge_port=args.llm_judge_port,
+        llm_judge_model=args.llm_judge_model,
         log_file=str(output_dir / "curriculum_learning_log.jsonl"),
     )
     curriculum = create_curriculum(curriculum_config)

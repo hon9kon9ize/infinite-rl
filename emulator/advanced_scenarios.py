@@ -59,6 +59,16 @@ class ResponsePattern:
         """Only answer tag present."""
         return (False, True, False)
 
+    @staticmethod
+    def high_quality() -> Tuple[bool, bool, bool]:
+        """High quality response: perfect format and correct (for truthy/batch testing)."""
+        return (True, True, True)
+
+    @staticmethod
+    def low_quality() -> Tuple[bool, bool, bool]:
+        """Low quality response: poor format and wrong answer."""
+        return (False, False, False)
+
 
 class AdvancedScenarios:
     """Collection of advanced training scenarios."""
@@ -247,6 +257,39 @@ class AdvancedScenarios:
             pattern.append(ResponsePattern.perfect())
 
         return pattern[:num_steps]
+
+    @staticmethod
+    def batch_llm_judge_validation(
+        num_tasks: int = 12,
+    ) -> List[Tuple[bool, bool, bool]]:
+        """Scenario for validating batch LLM Judge processing.
+
+        Creates multiple tasks for batch processing validation:
+        - First batch: 4 high-quality responses (will use LLM Judge batch API)
+        - Second batch: 4 medium-quality responses
+        - Third batch: 4 low-quality responses
+
+        This demonstrates batch API call efficiency and truthy task handling.
+        """
+        pattern = []
+
+        # Batch 1: High quality responses (for batch API validation)
+        for _ in range(4):
+            pattern.append(ResponsePattern.high_quality())
+
+        # Batch 2: Mixed quality responses
+        for _ in range(4):
+            pattern.append(
+                ResponsePattern.format_only()
+                if _ % 2 == 0
+                else ResponsePattern.perfect()
+            )
+
+        # Batch 3: Low quality responses
+        for _ in range(4):
+            pattern.append(ResponsePattern.low_quality())
+
+        return pattern[:num_tasks]
 
 
 def run_advanced_scenario(

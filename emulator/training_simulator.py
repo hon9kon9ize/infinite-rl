@@ -39,6 +39,7 @@ class RewardSnapshot:
     success_rate: float
     is_correct: bool
     response_type: str
+    task_type: str = "math"  # Type of task (math, puzzle, truthy)
     # Individual reward scores
     format_score: float = 0.0
     reasoning_steps_score: float = 0.0
@@ -61,6 +62,8 @@ class TrainingSimulator:
         use_length: bool = False,
         warmup_step: int = 32,
         success_rate_threshold: float = 0.7,
+        demote_threshold: float = 0.4,
+        window_size: int = 50,
         aux_weight: float = 0.2,
         use_llm_judge: bool = False,
         llm_judge_weight: float = 0.2,
@@ -77,6 +80,8 @@ class TrainingSimulator:
             use_length: Whether to use length regularization reward
             warmup_step: Number of warmup steps
             success_rate_threshold: Threshold for level advancement
+            demote_threshold: Threshold for level demotion
+            window_size: Size of sliding window for success rate tracking
             aux_weight: Weight for auxiliary rewards
             use_llm_judge: Whether to use LLM Judge for truthy tasks
             llm_judge_weight: Weight for LLM Judge reward
@@ -91,6 +96,8 @@ class TrainingSimulator:
         self.aux_weight = aux_weight
         self.use_llm_judge = use_llm_judge
         self.llm_judge_weight = llm_judge_weight
+        self.demote_threshold = demote_threshold
+        self.window_size = window_size
 
         # Build curriculum kwargs
         curriculum_kwargs = {
@@ -101,6 +108,8 @@ class TrainingSimulator:
             "use_length": use_length,
             "warmup_step": warmup_step,
             "success_rate_threshold": success_rate_threshold,
+            "demote_threshold": demote_threshold,
+            "window_size": window_size,
             "aux_weight": aux_weight,
             "num_generations": num_generations,
             "puzzle_one_shot": False,
@@ -121,6 +130,7 @@ class TrainingSimulator:
         has_think_format: bool = True,
         has_answer_format: bool = True,
         is_correct: bool = True,
+        task_type: str = "math",
     ) -> str:
         """Generate a synthetic response with specified properties.
 
@@ -128,28 +138,48 @@ class TrainingSimulator:
             has_think_format: Whether to include valid <think> tags
             has_answer_format: Whether to include valid <answer> tags
             is_correct: Whether the answer is mathematically correct
+            task_type: Type of task ("math", "puzzle", "truthy")
 
         Returns:
             Response string with specified properties
         """
-        think_content = (
-            "<think>Let me solve this step by step.</think>" if has_think_format else ""
-        )
-        answer = "4" if is_correct else "5"  # For "what is 2+2?" task
-        answer_content = f"<answer>{answer}</answer>" if has_answer_format else answer
+        if task_type == "puzzle":
+            # For puzzles, generate JavaScript code with both think and answer tags
+            think_content = (
+                "<think>Let me write the solution.</think>" if has_think_format else ""
+            )
+            if is_correct:
+                code = "function solution() { return true; }"
+            else:
+                code = "function solution() { return false; }"
+            answer_content = f"<answer>```javascript\n{code}\n```</answer>"
+            return f"{think_content}\n\n{answer_content}".strip()
+        else:
+            # For math/truthy, use the original format
+            think_content = (
+                "<think>Let me solve this step by step.</think>"
+                if has_think_format
+                else ""
+            )
+            answer = "4" if is_correct else "5"  # For "what is 2+2?" task
+            answer_content = (
+                f"<answer>{answer}</answer>" if has_answer_format else answer
+            )
 
-        return f"{think_content}\n\n{answer_content}".strip()
+            return f"{think_content}\n\n{answer_content}".strip()
 
     def run_batch(
         self,
         response_configs: List[Tuple[bool, bool, bool]],
         response_type: str = "custom",
+        task_type: str = "math",
     ) -> Dict[str, Any]:
         """Run a batch of responses and track statistics.
 
         Args:
             response_configs: List of (has_think, has_answer, is_correct) tuples
             response_type: Description of the response type
+            task_type: Type of task to create ("math", "puzzle", or "truthy")
 
         Returns:
             Statistics for the batch
@@ -162,11 +192,39 @@ class TrainingSimulator:
             "timestamp": datetime.now().isoformat(),
         }
 
-        for has_think, has_answer, is_correct in response_configs:
-            # Create a new task
-            self.task_counter += 1
-            base_task_id = f"math_batch_{self.task_counter}"
+        # Create a single task for this batch (representing one prompt in GRPO)
+        self.task_counter += 1
 
+        if task_type == "truthy":
+            # Create truthy task
+            base_task_id = f"truthy_batch_{self.task_counter}"
+            task = Task(
+                task_id=base_task_id,
+                task_name=f"Truthy Task {self.task_counter}",
+                task_type="truthy",
+                level=self.curriculum.current_level,
+                prompt="Which response is better?",
+                expected_answer={"type": "truthy", "conversation": []},
+            )
+        elif task_type == "puzzle":
+            # Create puzzle task (start at level 1 minimum since level 0 is math-only)
+            puzzle_level = max(self.curriculum.current_level, 1)
+            base_task_id = f"puzzle_batch_{self.task_counter}"
+            task = Task(
+                task_id=base_task_id,
+                task_name=f"Puzzle Task {self.task_counter}",
+                task_type="puzzle",
+                level=puzzle_level,
+                prompt="Solve this puzzle",
+                expected_answer={
+                    "puzzle": "dummy_puzzle",
+                    "inputs": {},
+                    "language": "javascript",
+                },
+            )
+        else:
+            # Create math task
+            base_task_id = f"math_batch_{self.task_counter}"
             task = Task(
                 task_id=base_task_id,
                 task_name=f"Math Task {self.task_counter}",
@@ -175,33 +233,46 @@ class TrainingSimulator:
                 prompt="What is 2+2?",
                 expected_answer="4",
             )
-            self.curriculum.session.add_task(task)
 
+        self.curriculum.session.add_task(task)
+
+        # Process all responses for this task (GRPO batch)
+        task_ids = []
+        for has_think, has_answer, is_correct in response_configs:
             # Generate response
-            response = self.generate_response(has_think, has_answer, is_correct)
+            response = self.generate_response(
+                has_think, has_answer, is_correct, task_type
+            )
 
-            # Compute reward
+            # Compute reward (adds generation to task)
             primary_score = self.curriculum.compute_reward(base_task_id, response)
-
-            # Get combined reward
-            combined_score = self.curriculum.get_rewards([base_task_id])[0]
-
-            # Get updated task for correctness
-            updated_task = self.curriculum.session.get_task(base_task_id)
+            task_ids.append(base_task_id)
 
             batch_results["primary_scores"].append(primary_score)
-            batch_results["combined_scores"].append(combined_score)
-            batch_results["is_correct_list"].append(updated_task.is_correct)
 
-            # Extract individual reward scores from task_rewards
-            reward_scores = {
-                "format_score": 0.0,
-                "reasoning_steps_score": 0.0,
-                "lang_consistency_score": 0.0,
-                "repetition_score": 0.0,
-                "length_score": 0.0,
-                "llm_judge_score": 0.0,
-            }
+        # Get combined rewards for all generations in this batch
+        combined_scores = self.curriculum.get_rewards(task_ids)
+
+        # Get updated task for correctness (after batch processing)
+        updated_task = self.curriculum.session.get_task(base_task_id)
+
+        # For batch results, we use the task-level correctness
+        # In GRPO, success is determined at the prompt level
+        batch_results["combined_scores"] = combined_scores
+        batch_results["is_correct_list"] = [updated_task.is_correct] * len(
+            response_configs
+        )
+
+        # Extract individual reward scores from the last generation (for snapshot)
+        reward_scores = {
+            "format_score": 0.0,
+            "reasoning_steps_score": 0.0,
+            "lang_consistency_score": 0.0,
+            "repetition_score": 0.0,
+            "length_score": 0.0,
+            "llm_judge_score": 0.0,
+        }
+        if updated_task.task_rewards:
             for reward in updated_task.task_rewards:
                 if reward.reward_function_name == "format":
                     reward_scores["format_score"] = reward.score
@@ -216,10 +287,11 @@ class TrainingSimulator:
                 elif reward.reward_function_name == "llm_judge":
                     reward_scores["llm_judge_score"] = reward.score
 
-            # Record snapshot
-            success_rate = self.curriculum.get_success_rate().get(
-                "mean_success_rate", 0.0
-            )
+        # Record snapshot for each response in the batch
+        success_rate = self.curriculum.get_success_rate().get("mean_success_rate", 0.0)
+        for i, (primary_score, combined_score) in enumerate(
+            zip(batch_results["primary_scores"], combined_scores)
+        ):
             self.snapshots.append(
                 RewardSnapshot(
                     step=self.curriculum.global_step,
@@ -229,6 +301,7 @@ class TrainingSimulator:
                     success_rate=success_rate,
                     is_correct=updated_task.is_correct,
                     response_type=response_type,
+                    task_type=task_type,
                     format_score=reward_scores["format_score"],
                     reasoning_steps_score=reward_scores["reasoning_steps_score"],
                     lang_consistency_score=reward_scores["lang_consistency_score"],
@@ -245,6 +318,7 @@ class TrainingSimulator:
         scenario_name: str,
         response_configs: List[Tuple[bool, bool, bool]],
         batch_size: int = 4,
+        task_type: str = "math",
     ) -> Dict[str, Any]:
         """Run a complete scenario with multiple batches.
 
@@ -252,12 +326,14 @@ class TrainingSimulator:
             scenario_name: Name of the scenario
             response_configs: List of (has_think, has_answer, is_correct) tuples
             batch_size: Responses per batch (for GRPO grouping)
+            task_type: Type of task to create ("math", "puzzle", or "truthy")
 
         Returns:
             Scenario statistics
         """
         print(f"\n{'='*70}")
         print(f"Scenario: {scenario_name}")
+        print(f"Task Type: {task_type}")
         print(f"{'='*70}")
         print(f"Total responses: {len(response_configs)}")
         print(f"Batch size: {batch_size}")
@@ -266,7 +342,9 @@ class TrainingSimulator:
         batches = []
         for i in range(0, len(response_configs), batch_size):
             batch = response_configs[i : i + batch_size]
-            batch_result = self.run_batch(batch, response_type=scenario_name)
+            batch_result = self.run_batch(
+                batch, response_type=scenario_name, task_type=task_type
+            )
             batches.append(batch_result)
 
             # Print progress
@@ -283,6 +361,7 @@ class TrainingSimulator:
 
         return {
             "scenario_name": scenario_name,
+            "task_type": task_type,
             "batches": batches,
             "final_level": self.curriculum.current_level,
             "final_step": self.curriculum.global_step,
@@ -374,10 +453,43 @@ class TrainingSimulator:
             "snapshots": [asdict(s) for s in self.snapshots],
         }
 
-        with open(filename, "w") as f:
-            json.dump(results, f, indent=2, default=str)
-
         print(f"\nResults saved to {filename}")
+
+    def get_results(self) -> Dict[str, Any]:
+        """Get final results summary with statistics.
+
+        Returns:
+            Dictionary with final_level, final_step, final_success_rate, and stats
+        """
+        # Calculate average scores from snapshots
+        if not self.snapshots:
+            return {
+                "final_level": self.curriculum.current_level,
+                "final_step": self.curriculum.global_step,
+                "final_success_rate": 0.0,
+                "stats": {
+                    "avg_primary": 0.0,
+                    "avg_combined": 0.0,
+                    "total_responses": 0,
+                },
+            }
+
+        total_primary = sum(s.primary_score for s in self.snapshots)
+        total_combined = sum(s.combined_score for s in self.snapshots)
+        count = len(self.snapshots)
+
+        return {
+            "final_level": self.curriculum.current_level,
+            "final_step": self.curriculum.global_step,
+            "final_success_rate": self.curriculum.get_success_rate().get(
+                "mean_success_rate", 0.0
+            ),
+            "stats": {
+                "avg_primary": total_primary / count,
+                "avg_combined": total_combined / count,
+                "total_responses": count,
+            },
+        }
 
 
 def main():

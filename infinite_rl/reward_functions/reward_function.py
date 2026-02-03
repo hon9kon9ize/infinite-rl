@@ -13,6 +13,14 @@ class RewardFunctionScore:
     reward_function_name: str = ""
     info: str = ""
 
+    def to_dict(self) -> dict:
+        """Convert to dict for logging."""
+        return {
+            "score": self.score,
+            "reward_function_name": self.reward_function_name,
+            "info": self.info,
+        }
+
 
 class RewardFunction:
     def __init__(

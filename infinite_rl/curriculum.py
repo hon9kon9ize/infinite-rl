@@ -9,7 +9,7 @@ success rate with variance tracking.
 import json
 import random
 from collections import deque
-from typing import Dict, List, Optional, Union, Any
+from typing import Dict, List, Optional, Any
 from pathlib import Path
 import datetime
 import statistics
@@ -22,6 +22,8 @@ from .prompt_templates import (
     format_puzzle_prompt,
     format_reflective_math_prompt,
     format_reflective_puzzle_prompt,
+    format_truthy_judge_system_prompt,
+    format_truthy_user_prompt,
 )
 
 
@@ -169,13 +171,13 @@ class CurriculumLearning:
         self.last_level_change_step: int = -999  # Track when last level change occurred
         self.level_change_cooldown: int = level_change_cooldown
 
-        # GRPO batch tracking: accumulate group responses until prompt-level decision
-        self.grpo_batch_primary_scores: Dict[str, List[float]] = (
-            {}
-        )  # Maps task_id -> list of primary scores (for curriculum)
-        self.grpo_batch_outputs: Dict[str, List[str]] = (
-            {}
-        )  # Maps task_id -> list of model outputs (for logging all generations)
+        # GRPO batch tracking: REMOVED - now handled by Task.generations
+        # self.grpo_batch_primary_scores: Dict[str, List[float]] = (
+        #     {}
+        # )  # Maps task_id -> list of primary scores (for curriculum)
+        # self.grpo_batch_outputs: Dict[str, List[str]] = (
+        #     {}
+        # )  # Maps task_id -> list of model outputs (for logging all generations)
         self.num_generations: int = (
             num_generations  # Number of generations per prompt (configurable)
         )
@@ -638,122 +640,145 @@ class CurriculumLearning:
         """
         Evaluate model output and update learning state.
 
+        Dispatches to task-type-specific handlers:
+        - Truthy tasks: LLM Judge as primary score
+        - Math/Puzzle: Primary task correctness with format gates
+
         Args:
             task_id: Task identifier
             model_output: Raw model response
 
         Returns:
-            Reward score combining primary correctness and auxiliary metrics
+            Reward score (for curriculum tracking and GRPO batching)
         """
-        # Get task from session
+        # Get task and store model output
         task = self.session.get_task(task_id)
         if task is None:
             raise ValueError(f"Unknown task_id: {task_id}")
-
-        task_type = task.task_type
-
-        # Store model_output in task for reward functions
         task.model_output = model_output
 
-        # FORMAT AS HARD GATE: Check format validity before evaluating primary task
-        # format_valid is True only when BOTH think and answer tags are properly formatted
-        format_valid = True
-        format_failure_reason = ""
+        # Dispatch to task-type-specific handler
+        if task.task_type == "truthy":
+            score, is_correct, task_rewards, aux_score_dict = (
+                self._compute_reward_truthy(task)
+            )
+        else:
+            score, is_correct, task_rewards, aux_score_dict = (
+                self._compute_reward_standard(task)
+            )
 
-        if self.use_format:
-            # Check both think and answer format - BOTH must pass for format_valid=True
-            format_think_valid = True
-            format_answer_valid = True
+        # GRPO batch accumulation and curriculum tracking
+        return self._finalize_reward_batch(
+            task, task_id, score, is_correct, task_rewards, aux_score_dict, model_output
+        )
 
-            if "format_think" in self.aux_reward_functions:
-                format_fn = self.aux_reward_functions["format_think"]
-                format_result = format_fn.compute_reward(task, is_correct=False)
-                # Format functions return 1.0 for success, -1.0 for failure
-                if format_result.score < 1.0:
-                    format_think_valid = False
-                    format_failure_reason = format_result.info
+    def _compute_reward_truthy(self, task: Task) -> tuple:
+        """
+        Evaluate a truthy (conversation quality) task.
 
-            if "format_answer" in self.aux_reward_functions:
-                format_fn = self.aux_reward_functions["format_answer"]
-                format_result = format_fn.compute_reward(task, is_correct=False)
-                # Format functions return 1.0 for success, -1.0 for failure
-                if format_result.score < 1.0:
-                    format_answer_valid = False
-                    if not format_failure_reason:
-                        format_failure_reason = format_result.info
+        Truthy tasks:
+        - Primary score IS the LLM Judge score (continuous 0-1)
+        - LLM Judge is evaluated in batch via get_rewards() for efficiency
+        - is_correct always False (truthy never affects curriculum)
+        - Reward functions: llm_judge (primary, deferred), format_think (optional), lang_consistency, repetition, whitespace
+        - No format gates applied (format_think is informational only)
 
-            # format_valid is True only if BOTH think and answer tags are valid
-            format_valid = format_think_valid and format_answer_valid
+        Args:
+            task: Task object with model_output already stored
 
-        # Initialize aux_score_dict (will be computed based on outcome)
+        Returns:
+            Tuple of (score, is_correct, task_rewards, aux_score_dict)
+        """
+        if "llm_judge" not in self.aux_reward_functions:
+            raise ValueError(
+                "Truthy tasks require llm_judge. Please set use_llm_judge=True with api_host, api_port, and model_name"
+            )
+
+        # LLM Judge is deferred and will be computed in batch via get_rewards()
+        # For now, use placeholder primary score of 0.5
+        primary_score = 0.5
+        primary_info = "LLM Judge score pending (batch processing)"
+
+        # Build reward list: primary is llm_judge score (will be replaced in get_rewards)
+        primary_reward = RewardFunctionScore(
+            score=primary_score,
+            reward_function_name="primary",
+            info=primary_info,
+        )
+        task_rewards = [primary_reward]
         aux_score_dict = {}
 
-        # Handle truthy tasks: primary score comes from llm_judge
-        if task_type == "truthy":
-            if "llm_judge" not in self.aux_reward_functions:
-                raise ValueError(
-                    "Truthy tasks require llm_judge. Please set use_llm_judge=True with api_host, api_port, and model_name"
+        # Compute auxiliary rewards (format_think, lang consistency, repetition, whitespace)
+        # Format does not gate truthy tasks, just informational
+        other_aux_scores = self.get_aux_reward_scores(task, is_correct=False)
+
+        # Add all auxiliary rewards without capping (truthy is continuous)
+        for name, data in other_aux_scores.items():
+            if name != "llm_judge":  # llm_judge is already the primary
+                aux_reward = RewardFunctionScore(
+                    score=data["score"],
+                    reward_function_name=name,
+                    info=data["info"] or "",
                 )
-            try:
-                llm_judge_result = self.aux_reward_functions[
-                    "llm_judge"
-                ].compute_reward(task, is_correct=False)
-                primary_score = llm_judge_result.score
-                primary_info = llm_judge_result.info
-            except Exception as e:
-                print(f"Error: LLM Judge failed for truthy task: {e}")
-                primary_score = 0.0
-                primary_info = f"LLM Judge error: {e}"
-        else:
-            # Get appropriate reward function for non-truthy tasks
-            if task_type not in self.reward_functions:
-                raise ValueError(f"Unknown task type: {task_type}")
+                task_rewards.append(aux_reward)
+                aux_score_dict[name] = data
 
-            reward_fn = self.reward_functions[task_type]
+        # Truthy tasks never affect curriculum (is_correct always False)
+        score = primary_score
+        is_correct = False
 
-            # Compute primary reward (regardless of format for leaky gate logic)
-            result = reward_fn.compute_reward(task)
-            primary_score = result.score
-            primary_info = result.info
+        return score, is_correct, task_rewards, aux_score_dict
 
-        # COMPUTE LLM JUDGE INDEPENDENTLY: For non-truthy tasks, compute as auxiliary
-        if task_type != "truthy" and "llm_judge" in self.aux_reward_functions:
-            try:
-                llm_judge_result = self.aux_reward_functions[
-                    "llm_judge"
-                ].compute_reward(task, is_correct=False)
-                aux_score_dict["llm_judge"] = {
-                    "score": llm_judge_result.score,
-                    "info": llm_judge_result.info,
-                }
-            except Exception as e:
-                print(f"Warning: LLM Judge reward failed: {e}")
-                aux_score_dict["llm_judge"] = {
-                    "score": 0.0,
-                    "info": str(e),
-                }
+    def _compute_reward_standard(self, task: Task) -> tuple:
+        """
+        Evaluate a standard (math/puzzle) task.
 
-        # STRICT GATE: For non-truthy tasks, require both format validity AND correctness
-        # For truthy tasks, use the primary score directly (continuous quality score from judge)
-        # No partial credit for non-truthy - must have both tags AND correct answer
+        Standard tasks (math, puzzle):
+        - Primary score is task correctness (1.0 for correct, 0.0 for incorrect)
+        - is_correct = primary_score == 1.0 (hard gate)
+        - Format gates: BOTH think and answer tags must be valid
+        - On success (format_valid AND is_correct): reward auxiliary fully
+        - On failure: cap positive auxiliary rewards at 0
+        - LLM Judge computed as auxiliary (separate from primary correctness)
 
-        if task_type == "truthy":
-            # Truthy tasks: use primary score directly (no strict gate)
-            primary_reward = RewardFunctionScore(
-                score=primary_score,
-                reward_function_name="primary",
-                info=primary_info or "",
-            )
-            task_rewards = [primary_reward]
+        Args:
+            task: Task object with model_output already stored
 
-            # Compute auxiliary rewards for truthy tasks (format doesn't apply)
-            other_aux_scores = self.get_aux_reward_scores(
-                model_output, task, is_correct=False
-            )
+        Returns:
+            Tuple of (score, is_correct, task_rewards, aux_score_dict)
+        """
+        # Get primary task reward
+        if task.task_type not in self.reward_functions:
+            raise ValueError(f"Unknown task type: {task.task_type}")
 
-            # Add all auxiliary rewards (no capping for truthy)
+        reward_fn = self.reward_functions[task.task_type]
+        result = reward_fn.compute_reward(task)
+        primary_score = result.score
+        primary_info = result.info
+
+        # Check format validity (both think and answer tags)
+        format_valid, format_failure_reason = self._check_format_validity(task)
+
+        # Determine primary success (hard gates: format valid AND primary score == 1.0)
+        is_correct = format_valid and (primary_score == 1.0)
+
+        # LLM Judge is deferred and will be computed in batch via get_rewards() for efficiency
+        # Do not compute it here
+        aux_score_dict = {}
+
+        # Build task rewards based on gates
+        primary_reward = RewardFunctionScore(
+            score=primary_score,
+            reward_function_name="primary",
+            info=primary_info or "",
+        )
+        task_rewards = [primary_reward]
+
+        if format_valid and is_correct:
+            # Success: both gates passed
+            other_aux_scores = self.get_aux_reward_scores(task, is_correct=True)
             for name, data in other_aux_scores.items():
-                if name != "llm_judge":  # llm_judge is already the primary
+                if name != "llm_judge":
                     aux_reward = RewardFunctionScore(
                         score=data["score"],
                         reward_function_name=name,
@@ -761,108 +786,126 @@ class CurriculumLearning:
                     )
                     task_rewards.append(aux_reward)
                     aux_score_dict[name] = data
-
             score = primary_score
-            is_correct = (
-                primary_score > 0.7
-            )  # Consider score > 0.7 as success for tracking
         else:
-            # Non-truthy tasks: apply strict gate
-            is_correct = primary_score == 1  # Threshold for success
+            # Failure: format invalid or answer incorrect
+            other_aux_scores = self.get_aux_reward_scores(task, is_correct=False)
 
-            if format_valid and is_correct:
-                # Both gates passed - format is valid AND answer is correct
-                primary_reward = RewardFunctionScore(
-                    score=primary_score,
-                    reward_function_name="primary",
-                    info=primary_info or "",
-                )
-                task_rewards = [primary_reward]
-
-                # Compute auxiliary rewards and combine them
-                other_aux_scores = self.get_aux_reward_scores(
-                    model_output, task, is_correct=is_correct
-                )
-
-                # Add non-llm_judge auxiliary rewards to task_rewards
-                for name, data in other_aux_scores.items():
-                    if name != "llm_judge":  # llm_judge already added above
-                        aux_reward = RewardFunctionScore(
-                            score=data["score"],
-                            reward_function_name=name,
-                            info=data["info"] or "",
-                        )
-                        task_rewards.append(aux_reward)
-                        aux_score_dict[name] = data
-
-                score = primary_score
-            else:
-                # Failed gates: either format invalid OR answer incorrect
-                primary_reward = RewardFunctionScore(
-                    score=primary_score,
-                    reward_function_name="primary",
-                    info=primary_info or "",
-                )
-                task_rewards = [primary_reward]
-
-                # Add format feedback if applicable
-                if not format_valid:
-                    task_rewards.append(
-                        RewardFunctionScore(
-                            score=0.0,
-                            reward_function_name="format",
-                            info=f"Format validation failed: {format_failure_reason}",
-                        )
+            # Add format feedback
+            if not format_valid:
+                task_rewards.append(
+                    RewardFunctionScore(
+                        score=0.0,
+                        reward_function_name="format",
+                        info=f"Format validation failed: {format_failure_reason}",
                     )
-
-                # Still compute aux scores for logging, but cap positive ones
-                other_aux_scores = self.get_aux_reward_scores(
-                    model_output, task, is_correct=False
                 )
 
-                # Cap positive auxiliary rewards when primary task failed
-                # But NOT for llm_judge, which is already separate
-                capped_aux_scores = {
-                    name: {
-                        "score": min(0.0, data["score"]),
-                        "info": (
-                            data["info"]
-                            if data["score"] < 0
-                            else "Primary task failed, positive auxiliary reward capped at 0"
-                        ),
-                    }
-                    for name, data in other_aux_scores.items()
-                    if name != "llm_judge"  # llm_judge not capped
-                }
-
-                # Add auxiliary rewards to task_rewards
-                for name, data in capped_aux_scores.items():
+            # Cap positive auxiliary rewards (but not llm_judge)
+            for name, data in other_aux_scores.items():
+                if name != "llm_judge":
+                    capped_score = min(0.0, data["score"])
+                    capped_info = (
+                        data["info"]
+                        if data["score"] < 0
+                        else "Primary task failed, positive auxiliary reward capped at 0"
+                    )
                     aux_reward = RewardFunctionScore(
-                        score=data["score"],
+                        score=capped_score,
                         reward_function_name=name,
-                        info=data["info"] or "",
+                        info=capped_info or "",
                     )
                     task_rewards.append(aux_reward)
-                    aux_score_dict[name] = data
+                    aux_score_dict[name] = {"score": capped_score, "info": capped_info}
 
-                score = 0.0
-                is_correct = False
+            score = 0.0
+
+        return score, is_correct, task_rewards, aux_score_dict
+
+    def _check_format_validity(self, task: Task) -> tuple:
+        """
+        Check format validity for standard tasks.
+
+        Both think and answer tags must be valid for format_valid=True.
+
+        Args:
+            task: Task with model_output
+
+        Returns:
+            Tuple of (format_valid: bool, failure_reason: str)
+        """
+        if not self.use_format:
+            return True, ""
+
+        format_think_valid = True
+        format_answer_valid = True
+        failure_reason = ""
+
+        if "format_think" in self.aux_reward_functions:
+            format_fn = self.aux_reward_functions["format_think"]
+            format_result = format_fn.compute_reward(task, is_correct=False)
+            if format_result.score < 1.0:
+                format_think_valid = False
+                failure_reason = format_result.info
+
+        if "format_answer" in self.aux_reward_functions:
+            format_fn = self.aux_reward_functions["format_answer"]
+            format_result = format_fn.compute_reward(task, is_correct=False)
+            if format_result.score < 1.0:
+                format_answer_valid = False
+                if not failure_reason:
+                    failure_reason = format_result.info
+
+        return format_think_valid and format_answer_valid, failure_reason
+
+    def _finalize_reward_batch(
+        self,
+        task: Task,
+        task_id: str,
+        score: float,
+        is_correct: bool,
+        task_rewards: List[RewardFunctionScore],
+        aux_score_dict: Dict[str, Dict[str, Any]],
+        model_output: str,
+    ) -> float:
+        """
+        Finalize reward computation: GRPO batching, curriculum tracking, and logging.
+
+        Handles GRPO batch accumulation and triggers level updates when batch completes.
+        Only non-truthy tasks (math/puzzle) contribute to curriculum success windows.
+
+        Args:
+            task: Task object
+            task_id: Task identifier
+            score: Primary score from _compute_reward_* method
+            is_correct: Success flag from _compute_reward_* method
+            task_rewards: List of RewardFunctionScore objects
+            aux_score_dict: Dictionary of auxiliary scores
+            model_output: Raw model response for generation tracking
+
+        Returns:
+            Score for this evaluation
+        """
+        # Extract primary_reward for logging
+        primary_reward = (
+            task_rewards[0]
+            if task_rewards
+            else RewardFunctionScore(score=0.0, reward_function_name="primary", info="")
+        )
 
         # GRPO batch accumulation: collect scores until group is complete
         # Extract base task_id (remove instance counter)
         base_task_id = task_id.rsplit("_", 1)[0] if "_" in task_id else task_id
-        if base_task_id not in self.grpo_batch_primary_scores:
-            self.grpo_batch_primary_scores[base_task_id] = []
-            self.grpo_batch_outputs[base_task_id] = []
 
-        self.grpo_batch_primary_scores[base_task_id].append(score)
-        self.grpo_batch_outputs[base_task_id].append(model_output)
+        # ADD generation to task (instead of dicts)
+        task.add_generation(model_output, task_rewards, score)
 
         # Check if we have a complete group (GRPO batch size)
-        if len(self.grpo_batch_primary_scores[base_task_id]) >= self.num_generations:
+        if len(task.generations) >= self.num_generations:
             # Complete group: track success at prompt level
-            primary_scores = self.grpo_batch_primary_scores[base_task_id]
-            self._track_success_group(task.level, primary_scores)
+            primary_scores = [g.primary_score for g in task.generations]
+            if task.task_type != "truthy":
+                self._track_success_group(task.level, primary_scores)
 
             # Increment step counter ONCE per complete prompt group
             self.global_step += 1
@@ -885,20 +928,19 @@ class CurriculumLearning:
                         for name, data in aux_score_dict.items()
                     },
                 }
-                # Add GRPO batch information
+                # Add GRPO batch information (now from task.generations)
                 log_entry["grpo_batch_size"] = len(primary_scores)
                 log_entry["grpo_primary_scores"] = primary_scores
-                log_entry["grpo_model_outputs"] = self.grpo_batch_outputs[base_task_id]
+                log_entry["grpo_model_outputs"] = [g.output for g in task.generations]
                 with open(self.log_file, "a", encoding="utf-8") as f:
                     json.dump(log_entry, f, ensure_ascii=False)
                     f.write("\n")
 
-            # Clean up completed batch
-            del self.grpo_batch_primary_scores[base_task_id]
-            del self.grpo_batch_outputs[base_task_id]
+            # NO cleanup needed - task owns its generations!
         elif self.num_generations == 1:
             # Single evaluation mode (non-GRPO): log immediately
-            self._track_success_group(task.level, [score])
+            if task.task_type != "truthy":
+                self._track_success_group(task.level, [score])
             self.global_step += 1
             self._update_level()
 
@@ -920,16 +962,17 @@ class CurriculumLearning:
                 with open(self.log_file, "a", encoding="utf-8") as f:
                     json.dump(log_entry, f, ensure_ascii=False)
                     f.write("\n")
-        elif len(self.grpo_batch_primary_scores[base_task_id]) > self.num_generations:
+        elif len(task.generations) > self.num_generations:
             # Safety: If we somehow got MORE than expected, process anyway
             print(
-                f"Warning: Task {base_task_id} has {len(self.grpo_batch_primary_scores[base_task_id])} responses "
+                f"Warning: Task {base_task_id} has {len(task.generations)} responses "
                 f"(expected {self.num_generations}). Processing batch anyway."
             )
-            primary_scores = self.grpo_batch_primary_scores[base_task_id][
-                : self.num_generations
+            primary_scores = [
+                g.primary_score for g in task.generations[: self.num_generations]
             ]
-            self._track_success_group(task.level, primary_scores)
+            if task.task_type != "truthy":
+                self._track_success_group(task.level, primary_scores)
             self.global_step += 1
             self._update_level()
 
@@ -954,34 +997,15 @@ class CurriculumLearning:
                 with open(self.log_file, "a", encoding="utf-8") as f:
                     json.dump(log_entry, f, ensure_ascii=False)
                     f.write("\n")
-
-            del self.grpo_batch_primary_scores[base_task_id]
-            del self.grpo_batch_outputs[base_task_id]
         else:
             # Incomplete group: still accumulating responses
             # Don't update level yet, just wait for more responses
             pass
 
-        # Periodic cleanup of stale batches (prevents memory leak if training crashes)
-        if self.global_step % 100 == 0 and len(self.grpo_batch_primary_scores) > 50:
-            print(
-                f"Warning: {len(self.grpo_batch_primary_scores)} incomplete GRPO batches detected. "
-                f"This may indicate a problem with the training loop. Cleaning up stale batches..."
-            )
-            # Keep only the most recent 20 incomplete batches
-            if len(self.grpo_batch_primary_scores) > 20:
-                sorted_batches = sorted(self.grpo_batch_primary_scores.items())
-                stale_count = len(sorted_batches) - 20
-                for batch_id, _ in sorted_batches[:stale_count]:
-                    # Only delete if key exists (may not exist if batch was created in test/externally)
-                    if batch_id in self.grpo_batch_primary_scores:
-                        del self.grpo_batch_primary_scores[batch_id]
-                    if batch_id in self.grpo_batch_outputs:
-                        del self.grpo_batch_outputs[batch_id]
-                print(f"Cleaned up {stale_count} stale batches")
-
-        # Save rewards to session
-        self.session.set_reward(task_id, task_rewards, model_output=model_output)
+        # Save rewards to session (pass is_correct explicitly)
+        self.session.set_reward(
+            task_id, task_rewards, model_output=task.model_output, is_correct=is_correct
+        )
 
         return score
 
@@ -1002,6 +1026,9 @@ class CurriculumLearning:
         # Check if we're in cooldown period
         steps_since_change = self.global_step - self.last_level_change_step
         if steps_since_change < self.level_change_cooldown:
+            print(
+                f"DEBUG: In cooldown - steps_since_change={steps_since_change} < cooldown={self.level_change_cooldown}"
+            )
             return False
 
         # Minimum samples required (10 prompts = ~40 responses for GRPO)
@@ -1010,12 +1037,19 @@ class CurriculumLearning:
         # Only check CURRENT level's success rate
         current_window = self.success_windows.get(self.current_level)
         if current_window is None or len(current_window) < min_samples:
+            print(
+                f"DEBUG: Not enough samples - window for level {self.current_level}: {list(current_window) if current_window else None} (len={len(current_window) if current_window else 0})"
+            )
             return False
 
         # Calculate success rate for current level only
         current_success_rate = sum(current_window) / len(current_window)
         variance = (
             statistics.variance(current_window) if len(current_window) > 1 else 0.0
+        )
+
+        print(
+            f"DEBUG: Level {self.current_level} - success_rate={current_success_rate:.1%}, variance={variance:.4f}"
         )
 
         # ADVANCE: High success rate at current level
@@ -1170,6 +1204,54 @@ class CurriculumLearning:
                 "by_level": all_stats,
             }
 
+    def get_truthy_judge_scores(self) -> Dict[str, Any]:
+        """Get statistics on truthy task LLM Judge scores.
+
+        Computes average, min, max, and count of truthy task judge scores.
+        This is separate from success rates (which only track binary correct/incorrect).
+
+        Returns:
+            Dictionary with:
+            - avg_judge_score: Average LLM Judge score (0.0-1.0)
+            - min_judge_score: Minimum LLM Judge score
+            - max_judge_score: Maximum LLM Judge score
+            - judge_score_count: Number of truthy tasks evaluated
+            - truthy_count: Total truthy task evaluations (for monitoring)
+        """
+        truthy_judge_scores = []
+        truthy_count = 0
+
+        for task in self.session.tasks.values():
+            if task.task_type == "truthy":
+                truthy_count += 1
+                # Extract LLM Judge or primary score from task rewards
+                for reward in task.task_rewards:
+                    if reward.reward_function_name in ("primary", "llm_judge"):
+                        # For truthy, primary IS the judge score
+                        if (
+                            task.task_type == "truthy"
+                            and reward.reward_function_name == "primary"
+                        ):
+                            truthy_judge_scores.append(reward.score)
+                            break
+
+        if truthy_judge_scores:
+            avg_judge_score = sum(truthy_judge_scores) / len(truthy_judge_scores)
+            min_judge_score = min(truthy_judge_scores)
+            max_judge_score = max(truthy_judge_scores)
+        else:
+            avg_judge_score = 0.0
+            min_judge_score = 0.0
+            max_judge_score = 0.0
+
+        return {
+            "avg_judge_score": avg_judge_score,
+            "min_judge_score": min_judge_score,
+            "max_judge_score": max_judge_score,
+            "judge_score_count": len(truthy_judge_scores),
+            "truthy_count": truthy_count,
+        }
+
     def get_prompt(self) -> Optional[Task]:
         """
         Get a task prompt appropriate for current difficulty level.
@@ -1237,9 +1319,27 @@ class CurriculumLearning:
         # Select task with weighting
         selected_task = random.choices(available_tasks, weights=weights, k=1)[0]
 
-        # Format response based on task type
+        # Dispatch to task-type-specific handler
         if selected_task["type"] == "truthy":
-            # Truthy task
+            return self._get_truthy_prompt(selected_task)
+        elif selected_task["type"] == "math":
+            return self._get_math_prompt(selected_task)
+        elif selected_task["type"] == "puzzle":
+            return self._get_puzzle_prompt(selected_task)
+
+        return None
+
+    def _get_truthy_prompt(self, selected_task: Dict[str, Any]) -> Optional[Task]:
+        """
+        Create a truthy task from selected task data.
+
+        Args:
+            selected_task: Task dict with type='truthy', data, and id
+
+        Returns:
+            Task object for truthy evaluation, or None on error
+        """
+        try:
             truthy_data = selected_task["data"]
             base_task_id = selected_task["id"]
             # Generate unique task_id for this instance
@@ -1252,38 +1352,54 @@ class CurriculumLearning:
             chosen = truthy_data.get("chosen", "")
             rejected = truthy_data.get("rejected", "")
 
-            # Format the prompt with chosen and rejected options
-            full_prompt = (
-                f"{user_prompt}\n\n## Chosen: {chosen}\n\n## Rejected: {rejected}"
+            # Validate critical fields are present and non-empty
+            # prompt, chosen, and rejected are required for truthy tasks
+            if not user_prompt or not chosen or not rejected:
+                raise ValueError("Missing required fields: prompt, chosen, or rejected")
+
+            user_prompt = format_truthy_user_prompt(
+                system_prompt, user_prompt, self.think_tag
             )
 
-            # Expected answer is a conversation format
-            expected_output = {
-                "type": "truthy",
-                "conversation": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": full_prompt},
-                    # model_output will be added as assistant message during evaluation
-                ],
+            # Format the prompt with chosen and rejected options
+            judge_system_prompt = format_truthy_judge_system_prompt(
+                user_prompt, chosen, rejected
+            )
+
+            # Store chosen and rejected in expected_answer for reproducibility
+            expected_answer = {
+                "chosen": chosen,
+                "rejected": rejected,
             }
 
             task_obj = Task(
                 task_id=unique_task_id,
                 task_name=task_name,
                 task_type="truthy",
-                level=random.randint(
-                    0, 6
-                ),  # Random level since truthy not limited by rating
-                prompt=full_prompt,
-                expected_answer=expected_output,
-                language="multi",  # Truthy can be multilingual
-                reasoning_language=truthy_data.get("language", "en"),
+                level=-1,  # Random level since truthy not limited by rating
+                prompt=user_prompt,
+                judge_system_prompt=judge_system_prompt,
+                expected_answer=expected_answer,
+                reasoning_language=truthy_data.get("reasoning_language", "en"),
+                language=truthy_data.get("language", "en"),
             )
             self.session.add_task(task_obj)
             return task_obj
+        except Exception as e:
+            print(f"Error creating truthy task: {e}")
+            return None
 
-        elif selected_task["type"] == "math":
-            # Math task
+    def _get_math_prompt(self, selected_task: Dict[str, Any]) -> Optional[Task]:
+        """
+        Create a math task from selected task data.
+
+        Args:
+            selected_task: Task dict with type='math', data, rating, and id
+
+        Returns:
+            Task object for math problem, or None on error
+        """
+        try:
             math_data = selected_task["data"]
             base_task_id = selected_task["id"]
             # Generate unique task_id for this instance
@@ -1309,9 +1425,21 @@ class CurriculumLearning:
             )
             self.session.add_task(task_obj)
             return task_obj
+        except Exception as e:
+            print(f"Error creating math task: {e}")
+            return None
 
-        elif selected_task["type"] == "puzzle":
-            # Puzzle task
+    def _get_puzzle_prompt(self, selected_task: Dict[str, Any]) -> Optional[Task]:
+        """
+        Create a puzzle task from selected task data.
+
+        Args:
+            selected_task: Task dict with type='puzzle', data, language, puzzle_name, rating, and id
+
+        Returns:
+            Task object for puzzle, or None on error
+        """
+        try:
             puzzle_data = selected_task["data"]
             base_task_id = selected_task["id"]
             # Generate unique task_id for this instance
@@ -1345,8 +1473,9 @@ class CurriculumLearning:
             )
             self.session.add_task(task_obj)
             return task_obj
-
-        return None
+        except Exception as e:
+            print(f"Error creating puzzle task: {e}")
+            return None
 
     def get_learning_stats(self) -> Dict[str, Any]:
         """Get current learning statistics including sliding window success rates."""
@@ -1365,7 +1494,6 @@ class CurriculumLearning:
 
     def get_aux_reward_scores(
         self,
-        model_output: str,
         task: "Task",
         is_correct: bool = False,
     ) -> Dict[str, Dict[str, Any]]:
@@ -1373,7 +1501,6 @@ class CurriculumLearning:
         Compute all auxiliary reward scores for the given model output.
 
         Args:
-            model_output: Raw model response (already stored in task.model_output)
             task: The Task object (contains expected_answer, language, and model_output)
             is_correct: Whether the primary task was answered correctly
 
@@ -1398,6 +1525,91 @@ class CurriculumLearning:
                 }
         return aux_scores
 
+    def _compute_batch_llm_judge(self, task_ids: List[str]) -> None:
+        """
+        Compute LLM Judge rewards for multiple tasks in batch (efficiently via API).
+
+        This method is called from get_rewards() before scoring to enable efficient
+        batched LLM Judge API calls. Each task's primary reward is updated with the
+        LLM Judge score (for truthy) or added as auxiliary (for math/puzzle).
+
+        Modifies task.task_rewards in place to include LLM Judge results.
+
+        Args:
+            task_ids: List of task identifiers to evaluate with LLM Judge
+        """
+        if not self.use_llm_judge or "llm_judge" not in self.aux_reward_functions:
+            return  # LLM Judge not enabled
+
+        # Collect all tasks that need LLM Judge evaluation
+        tasks_to_judge = []
+        task_index_map = {}  # Maps index in tasks_to_judge to task_id
+
+        for task_id in task_ids:
+            task = self.session.get_task(task_id)
+            if task is None:
+                continue
+            # Check if LLM Judge has already been computed
+            has_judge_score = any(
+                r.reward_function_name == "llm_judge" for r in task.task_rewards
+            )
+            if not has_judge_score:
+                task_index_map[len(tasks_to_judge)] = task_id
+                tasks_to_judge.append(task)
+
+        if not tasks_to_judge:
+            return  # No tasks need LLM Judge evaluation
+
+        # Batch evaluate all tasks with LLM Judge
+        try:
+            llm_judge_fn = self.aux_reward_functions["llm_judge"]
+            # Try batch evaluation if supported
+            judge_results = None
+
+            if hasattr(llm_judge_fn, "compute_rewards_batch"):
+                try:
+                    # Batch API call
+                    judge_results = llm_judge_fn.compute_rewards_batch(tasks_to_judge)
+                except (AttributeError, TypeError):
+                    # Batch method not available or failed, fallback to individual
+                    judge_results = None
+
+            if judge_results is None:
+                # Fallback: individual calls (still batched, but without API optimization)
+                judge_results = []
+                for task in tasks_to_judge:
+                    result = llm_judge_fn.compute_reward(task, is_correct=False)
+                    judge_results.append(result)
+
+            # Update task rewards with LLM Judge scores
+            for idx, judge_result in enumerate(judge_results):
+                task_id = task_index_map[idx]
+                task = self.session.get_task(task_id)
+
+                if task.task_type == "truthy":
+                    # For truthy: replace primary score with LLM Judge score
+                    for i, reward in enumerate(task.task_rewards):
+                        if reward.reward_function_name == "primary":
+                            task.task_rewards[i] = RewardFunctionScore(
+                                score=judge_result.score,
+                                reward_function_name="primary",
+                                info=judge_result.info or "",
+                            )
+                            break
+                else:
+                    # For math/puzzle: add as auxiliary reward
+                    task.task_rewards.append(
+                        RewardFunctionScore(
+                            score=judge_result.score,
+                            reward_function_name="llm_judge",
+                            info=judge_result.info or "",
+                        )
+                    )
+        except Exception as e:
+            print(f"Warning: Batch LLM Judge evaluation failed: {e}")
+            # Gracefully handle errors by skipping judge evaluation
+            # Tasks will use placeholder scores
+
     def get_rewards(self, task_ids: List[str]) -> List[float]:
         """Calculate combined reward scores for multiple completed tasks.
 
@@ -1420,6 +1632,9 @@ class CurriculumLearning:
         Raises:
             ValueError: If any task_id not found in session
         """
+        # Batch process LLM Judge for all tasks (for efficiency)
+        self._compute_batch_llm_judge(task_ids)
+
         combined_rewards = []
 
         # Precompute the judge score to get the max score and min score to normalize

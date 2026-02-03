@@ -308,6 +308,73 @@ class CurriculumLoggingCallback(TrainerCallback):
                     wandb_logs[f"curriculum/level_{level}/variance"] = variance
                     wandb_logs[f"curriculum/level_{level}/samples"] = samples
 
+                # Log truthy task judge scores (if LLM Judge enabled)
+                if self.curriculum.use_llm_judge:
+                    truthy_stats = self.curriculum.get_truthy_judge_scores()
+                    wandb_logs["curriculum/truthy/avg_judge_score"] = truthy_stats.get(
+                        "avg_judge_score", 0.0
+                    )
+                    wandb_logs["curriculum/truthy/min_judge_score"] = truthy_stats.get(
+                        "min_judge_score", 0.0
+                    )
+                    wandb_logs["curriculum/truthy/max_judge_score"] = truthy_stats.get(
+                        "max_judge_score", 0.0
+                    )
+                    wandb_logs["curriculum/truthy/count"] = truthy_stats.get(
+                        "judge_score_count", 0
+                    )
+
+                # Log generation statistics for recent tasks (Phase 4: Enhanced generation tracking)
+                recent_tasks = list(self.curriculum.session.tasks.keys())[
+                    -10:
+                ]  # Last 10 tasks
+                total_generations = 0
+                total_correct_generations = 0
+                generation_scores = []
+
+                for task_id in recent_tasks:
+                    batch_stats = self.curriculum.session.get_batch_stats(task_id)
+                    if batch_stats:
+                        total_generations += batch_stats["num_generations"]
+                        total_correct_generations += batch_stats["correct_generations"]
+                        generation_scores.extend(
+                            [batch_stats["scores"]["avg"]]
+                            if batch_stats["num_generations"] > 0
+                            else []
+                        )
+
+                        # Log per-task generation stats (sample a few)
+                        if (
+                            len(recent_tasks) <= 3
+                        ):  # Only log detailed stats for very recent tasks
+                            wandb_logs[
+                                f"generations/task_{task_id}/num_generations"
+                            ] = batch_stats["num_generations"]
+                            wandb_logs[f"generations/task_{task_id}/avg_score"] = (
+                                batch_stats["scores"]["avg"]
+                            )
+                            wandb_logs[f"generations/task_{task_id}/best_score"] = (
+                                batch_stats["scores"]["max"]
+                            )
+                            wandb_logs[f"generations/task_{task_id}/correct_ratio"] = (
+                                batch_stats["correct_generations"]
+                                / batch_stats["num_generations"]
+                                if batch_stats["num_generations"] > 0
+                                else 0
+                            )
+
+                # Log aggregated generation statistics
+                if total_generations > 0:
+                    wandb_logs["generations/recent_tasks_count"] = len(recent_tasks)
+                    wandb_logs["generations/total_generations"] = total_generations
+                    wandb_logs["generations/avg_correct_ratio"] = (
+                        total_correct_generations / total_generations
+                    )
+                    if generation_scores:
+                        wandb_logs["generations/avg_task_score"] = sum(
+                            generation_scores
+                        ) / len(generation_scores)
+
                 wandb.log(wandb_logs)
 
             self.last_log_step = state.global_step

@@ -317,6 +317,51 @@ print(f"Variance: {stats['sliding_window_stats']['mean_variance']:.4f}")
 - Advances to next difficulty level when success rate and consistency thresholds are both met
 - Provides detailed statistics to monitor curriculum progression
 
+## GRPO Batch Architecture
+
+The system implements a clean **Task → Generation hierarchy** for GRPO (Group Relative Policy Optimization) batch management with zero redundancy:
+
+**Core Components:**
+- **`Task.generations`**: List of all generations for a task
+- **`Task.add_generation()`**: Adds a new generation with output, rewards, and primary score
+- **`Task.latest_generation`**: Gets the most recent generation
+- **`Session.get_batch_data(task_id)`**: Retrieves all generation data for analysis
+- **`Session.get_batch_stats(task_id)`**: Provides comprehensive batch statistics
+
+**Key Benefits:**
+- **Zero Redundancy**: No scattered state across multiple dicts
+- **Single Source of Truth**: Task owns all its generations
+- **Automatic Cleanup**: No manual dict management needed
+- **Full Queryability**: Complete generation history tracking
+- **Clean Integration**: Seamless GRPO/non-GRPO task handling
+
+**Usage Examples:**
+```python
+from infinite_rl import CurriculumLearning
+
+cl = CurriculumLearning()
+
+# GRPO batch automatically tracked
+for generation in range(4):  # GRPO with 4 generations
+    task = cl.get_prompt()
+    model_output = generate_response(task['prompt'])
+    reward = cl.compute_reward(task['task_id'], model_output)
+    # Task automatically accumulates generations
+
+# Query generation statistics
+from infinite_rl.session import Session
+session = cl.session  # Access internal session
+
+# Get all generation data
+batch_data = session.get_batch_data(task['task_id'])
+print(f"Generated {len(batch_data)} responses")
+
+# Get batch statistics
+stats = session.get_batch_stats(task['task_id'])
+print(f"Average score: {stats['scores']['avg']:.3f}")
+print(f"Best generation index: {stats['best_generation']['index']}")
+```
+
 ## Testing
 
 ### Testing the RewardExecutor Locally

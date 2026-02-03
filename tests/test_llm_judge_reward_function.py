@@ -7,6 +7,28 @@ from infinite_rl.reward_functions.llm_judge import LLMJudgeRewardFunction
 from infinite_rl.task import Task
 
 
+class MockTokenizer:
+    """Mock tokenizer for testing without transformers dependency."""
+
+    def __init__(self):
+        self.bos_token = "<BOS>"
+
+    def apply_chat_template(self, conversation, tokenize=False):
+        """Mock chat template application.
+
+        Formats conversation as simple concatenation without actual tokenization.
+        """
+        parts = []
+        for msg in conversation:
+            role = msg.get("role", "").upper()
+            content = msg.get("content", "")
+            parts.append(f"[{role}] {content}")
+
+        result = " ".join(parts)
+        # Add BOS token prefix (will be removed by apply_chat_template caller)
+        return self.bos_token + result
+
+
 class TestLLMJudgeRewardFunction(unittest.TestCase):
     """Test suite for LLMJudgeRewardFunction."""
 
@@ -17,7 +39,11 @@ class TestLLMJudgeRewardFunction(unittest.TestCase):
         self.model_name = "Skywork/Skywork-Reward-V2-Qwen3-4B"
 
     def create_reward_function(self, **kwargs):
-        """Helper to create reward function with test defaults."""
+        """Helper to create reward function with test defaults.
+
+        Note: Does NOT initialize automatically, allowing tests to control
+        initialization with mocks or manually set up tokenizer.
+        """
         params = {
             "api_host": self.api_host,
             "api_port": self.api_port,

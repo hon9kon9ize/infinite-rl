@@ -39,6 +39,14 @@ python -m emulator.examples 3
 # Tests all reward functions with up-down-up scenario
 python -m emulator.examples 11
 
+# Run example 13 - BATCH LLM JUDGE VALIDATION
+# Tests batch API processing with multiple tasks
+python -m emulator.examples 13
+
+# Run example 14 - TRUTHY TASKS WITH LLM JUDGE
+# Tests truthy task type and quality evaluation
+python -m emulator.examples 14
+
 # Run all advanced scenarios
 python -m emulator.examples 7
 ```
@@ -47,23 +55,29 @@ python -m emulator.examples 7
 
 ### training_simulator.py
 - `RewardSnapshot`: Dataclass for tracking metrics at each step
+  - Now includes `task_type` field (math, puzzle, or truthy)
 - `TrainingSimulator`: Main class with methods:
   - `generate_response()`: Create synthetic responses with specified properties
-  - `run_scenario()`: Execute training scenario with batched processing
+  - `run_scenario(task_type="math")`: Execute training scenario with batched processing
+    - Supports "math", "puzzle", and "truthy" task types
+    - Automatically calls batch LLM Judge API when available
+  - `run_batch(task_type="math")`: Process a batch with specified task type
   - `print_results()`: Format output for analysis
   - `save_results()`: Export to JSON
 
 ### advanced_scenarios.py
-- `ResponsePattern`: 8 predefined response patterns (perfect, format_only, no_think, etc.)
-- `AdvancedScenarios`: 5 complex training scenarios
+- `ResponsePattern`: Now includes 10 predefined response patterns
+  - New: `high_quality()`, `low_quality()` for batch testing
+- `AdvancedScenarios`: 6 complex training scenarios
   - mixed_quality_progression: Realistic 4-phase learning
   - format_first_then_correctness: Two-phase progression
   - difficulty_mismatch: Task too hard scenario
   - recovery_from_collapse: Collapse and recovery
   - cascade_success: Natural progression
+  - **NEW**: batch_llm_judge_validation: Batch API testing with 3 task groups
 
 ### examples.py
-10 standalone examples covering:
+**14 examples** covering:
 1. Perfect responses baseline
 2. Format issues (missing think tags)
 3. Gradual improvement over time
@@ -74,6 +88,54 @@ python -m emulator.examples 7
 8. Custom patterns with randomness
 9. Comparing multiple scenarios
 10. Saving and loading results
+11. Reward function comprehensive test
+12. LLM Judge auxiliary reward
+13. **NEW**: Batch LLM Judge validation
+14. **NEW**: Truthy tasks with LLM Judge
+
+## New Features: Batch LLM Judge & Truthy Tasks
+
+### Batch Processing
+The emulator now supports efficient batch LLM Judge API calls:
+
+```python
+# Example: Run scenario with batch processing
+simulator = TrainingSimulator(
+    use_llm_judge=True,
+    llm_judge_kwargs={
+        "api_host": "localhost",
+        "api_port": 8000,
+        "model_name": "Skywork/Reward-Preference-Alpaca-7B-v2",
+    }
+)
+
+# Batch processing is automatic in get_rewards()
+# - Collects multiple tasks
+# - Calls compute_rewards_batch() if available
+# - Falls back to individual calls otherwise
+result = simulator.run_scenario(
+    "Batch Test",
+    response_configs=configs,
+    batch_size=4  # Tasks per GRPO batch
+)
+```
+
+### Truthy Tasks
+New support for truthy task type (quality evaluation without curriculum impact):
+
+```python
+# Create truthy task scenario
+result = simulator.run_scenario(
+    "Truthy Quality Test",
+    response_configs=configs,
+    task_type="truthy",  # New parameter!
+)
+
+# Notes:
+# - Truthy tasks use LLM Judge as primary score (not auxiliary)
+# - Never affect curriculum level advancement (is_correct always False)
+# - Useful for quality metrics alongside curriculum tasks
+```
 
 ## Response Configuration Format
 
@@ -85,6 +147,7 @@ Responses are configured as 3-tuples:
 Example usage:
 ```python
 # Perfect response: both tags present, answer is correct
+# Perfect response: both tags present, answer is correct
 config = (True, True, True)
 
 # Format only: both tags present, answer is wrong
@@ -95,6 +158,10 @@ config = (False, True, True)
 
 # All bad: no tags, answer is wrong
 config = (False, False, False)
+
+# Using patterns (new additions)
+ResponsePattern.high_quality()  # (True, True, True)
+ResponsePattern.low_quality()   # (False, False, False)
 ```
 
 ## Documentation

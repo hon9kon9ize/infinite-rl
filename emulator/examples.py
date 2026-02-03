@@ -291,7 +291,7 @@ def example_save_results():
 
 def example_llm_judge():
     """Test LLM Judge as an auxiliary reward function for math/puzzle tasks.
-    
+
     NOTE: Requires sglang server running the Skywork Reward Model.
     Start server with:
         python -m sglang.launch_server --model-path Skywork/Reward-Preference-Alpaca-7B-v2 --port 8000
@@ -331,7 +331,9 @@ def example_llm_judge():
         print("\nRunning scenario: Mixed Quality Responses")
         print("-" * 70)
 
-        configs = [ResponsePattern.perfect()] * 30 + [ResponsePattern.format_only()] * 20
+        configs = [ResponsePattern.perfect()] * 30 + [
+            ResponsePattern.format_only()
+        ] * 20
 
         result = simulator.run_scenario(
             "LLM Judge Test",
@@ -418,6 +420,135 @@ def example_reward_test():
     example_reward_test_all_functions()
 
 
+# ============================================================================
+# EXAMPLE 13: Batch LLM Judge Validation
+# ============================================================================
+
+
+def example_batch_llm_judge():
+    """Validate batch LLM Judge processing with multiple tasks.
+
+    Demonstrates:
+    - Batch API calls for efficient processing
+    - Task payload validation
+    - Fallback to individual calls if batch unavailable
+    """
+    from .training_simulator import TrainingSimulator
+    from .advanced_scenarios import ResponsePattern, AdvancedScenarios
+
+    print("\n" + "=" * 80)
+    print("BATCH LLM JUDGE VALIDATION EXAMPLE")
+    print("=" * 80)
+
+    # Create simulator with LLM Judge enabled
+    simulator = TrainingSimulator(
+        num_generations=4,
+        use_format=True,
+        use_llm_judge=True,
+        llm_judge_weight=0.2,
+        llm_judge_kwargs={
+            "api_host": "localhost",
+            "api_port": 8000,
+            "model_name": "Skywork/Reward-Preference-Alpaca-7B-v2",
+        },
+    )
+
+    print("\nConfiguration:")
+    print(f"  ✓ LLM Judge: {simulator.use_llm_judge}")
+    print(f"  ✓ Batch Processing: Enabled (compute_rewards_batch)")
+    print(f"  ✓ Fallback: Individual calls if batch unavailable")
+    print()
+
+    # Run batch validation scenario
+    print("Scenario: Batch LLM Judge Validation")
+    print("-" * 80)
+
+    # Get the batch validation pattern
+    configs = AdvancedScenarios.batch_llm_judge_validation(num_tasks=12)
+
+    result = simulator.run_scenario(
+        "Batch LLM Judge Validation",
+        response_configs=configs,
+        batch_size=4,
+        task_type="math",
+    )
+
+    print(f"\nFinal Results:")
+    print(f"  ✓ Final Level: {result['final_level']}")
+    print(f"  ✓ Success Rate: {result['final_success_rate']:.1%}")
+    print(f"  ✓ Total Steps: {result['final_step']}")
+    print(f"  ✓ Task Type: {result['task_type']}")
+    print("\n✓ Batch processing validation complete!")
+
+
+# ============================================================================
+# EXAMPLE 14: Truthy Tasks with LLM Judge
+# ============================================================================
+
+
+def example_truthy_tasks():
+    """Simulate truthy task processing with LLM Judge.
+
+    Demonstrates:
+    - Truthy task creation and processing
+    - LLM Judge primary score replacement (truthy tasks don't affect curriculum)
+    - Batch processing of truthy tasks
+    """
+    from .training_simulator import TrainingSimulator
+    from .advanced_scenarios import ResponsePattern
+
+    print("\n" + "=" * 80)
+    print("TRUTHY TASKS WITH LLM JUDGE EXAMPLE")
+    print("=" * 80)
+
+    # Create simulator with LLM Judge for truthy tasks
+    simulator = TrainingSimulator(
+        num_generations=4,
+        use_format=True,
+        use_llm_judge=True,
+        llm_judge_weight=0.3,
+        llm_judge_kwargs={
+            "api_host": "localhost",
+            "api_port": 8000,
+            "model_name": "Skywork/Reward-Preference-Alpaca-7B-v2",
+        },
+    )
+
+    print("\nConfiguration:")
+    print(f"  ✓ Task Type: truthy")
+    print(f"  ✓ LLM Judge: {simulator.use_llm_judge}")
+    print(f"  ✓ LLM Judge Weight: {simulator.llm_judge_weight}")
+    print(f"  ✓ Note: Truthy tasks don't affect curriculum advancement")
+    print()
+
+    # Run truthy task scenario
+    print("Scenario: Truthy Tasks with Quality Variation")
+    print("-" * 80)
+
+    configs = (
+        [ResponsePattern.high_quality()] * 6  # High quality
+        + [ResponsePattern.format_only()] * 6  # Medium quality
+        + [ResponsePattern.low_quality()] * 6  # Low quality
+    )
+
+    result = simulator.run_scenario(
+        "Truthy Tasks Quality Test",
+        response_configs=configs,
+        batch_size=3,
+        task_type="truthy",
+    )
+
+    print(f"\nFinal Results:")
+    print(f"  ✓ Final Level: {result['final_level']}")
+    print(f"  ✓ Success Rate: {result['final_success_rate']:.1%}")
+    print(f"  ✓ Total Steps: {result['final_step']}")
+    print(f"  ✓ Task Type: {result['task_type']}")
+    print("\n✓ Truthy task validation complete!")
+    print("\nNote: Curriculum level should remain unchanged because")
+    print("truthy tasks are used for quality evaluation only,")
+    print("not for difficulty progression.")
+
+
 if __name__ == "__main__":
     import sys
 
@@ -434,6 +565,8 @@ if __name__ == "__main__":
         "10": ("Save Results", example_save_results),
         "11": ("Reward Function Test (All)", example_reward_test),
         "12": ("LLM Judge Auxiliary Reward", example_llm_judge),
+        "13": ("Batch LLM Judge Validation", example_batch_llm_judge),
+        "14": ("Truthy Tasks with LLM Judge", example_truthy_tasks),
         "patterns": ("Response Patterns", print_response_patterns),
     }
 

@@ -11,6 +11,32 @@ from infinite_rl.curriculum import (
 from infinite_rl.reward_functions import RewardFunctionScore
 
 
+class MockTokenizer:
+    """Mock tokenizer for testing without transformers dependency."""
+
+    def __init__(self):
+        self.bos_token = "<BOS>"
+
+    def apply_chat_template(self, conversation, tokenize=False):
+        """Mock chat template application."""
+        parts = []
+        for msg in conversation:
+            role = msg.get("role", "").upper()
+            content = msg.get("content", "")
+            parts.append(f"[{role}] {content}")
+
+        result = " ".join(parts)
+        return self.bos_token + result
+
+
+def setup_llm_judge_with_mock_tokenizer(curriculum_learning):
+    """Helper to set up LLM Judge with mock tokenizer in tests."""
+    if "llm_judge" in curriculum_learning.aux_reward_functions:
+        curriculum_learning.aux_reward_functions["llm_judge"].tokenizer = (
+            MockTokenizer()
+        )
+
+
 class TestTask(unittest.TestCase):
     """Test Task class functionality."""
 
@@ -98,6 +124,42 @@ class TestTask(unittest.TestCase):
         self.assertIsNone(task_dict["model_output"])
         self.assertIsNotNone(task_dict["created_at"])
         self.assertIsNotNone(task_dict["first_response_at"])
+
+    def test_task_generation_tracking(self):
+        """Test that Task properly tracks generations."""
+        # Test initial state
+        self.assertEqual(len(self.task.generations), 0)
+        self.assertIsNone(self.task.latest_generation)
+
+        # Add first generation
+        reward1 = RewardFunctionScore(0.8, "primary", "good answer")
+        gen1 = self.task.add_generation("output1", [reward1], 0.8)
+
+        self.assertEqual(len(self.task.generations), 1)
+        self.assertEqual(self.task.generations[0].output, "output1")
+        self.assertEqual(self.task.generations[0].primary_score, 0.8)
+        self.assertEqual(self.task.latest_generation, gen1)
+
+        # Add second generation
+        reward2 = RewardFunctionScore(0.6, "primary", "okay answer")
+        gen2 = self.task.add_generation("output2", [reward2], 0.6)
+
+        self.assertEqual(len(self.task.generations), 2)
+        self.assertEqual(self.task.generations[1].output, "output2")
+        self.assertEqual(self.task.latest_generation, gen2)
+
+        # Test latest generation properties
+        self.assertEqual(self.task.latest_generation.output, "output2")
+        self.assertEqual(len(self.task.latest_generation.rewards), 1)
+        self.assertEqual(self.task.latest_generation.rewards[0].score, 0.6)
+        self.assertEqual(self.task.latest_generation.is_correct, True)  # 0.6 >= 0.5
+
+        # Test to_dict includes generations
+        task_dict = self.task.to_dict()
+        self.assertIn("generations", task_dict)
+        self.assertEqual(len(task_dict["generations"]), 2)
+        self.assertEqual(task_dict["generations"][0]["output"], "output1")
+        self.assertEqual(task_dict["generations"][1]["output"], "output2")
 
 
 class TestSession(unittest.TestCase):
@@ -284,6 +346,148 @@ class TestSession(unittest.TestCase):
         # task_history tracks all tasks added, so one task means one evaluation recorded
         self.assertEqual(stats["total_evaluations"], 1)
         self.assertNotIn("log_file", stats)
+
+    def test_get_batch_data(self):
+        """Test retrieving all generations data for a task."""
+        task = Task(
+            task_id="task_001",
+            task_name="Test Task",
+            task_type="math",
+            level=1,
+            prompt="Test prompt",
+            expected_answer="4",
+        )
+
+        # Add multiple generations to simulate GRPO batch
+        rewards1 = [
+            RewardFunctionScore(score=0.5, reward_function_name="primary", info="")
+        ]
+        rewards2 = [
+            RewardFunctionScore(score=0.8, reward_function_name="primary", info="")
+        ]
+        rewards3 = [
+            RewardFunctionScore(score=1.0, reward_function_name="primary", info="")
+        ]
+
+        task.add_generation("First attempt", rewards1, 0.5)
+        task.add_generation("Second attempt", rewards2, 0.8)
+        task.add_generation("Third attempt", rewards3, 1.0)
+
+        self.session.add_task(task)
+
+        batch_data = self.session.get_batch_data("task_001")
+
+        self.assertIsNotNone(batch_data)
+        self.assertEqual(len(batch_data), 3)
+
+        # Check first generation
+        self.assertEqual(batch_data[0]["output"], "First attempt")
+        self.assertEqual(batch_data[0]["primary_score"], 0.5)
+        self.assertTrue(batch_data[0]["is_correct"])  # 0.5 >= 0.5
+        self.assertEqual(len(batch_data[0]["rewards"]), 1)
+
+        # Check third generation (correct)
+        self.assertEqual(batch_data[2]["output"], "Third attempt")
+        self.assertEqual(batch_data[2]["primary_score"], 1.0)
+        self.assertTrue(batch_data[2]["is_correct"])
+
+    def test_get_batch_data_nonexistent_task(self):
+        """Test get_batch_data returns None for non-existent task."""
+        batch_data = self.session.get_batch_data("nonexistent")
+        self.assertIsNone(batch_data)
+
+    def test_get_batch_stats(self):
+        """Test retrieving statistics about generations for a task."""
+        task = Task(
+            task_id="task_001",
+            task_name="Test Task",
+            task_type="math",
+            level=1,
+            prompt="Test prompt",
+            expected_answer="4",
+        )
+
+        # Add generations with varying scores
+        task.add_generation(
+            "Bad",
+            [RewardFunctionScore(score=0.2, reward_function_name="primary", info="")],
+            0.2,
+        )
+        task.add_generation(
+            "Good",
+            [RewardFunctionScore(score=0.9, reward_function_name="primary", info="")],
+            0.9,
+        )
+        task.add_generation(
+            "Perfect",
+            [RewardFunctionScore(score=1.0, reward_function_name="primary", info="")],
+            1.0,
+        )
+
+        self.session.add_task(task)
+
+        stats = self.session.get_batch_stats("task_001")
+
+        self.assertIsNotNone(stats)
+        self.assertEqual(stats["num_generations"], 3)
+        self.assertEqual(stats["scores"]["min"], 0.2)
+        self.assertEqual(stats["scores"]["max"], 1.0)
+        self.assertAlmostEqual(stats["scores"]["avg"], 0.7, places=1)
+        self.assertEqual(stats["best_generation"]["index"], 2)
+        self.assertEqual(stats["best_generation"]["score"], 1.0)
+        self.assertEqual(stats["best_generation"]["output"], "Perfect")
+        self.assertEqual(
+            stats["correct_generations"], 2
+        )  # Scores 0.9 and 1.0 are >= 0.5
+        self.assertEqual(
+            stats["first_correct_at"], 1
+        )  # First generation (score 0.2) is not correct, second (0.9) is
+
+    def test_get_batch_stats_no_generations(self):
+        """Test get_batch_stats returns None for task with no generations."""
+        task = Task(
+            task_id="task_001",
+            task_name="Test Task",
+            task_type="math",
+            level=1,
+            prompt="Test prompt",
+            expected_answer="4",
+        )
+        self.session.add_task(task)
+
+        stats = self.session.get_batch_stats("task_001")
+        self.assertIsNone(stats)
+
+    def test_get_batch_stats_single_generation(self):
+        """Test get_batch_stats works with single generation."""
+        task = Task(
+            task_id="task_001",
+            task_name="Test Task",
+            task_type="math",
+            level=1,
+            prompt="Test prompt",
+            expected_answer="4",
+        )
+
+        task.add_generation(
+            "Only attempt",
+            [RewardFunctionScore(score=0.7, reward_function_name="primary", info="")],
+            0.7,
+        )
+        self.session.add_task(task)
+
+        stats = self.session.get_batch_stats("task_001")
+
+        self.assertIsNotNone(stats)
+        self.assertEqual(stats["num_generations"], 1)
+        self.assertEqual(stats["scores"]["min"], 0.7)
+        self.assertEqual(stats["scores"]["max"], 0.7)
+        self.assertEqual(stats["scores"]["avg"], 0.7)
+        self.assertEqual(stats["scores"]["std"], 0.0)  # No variance with single value
+        self.assertEqual(stats["correct_generations"], 1)  # 0.7 >= 0.5
+        self.assertEqual(
+            stats["first_correct_at"], 0
+        )  # First (only) generation is correct
 
 
 class TestCurriculumLearning(unittest.TestCase):
@@ -569,6 +773,205 @@ class TestCurriculumLearning(unittest.TestCase):
         self.assertEqual(task.language, "javascript")
         self.assertIn("TestPuzzle", task.prompt)
         self.assertIn("Test puzzle description", task.prompt)
+
+    def test_get_math_prompt_creates_task(self):
+        """Test _get_math_prompt creates a valid math task."""
+        cl = CurriculumLearning()
+
+        selected_task = {
+            "type": "math",
+            "data": {
+                "prompt": "What is 2+2?",
+                "response": "4",
+                "lang": "en",
+                "rating": 1,
+            },
+            "rating": 1,
+            "id": "math_test",
+        }
+
+        task = cl._get_math_prompt(selected_task)
+
+        self.assertIsNotNone(task)
+        self.assertIsInstance(task, Task)
+        self.assertEqual(task.task_type, "math")
+        self.assertEqual(task.level, 1)
+        self.assertEqual(task.expected_answer, "4")
+        self.assertEqual(task.language, "en")
+        self.assertIn("What is 2+2?", task.prompt)
+        # Task should be added to session
+        self.assertIn(task.task_id, cl.session.tasks)
+
+    def test_get_math_prompt_handles_error(self):
+        """Test _get_math_prompt returns None on error."""
+        cl = CurriculumLearning()
+
+        # Provide invalid selected_task (missing required fields)
+        selected_task = {
+            "type": "math",
+            "data": {},  # Missing prompt and response
+            # Missing rating
+        }
+
+        task = cl._get_math_prompt(selected_task)
+
+        self.assertIsNone(task, "Should return None on error")
+
+    def test_get_puzzle_prompt_creates_task(self):
+        """Test _get_puzzle_prompt creates a valid puzzle task."""
+        cl = CurriculumLearning()
+
+        selected_task = {
+            "type": "puzzle",
+            "language": "javascript",
+            "puzzle_name": "TestPuzzle",
+            "data": {
+                "name": "TestPuzzle",
+                "docstring": "Test puzzle description",
+                "sat": "function sat() { return true; }",
+                "sol": "function sol() {}",
+                "ans_type": "boolean",
+                "rating": 1,
+            },
+            "rating": 1,
+            "id": "puzzle_test",
+        }
+
+        task = cl._get_puzzle_prompt(selected_task)
+
+        self.assertIsNotNone(task)
+        self.assertIsInstance(task, Task)
+        self.assertEqual(task.task_type, "puzzle")
+        self.assertEqual(task.level, 1)
+        self.assertEqual(task.language, "javascript")
+        self.assertIn("TestPuzzle", task.prompt)
+        self.assertIn("Test puzzle description", task.prompt)
+        # Task should be added to session
+        self.assertIn(task.task_id, cl.session.tasks)
+
+    def test_get_puzzle_prompt_handles_error(self):
+        """Test _get_puzzle_prompt returns None on error."""
+        cl = CurriculumLearning()
+
+        # Provide invalid selected_task
+        selected_task = {
+            "type": "puzzle",
+            "language": "javascript",
+            "puzzle_name": "TestPuzzle",
+            "data": {},  # Missing required puzzle data
+            # Missing rating
+        }
+
+        task = cl._get_puzzle_prompt(selected_task)
+
+        self.assertIsNone(task, "Should return None on error")
+
+    def test_get_truthy_prompt_creates_task(self):
+        """Test _get_truthy_prompt creates a valid truthy task."""
+        cl = CurriculumLearning()
+
+        selected_task = {
+            "type": "truthy",
+            "id": "truthy_test",
+            "data": {
+                "id": "conv_123",
+                "system": "You are a helpful assistant",
+                "prompt": "What's the best way to learn Python?",
+                "chosen": "Practice with projects and read documentation.",
+                "rejected": "Just watch videos without coding.",
+                "reasoning_language": "en",
+                "language": "en",
+            },
+        }
+
+        task = cl._get_truthy_prompt(selected_task)
+
+        self.assertIsNotNone(task)
+        self.assertIsInstance(task, Task)
+        self.assertEqual(task.task_type, "truthy")
+        self.assertEqual(task.language, "en")
+        self.assertIsNotNone(task.judge_system_prompt)
+        # expected_answer now stores chosen and rejected for reproducibility
+        self.assertIsNotNone(task.expected_answer)
+        self.assertEqual(
+            task.expected_answer["chosen"],
+            "Practice with projects and read documentation.",
+        )
+        self.assertEqual(
+            task.expected_answer["rejected"], "Just watch videos without coding."
+        )
+        # Task should be added to session
+        self.assertIn(task.task_id, cl.session.tasks)
+
+    def test_get_truthy_prompt_handles_error(self):
+        """Test _get_truthy_prompt returns None on error."""
+        cl = CurriculumLearning()
+
+        # Provide invalid selected_task
+        selected_task = {
+            "type": "truthy",
+            "id": "truthy_test",
+            "data": {},  # Missing required fields
+        }
+
+        task = cl._get_truthy_prompt(selected_task)
+
+        self.assertIsNone(task, "Should return None on error")
+
+    def test_prompt_helper_increments_task_counter(self):
+        """Test that each prompt helper increments task_instance_counter."""
+        cl = CurriculumLearning()
+        initial_counter = cl.task_instance_counter
+
+        # Create math task
+        math_task = cl._get_math_prompt(
+            {
+                "type": "math",
+                "data": {"prompt": "Test", "response": "4", "lang": "en"},
+                "rating": 1,
+                "id": "math_1",
+            }
+        )
+        self.assertEqual(cl.task_instance_counter, initial_counter + 1)
+        self.assertIn(str(initial_counter), math_task.task_id)
+
+        # Create puzzle task
+        puzzle_task = cl._get_puzzle_prompt(
+            {
+                "type": "puzzle",
+                "language": "python",
+                "puzzle_name": "Test",
+                "data": {
+                    "name": "Test",
+                    "docstring": "",
+                    "sat": "",
+                    "sol": "",
+                    "ans_type": "",
+                },
+                "rating": 1,
+                "id": "puzzle_1",
+            }
+        )
+        self.assertEqual(cl.task_instance_counter, initial_counter + 2)
+        self.assertIn(str(initial_counter + 1), puzzle_task.task_id)
+
+        # Create truthy task
+        truthy_task = cl._get_truthy_prompt(
+            {
+                "type": "truthy",
+                "id": "truthy_1",
+                "data": {
+                    "id": "test",
+                    "system": "",
+                    "prompt": "Test",
+                    "chosen": "A",
+                    "rejected": "B",
+                    "language": "en",
+                },
+            }
+        )
+        self.assertEqual(cl.task_instance_counter, initial_counter + 3)
+        self.assertIn(str(initial_counter + 2), truthy_task.task_id)
 
     def test_recent_tasks_tracking(self):
         """Test that recent tasks are tracked and weighted."""
@@ -1662,15 +2065,23 @@ class TestCurriculumLearning(unittest.TestCase):
         self.assertIn("llm_judge", str(context.exception))
 
     def test_truthy_task_primary_score_from_llm_judge(self):
-        """Test that truthy task primary score comes from llm_judge."""
+        """Test that truthy task primary score comes from llm_judge via batch processing."""
         cl = CurriculumLearning(
             use_llm_judge=True,
+            aux_weight=0.0,  # Disable auxiliary weight blending for clean test
             llm_judge_kwargs={
                 "api_host": "localhost",
                 "api_port": 8000,
-                "model_name": "Skywork",
+                "model_name": "Skywork/Skywork-Reward-V2-Qwen3-4B",
             },
+            use_format=False,  # Disable format to avoid auxiliary reward blending
+            use_whitespace_collapse=False,  # Disable whitespace collapse
+            use_lang_consistency=False,  # Disable auxiliary rewards to test just LLM Judge
+            use_repetition=False,
         )
+
+        # Set up mock tokenizer for LLM Judge
+        setup_llm_judge_with_mock_tokenizer(cl)
 
         # Create a truthy task
         task = Task(
@@ -1683,27 +2094,295 @@ class TestCurriculumLearning(unittest.TestCase):
         )
         cl.session.add_task(task)
 
-        # Mock llm_judge reward function
+        # Mock llm_judge reward function with compute_rewards_batch (batch API)
         with patch.object(
-            cl.aux_reward_functions["llm_judge"], "compute_reward"
-        ) as mock_judge:
+            cl.aux_reward_functions["llm_judge"], "compute_rewards_batch"
+        ) as mock_batch:
             mock_result = MagicMock()
             mock_result.score = 0.75
             mock_result.info = "Good response"
-            mock_judge.return_value = mock_result
+            mock_batch.return_value = [mock_result]
 
-            # For truthy tasks, no format check applies
+            # Step 1: compute_reward returns placeholder 0.5 (LLM Judge deferred)
             primary_reward = cl.compute_reward("truthy_test", "Test response")
+            self.assertEqual(
+                primary_reward, 0.5
+            )  # Placeholder pending batch processing
 
-            # Primary score should be the judge score (0.75)
-            self.assertEqual(primary_reward, 0.75)
+            # Step 2: get_rewards applies batch LLM Judge processing
+            rewards = cl.get_rewards(["truthy_test"])
 
-            # Task should have is_correct = True (since 0.75 > 0.7 for truthy tasks)
+            # Primary score should now be the judge score (0.75) after batch processing
+            self.assertAlmostEqual(rewards[0], 0.75, places=5)
+
+            # CRITICAL: Truthy tasks always have is_correct=False (never affects curriculum)
             task_from_session = cl.session.get_task("truthy_test")
-            self.assertTrue(task_from_session.is_correct)
+            self.assertFalse(task_from_session.is_correct)
 
-    def test_truthy_task_weight_calculation(self):
-        """Test that truthy task weights are correctly calculated in get_rewards."""
+    def test_batch_llm_judge_validates_request_payload(self):
+        """Test that batch LLM Judge request payload contains correct number of tasks."""
+        cl = CurriculumLearning(
+            use_llm_judge=True,
+            aux_weight=0.0,  # Disable auxiliary weight blending for clean test
+            llm_judge_kwargs={
+                "api_host": "localhost",
+                "api_port": 8000,
+                "model_name": "Skywork/Skywork-Reward-V2-Qwen3-4B",
+            },
+            use_format=False,  # Disable format to avoid auxiliary reward blending
+            use_whitespace_collapse=False,  # Disable whitespace collapse
+            use_lang_consistency=False,  # Disable auxiliary rewards for clean test
+            use_repetition=False,
+        )
+
+        # Set up mock tokenizer for LLM Judge
+        setup_llm_judge_with_mock_tokenizer(cl)
+
+        # Create multiple truthy tasks
+        task_ids = []
+        for i in range(3):
+            task = Task(
+                task_id=f"truthy_{i}",
+                task_name=f"Truthy {i}",
+                task_type="truthy",
+                level=0,
+                prompt=f"Which response is better (task {i})?",
+                expected_answer={"type": "truthy", "conversation": []},
+            )
+            cl.session.add_task(task)
+            task.model_output = f"Response {i}"
+            task_ids.append(f"truthy_{i}")
+
+        # Mock the batch API method since compute_rewards_batch now exists
+        with patch.object(
+            cl.aux_reward_functions["llm_judge"], "compute_rewards_batch"
+        ) as mock_batch:
+            # Create mock results for each task
+            mock_results = []
+            for i in range(3):
+                mock_result = MagicMock()
+                mock_result.score = 0.7 + (i * 0.1)  # 0.7, 0.8, 0.9
+                mock_result.info = f"Response {i} quality"
+                mock_results.append(mock_result)
+
+            mock_batch.return_value = mock_results
+
+            # Step 1: compute_reward for each task (returns placeholders)
+            for task_id in task_ids:
+                score = cl.compute_reward(task_id, "Test")
+                self.assertEqual(score, 0.5)  # Placeholder
+
+            # Step 2: get_rewards triggers batch processing
+            rewards = cl.get_rewards(task_ids)
+
+            # Verify batch API was called
+            self.assertTrue(mock_batch.called)
+
+            # Verify batch API was called with correct number of tasks
+            call_args = mock_batch.call_args
+            batch_tasks = call_args[0][0]  # First positional argument
+            self.assertEqual(
+                len(batch_tasks),
+                3,
+                f"Expected 3 tasks in batch, got {len(batch_tasks)}",
+            )
+
+            # Verify all tasks are in the batch
+            batch_task_ids = [t.task_id for t in batch_tasks]
+            for task_id in task_ids:
+                self.assertIn(
+                    task_id,
+                    batch_task_ids,
+                    f"Task {task_id} should be in batch request",
+                )
+
+            # Verify final rewards use batch results
+            self.assertAlmostEqual(rewards[0], 0.7, places=5)  # First task score
+            self.assertAlmostEqual(rewards[1], 0.8, places=5)  # Second task score
+            self.assertAlmostEqual(rewards[2], 0.9, places=5)  # Third task score
+
+    def test_batch_llm_judge_with_mixed_task_types(self):
+        """Test batch LLM Judge handles both truthy and math/puzzle tasks correctly."""
+        cl = CurriculumLearning(
+            use_llm_judge=True,
+            aux_weight=0.0,  # Disable auxiliary weight blending for clean test
+            llm_judge_kwargs={
+                "api_host": "localhost",
+                "api_port": 8000,
+                "model_name": "Skywork/Skywork-Reward-V2-Qwen3-4B",
+            },
+            use_format=False,  # Disable auxiliary rewards for clean test
+            use_whitespace_collapse=False,
+            use_lang_consistency=False,
+            use_repetition=False,
+        )
+
+        # Set up mock tokenizer for LLM Judge
+        setup_llm_judge_with_mock_tokenizer(cl)
+
+        # Create 1 truthy and 1 math task
+        truthy_task = Task(
+            task_id="truthy_0",
+            task_name="Truthy",
+            task_type="truthy",
+            level=0,
+            prompt="Which is better?",
+            expected_answer={"type": "truthy", "conversation": []},
+        )
+        truthy_task.model_output = "Response"
+        cl.session.add_task(truthy_task)
+
+        math_task = Task(
+            task_id="math_0",
+            task_name="Math",
+            task_type="math",
+            level=0,
+            prompt="What is 2+2?",
+            expected_answer="4",
+        )
+        math_task.model_output = "<think>2+2 equals 4</think><answer>4</answer>"
+        cl.session.add_task(math_task)
+
+        # Mock LLM Judge with batch support
+        with patch.object(
+            cl.aux_reward_functions["llm_judge"], "compute_rewards_batch"
+        ) as mock_batch:
+            # Mock result for each task (batch processes all)
+            mock_results = []
+            for i in range(2):
+                mock_result = MagicMock()
+                mock_result.score = 0.8
+                mock_result.info = f"Quality {i}"
+                mock_results.append(mock_result)
+
+            mock_batch.return_value = mock_results
+
+            # Manually add the method so hasattr works
+            cl.aux_reward_functions["llm_judge"].compute_rewards_batch = mock_batch
+
+            # Mock math reward function
+            with patch.object(
+                cl.reward_functions["math"], "compute_reward"
+            ) as mock_math_reward:
+                mock_math_result = MagicMock()
+                mock_math_result.score = 1.0
+                mock_math_result.info = "Correct"
+                mock_math_reward.return_value = mock_math_result
+
+                # Compute rewards for both
+                cl.compute_reward("truthy_0", "Response")
+                cl.compute_reward("math_0", "<think>2+2=4</think><answer>4</answer>")
+
+                # Get combined rewards
+                rewards = cl.get_rewards(["truthy_0", "math_0"])
+
+                # Verify batch API was called
+                self.assertTrue(mock_batch.called)
+
+                # Verify batch includes both task types
+                call_args = mock_batch.call_args
+                batch_tasks = call_args[0][0]
+                self.assertEqual(len(batch_tasks), 2)
+
+                # Verify truthy uses batch score as primary
+                task_truthy = cl.session.get_task("truthy_0")
+                primary_rewards = [
+                    r
+                    for r in task_truthy.task_rewards
+                    if r.reward_function_name == "primary"
+                ]
+                self.assertEqual(primary_rewards[0].score, 0.8)
+
+                # Verify math has llm_judge as auxiliary
+                task_math = cl.session.get_task("math_0")
+                judge_rewards = [
+                    r
+                    for r in task_math.task_rewards
+                    if r.reward_function_name == "llm_judge"
+                ]
+                self.assertEqual(len(judge_rewards), 1)
+                self.assertEqual(judge_rewards[0].score, 0.8)
+
+    def test_batch_llm_judge_with_fallback_to_individual(self):
+        """Test batch LLM Judge falls back to individual calls if batch API unavailable."""
+        cl = CurriculumLearning(
+            use_llm_judge=True,
+            aux_weight=0.0,  # Disable auxiliary weight blending for clean test
+            llm_judge_kwargs={
+                "api_host": "localhost",
+                "api_port": 8000,
+                "model_name": "Skywork/Skywork-Reward-V2-Qwen3-4B",
+            },
+            use_format=False,  # Disable auxiliary to avoid extra calls
+            use_whitespace_collapse=False,
+            use_lang_consistency=False,
+            use_repetition=False,
+        )
+
+        # Set up mock tokenizer for LLM Judge
+        setup_llm_judge_with_mock_tokenizer(cl)
+
+        # Create multiple tasks
+        task_ids = []
+        for i in range(2):
+            task = Task(
+                task_id=f"truthy_{i}",
+                task_name=f"Truthy {i}",
+                task_type="truthy",
+                level=0,
+                prompt="Which is better?",
+                expected_answer={"type": "truthy", "conversation": []},
+            )
+            cl.session.add_task(task)
+            task.model_output = f"Response {i}"
+            task_ids.append(f"truthy_{i}")
+
+        # Mock compute_rewards_batch to not exist (hasattr will return False)
+        # and mock compute_reward to handle fallback
+        with patch.object(
+            cl.aux_reward_functions["llm_judge"],
+            "compute_rewards_batch",
+            side_effect=AttributeError("compute_rewards_batch not available"),
+        ):
+            with patch.object(
+                cl.aux_reward_functions["llm_judge"], "compute_reward"
+            ) as mock_individual:
+                mock_results = []
+                for i in range(2):
+                    mock_result = MagicMock()
+                    mock_result.score = 0.6 + (i * 0.1)
+                    mock_result.info = f"Quality {i}"
+                    mock_results.append(mock_result)
+
+                # Set up individual calls to be used
+                mock_individual.side_effect = mock_results
+
+                # Compute initial rewards
+                for task_id in task_ids:
+                    cl.compute_reward(task_id, "Test")
+
+                # Reset the mock for get_rewards call
+                mock_individual.reset_mock()
+                mock_individual.side_effect = mock_results
+
+                # Get rewards (should fallback to individual calls since batch raises AttributeError)
+                rewards = cl.get_rewards(task_ids)
+
+                # Verify individual calls were made
+                self.assertTrue(mock_individual.called)
+                # Should be called twice (once for each task in batch processing)
+                self.assertEqual(
+                    mock_individual.call_count,
+                    2,
+                    f"Expected 2 individual calls, got {mock_individual.call_count}",
+                )
+
+                # Verify results
+                self.assertAlmostEqual(rewards[0], 0.6, places=5)
+                self.assertAlmostEqual(rewards[1], 0.7, places=5)
+
+    def test_truthy_task_does_not_affect_curriculum(self):
+        """Test that truthy tasks never affect curriculum success windows."""
         cl = CurriculumLearning(
             use_llm_judge=True,
             llm_judge_kwargs={
@@ -1711,35 +2390,41 @@ class TestCurriculumLearning(unittest.TestCase):
                 "api_port": 8000,
                 "model_name": "Skywork",
             },
-            aux_weight=0.1,
-            llm_judge_weight=0.2,
+            num_generations=1,  # Single evaluation mode for immediate tracking
         )
 
-        # Create a truthy task
-        task = Task(
-            task_id="truthy_test",
-            task_name="Truthy Test",
-            task_type="truthy",
-            level=0,
-            prompt="Test",
-            expected_answer={"type": "truthy", "conversation": []},
-        )
-        cl.session.add_task(task)
+        cl.current_level = 0
 
-        # Add primary reward (which is judge score for truthy)
-        primary_reward = RewardFunctionScore(
-            score=0.8,
-            reward_function_name="primary",
-            info="",
-        )
-        cl.session.set_reward("truthy_test", [primary_reward])
+        # Create and evaluate 20 truthy tasks with high judge scores
+        for i in range(20):
+            task = Task(
+                task_id=f"truthy_{i}",
+                task_name=f"Truthy {i}",
+                task_type="truthy",
+                level=0,
+                prompt="Which response is better?",
+                expected_answer={"type": "truthy", "conversation": []},
+            )
+            cl.session.add_task(task)
 
-        # For truthy task: primary_weight = 1.0 - 0.1 = 0.9 (no llm_judge_weight subtracted)
-        # combined = 0.9 * 0.8 + 0.1 * 0.5 = 0.72 + 0.05 = 0.77
-        combined_rewards = cl.get_rewards(["truthy_test"])
-        self.assertEqual(len(combined_rewards), 1)
-        # With no auxiliary scores, aux_avg = 0.5 (middle value)
-        self.assertAlmostEqual(combined_rewards[0], 0.77, places=1)
+            # Mock high LLM Judge scores
+            with patch.object(
+                cl.aux_reward_functions["llm_judge"], "compute_reward"
+            ) as mock_judge:
+                mock_result = MagicMock()
+                mock_result.score = 0.95  # Very high quality
+                mock_result.info = "Excellent"
+                mock_judge.return_value = mock_result
+
+                cl.compute_reward(f"truthy_{i}", "Response")
+
+        # Check that level did NOT advance despite high truthy scores
+        # Truthy tasks should NOT contribute to success windows
+        self.assertEqual(
+            cl.current_level,
+            0,
+            "Truthy tasks should not trigger curriculum advancement",
+        )
 
     def test_non_truthy_weight_without_llm_judge(self):
         """Test weight calculation for non-truthy tasks when llm_judge disabled."""
@@ -1820,6 +2505,420 @@ class TestCurriculumLearning(unittest.TestCase):
         # Should be around 0.75 (with judge contribution being 0 due to no range)
         self.assertGreaterEqual(combined_rewards[0], 0.7)
         self.assertLessEqual(combined_rewards[0], 0.76)
+
+    # === NEW TESTS FOR REFACTORED METHODS ===
+
+    def test_compute_reward_truthy_returns_judge_score(self):
+        """Test _compute_reward_truthy uses placeholder score (batch LLM Judge via get_rewards)."""
+        cl = CurriculumLearning(
+            use_llm_judge=True,
+            llm_judge_kwargs={
+                "api_host": "localhost",
+                "api_port": 8000,
+                "model_name": "Skywork",
+            },
+        )
+
+        task = Task(
+            task_id="truthy_test",
+            task_name="Truthy Test",
+            task_type="truthy",
+            level=0,
+            prompt="Which is better?",
+            expected_answer={"type": "truthy", "conversation": []},
+        )
+        cl.session.add_task(task)
+        task.model_output = "My response"
+
+        # Mock LLM Judge
+        with patch.object(
+            cl.aux_reward_functions["llm_judge"], "compute_reward"
+        ) as mock_judge:
+            mock_result = MagicMock()
+            mock_result.score = 0.65
+            mock_result.info = "Decent"
+            mock_judge.return_value = mock_result
+
+            # Call the refactored method directly
+            score, is_correct, task_rewards, aux_score_dict = cl._compute_reward_truthy(
+                task
+            )
+
+            # Verify returned values: placeholder 0.5 (LLM Judge deferred)
+            self.assertEqual(
+                score, 0.5, "Score should be placeholder (LLM Judge deferred to batch)"
+            )
+            self.assertFalse(is_correct, "Truthy always has is_correct=False")
+            self.assertEqual(
+                task_rewards[0].score,
+                0.5,
+                "Primary reward is placeholder pending batch",
+            )
+            self.assertEqual(task_rewards[0].reward_function_name, "primary")
+
+    def test_compute_reward_standard_success_path(self):
+        """Test _compute_reward_standard with format valid and correct answer."""
+        cl = CurriculumLearning(use_format=True)
+
+        task = Task(
+            task_id="math_test",
+            task_name="Math Test",
+            task_type="math",
+            level=1,
+            prompt="What is 2+2?",
+            expected_answer="4",
+        )
+        cl.session.add_task(task)
+        task.model_output = "<think>2+2=4</think>\n<answer>4</answer>"
+
+        # Mock the task reward function (returns 1.0 for correct)
+        with patch.object(
+            cl.reward_functions["math"], "compute_reward"
+        ) as mock_task_fn:
+            mock_result = MagicMock()
+            mock_result.score = 1.0
+            mock_result.info = "Correct"
+            mock_task_fn.return_value = mock_result
+
+            # Call the refactored method
+            score, is_correct, task_rewards, aux_score_dict = (
+                cl._compute_reward_standard(task)
+            )
+
+            # Verify success path
+            self.assertEqual(score, 1.0, "Score should be 1.0 on success")
+            self.assertTrue(is_correct, "is_correct should be True")
+            self.assertEqual(
+                task_rewards[0].score, 1.0, "Primary reward is task correctness"
+            )
+
+    def test_compute_reward_standard_failure_format_invalid(self):
+        """Test _compute_reward_standard with invalid format."""
+        cl = CurriculumLearning(use_format=True)
+
+        task = Task(
+            task_id="math_test",
+            task_name="Math Test",
+            task_type="math",
+            level=1,
+            prompt="What is 2+2?",
+            expected_answer="4",
+        )
+        cl.session.add_task(task)
+        task.model_output = "<answer>4</answer>"  # Missing <think> tag
+
+        # Mock the task reward function (returns 1.0 even though format invalid)
+        with patch.object(
+            cl.reward_functions["math"], "compute_reward"
+        ) as mock_task_fn:
+            mock_result = MagicMock()
+            mock_result.score = 1.0
+            mock_result.info = "Correct"
+            mock_task_fn.return_value = mock_result
+
+            # Call the refactored method
+            score, is_correct, task_rewards, aux_score_dict = (
+                cl._compute_reward_standard(task)
+            )
+
+            # Verify failure path
+            self.assertEqual(score, 0.0, "Score should be 0.0 on format failure")
+            self.assertFalse(is_correct, "is_correct should be False")
+
+    def test_compute_reward_standard_failure_incorrect_answer(self):
+        """Test _compute_reward_standard with incorrect answer."""
+        cl = CurriculumLearning(use_format=True)
+
+        task = Task(
+            task_id="math_test",
+            task_name="Math Test",
+            task_type="math",
+            level=1,
+            prompt="What is 2+2?",
+            expected_answer="4",
+        )
+        cl.session.add_task(task)
+        task.model_output = "<think>2+2=5</think>\n<answer>5</answer>"
+
+        # Mock the task reward function (returns 0.0 for incorrect)
+        with patch.object(
+            cl.reward_functions["math"], "compute_reward"
+        ) as mock_task_fn:
+            mock_result = MagicMock()
+            mock_result.score = 0.0
+            mock_result.info = "Incorrect"
+            mock_task_fn.return_value = mock_result
+
+            # Call the refactored method
+            score, is_correct, task_rewards, aux_score_dict = (
+                cl._compute_reward_standard(task)
+            )
+
+            # Verify failure path
+            self.assertEqual(score, 0.0, "Score should be 0.0 on incorrect answer")
+            self.assertFalse(is_correct, "is_correct should be False")
+
+    def test_check_format_validity_both_tags_valid(self):
+        """Test _check_format_validity returns True when both tags valid."""
+        cl = CurriculumLearning(use_format=True)
+
+        task = Task(
+            task_id="test",
+            task_name="Test",
+            task_type="math",
+            level=0,
+            prompt="Test",
+            expected_answer="4",
+        )
+        task.model_output = "<think>Reasoning here</think>\n<answer>4</answer>"
+        cl.session.add_task(task)
+
+        # Mock both format functions to return 1.0 (valid)
+        with patch.object(
+            cl.aux_reward_functions["format_think"], "compute_reward"
+        ) as mock_think:
+            mock_result = MagicMock()
+            mock_result.score = 1.0
+            mock_result.info = "Valid think tag"
+            mock_think.return_value = mock_result
+
+            with patch.object(
+                cl.aux_reward_functions["format_answer"], "compute_reward"
+            ) as mock_answer:
+                mock_result = MagicMock()
+                mock_result.score = 1.0
+                mock_result.info = "Valid answer tag"
+                mock_answer.return_value = mock_result
+
+                valid, reason = cl._check_format_validity(task)
+
+                self.assertTrue(valid, "Format should be valid")
+                self.assertEqual(reason, "", "No failure reason when valid")
+
+    def test_check_format_validity_think_tag_invalid(self):
+        """Test _check_format_validity returns False when think tag invalid."""
+        cl = CurriculumLearning(use_format=True)
+
+        task = Task(
+            task_id="test",
+            task_name="Test",
+            task_type="math",
+            level=0,
+            prompt="Test",
+            expected_answer="4",
+        )
+        task.model_output = "<answer>4</answer>"  # Missing think tag
+        cl.session.add_task(task)
+
+        # Mock format_think to return < 1.0 (invalid)
+        with patch.object(
+            cl.aux_reward_functions["format_think"], "compute_reward"
+        ) as mock_think:
+            mock_result = MagicMock()
+            mock_result.score = 0.0
+            mock_result.info = "Missing think tag"
+            mock_think.return_value = mock_result
+
+            with patch.object(
+                cl.aux_reward_functions["format_answer"], "compute_reward"
+            ) as mock_answer:
+                mock_result = MagicMock()
+                mock_result.score = 1.0
+                mock_result.info = "Valid answer tag"
+                mock_answer.return_value = mock_result
+
+                valid, reason = cl._check_format_validity(task)
+
+                self.assertFalse(valid, "Format should be invalid")
+                self.assertIn("think", reason, "Reason should mention think tag")
+
+    def test_finalize_reward_batch_single_generation(self):
+        """Test _finalize_reward_batch with single generation (no GRPO batching)."""
+        cl = CurriculumLearning(num_generations=1)
+        cl.current_level = 0
+
+        task = Task(
+            task_id="math_test",
+            task_name="Math Test",
+            task_type="math",
+            level=0,
+            prompt="Test",
+            expected_answer="4",
+        )
+        cl.session.add_task(task)
+
+        # Create mock reward
+        primary_reward = RewardFunctionScore(
+            score=1.0,
+            reward_function_name="primary",
+            info="Correct",
+        )
+        task_rewards = [primary_reward]
+        aux_score_dict = {}
+
+        # Finalize reward
+        score = cl._finalize_reward_batch(
+            task, "math_test", 1.0, True, task_rewards, aux_score_dict, "4"
+        )
+
+        # Should immediately trigger success tracking
+        self.assertEqual(score, 1.0)
+        # Check that success was tracked (indirectly via step counter)
+        self.assertEqual(cl.global_step, 1, "Should increment global_step immediately")
+
+    def test_finalize_reward_batch_grpo_accumulation(self):
+        """Test _finalize_reward_batch accumulates GRPO responses until batch complete."""
+        cl = CurriculumLearning(num_generations=3)
+        cl.current_level = 0
+
+        # Create 3 responses for same prompt
+        base_task_id = "prompt_base"
+        task = Task(
+            task_id=base_task_id,
+            task_name="Base Task",
+            task_type="math",
+            level=0,
+            prompt="What is 2+2?",
+            expected_answer="4",
+        )
+        cl.session.add_task(task)
+
+        # Simulate 3 generations for the same task
+        for i in range(3):
+            primary_reward = RewardFunctionScore(
+                score=1.0,
+                reward_function_name="primary",
+                info="Correct",
+            )
+            task_rewards = [primary_reward]
+
+            # Finalize each response (only the last one should complete the batch)
+            cl._finalize_reward_batch(
+                task, base_task_id, 1.0, True, task_rewards, {}, f"Response {i}"
+            )
+
+        # After 3 responses (batch complete), level should have been checked
+        # and global_step should be 1 (one batch processed)
+        self.assertEqual(cl.global_step, 1, "Batch complete should increment step once")
+
+        # Task should have accumulated all 3 generations
+        self.assertEqual(len(task.generations), 3, "Task should have 3 generations")
+        self.assertEqual(task.generations[0].output, "Response 0")
+        self.assertEqual(task.generations[1].output, "Response 1")
+        self.assertEqual(task.generations[2].output, "Response 2")
+
+    def test_finalize_reward_batch_excludes_truthy_from_curriculum(self):
+        """Test _finalize_reward_batch excludes truthy tasks from success tracking."""
+        cl = CurriculumLearning(
+            use_llm_judge=True,
+            llm_judge_kwargs={
+                "api_host": "localhost",
+                "api_port": 8000,
+                "model_name": "Skywork",
+            },
+            num_generations=1,
+        )
+        cl.current_level = 0
+
+        task = Task(
+            task_id="truthy_test",
+            task_name="Truthy Test",
+            task_type="truthy",
+            level=0,
+            prompt="Which is better?",
+            expected_answer={"type": "truthy", "conversation": []},
+        )
+        cl.session.add_task(task)
+
+        # Evaluate truthy task
+        primary_reward = RewardFunctionScore(
+            score=0.9,
+            reward_function_name="primary",
+            info="Good",
+        )
+        task_rewards = [primary_reward]
+
+        cl._finalize_reward_batch(
+            task,
+            "truthy_test",
+            0.9,
+            False,
+            task_rewards,
+            {},  # is_correct=False for truthy
+            "Some response",
+        )
+
+        # Truthy should NOT contribute to success windows
+        # Level should remain at 0 (no advancement from truthy alone)
+        self.assertEqual(
+            cl.current_level, 0, "Truthy tasks should not advance curriculum"
+        )
+
+    def test_compute_reward_dispatches_to_correct_handler(self):
+        """Test that compute_reward dispatcher calls appropriate handler for task type."""
+        cl = CurriculumLearning(
+            use_format=True,
+            use_llm_judge=True,
+            llm_judge_kwargs={
+                "api_host": "localhost",
+                "api_port": 8000,
+                "model_name": "Skywork",
+            },
+        )
+
+        # Test math task dispatch
+        math_task = Task(
+            task_id="math_test",
+            task_name="Math",
+            task_type="math",
+            level=0,
+            prompt="Test",
+            expected_answer="4",
+        )
+        cl.session.add_task(math_task)
+
+        with patch.object(cl, "_compute_reward_standard") as mock_standard:
+            mock_standard.return_value = (1.0, True, [], {})
+            with patch.object(
+                cl.reward_functions["math"], "compute_reward"
+            ) as mock_task_fn:
+                mock_result = MagicMock()
+                mock_result.score = 1.0
+                mock_result.info = ""
+                mock_task_fn.return_value = mock_result
+
+                cl.compute_reward(
+                    "math_test", "<think>Test</think>\n<answer>4</answer>"
+                )
+
+                # Should call _compute_reward_standard for math task
+                mock_standard.assert_called_once()
+
+        # Test truthy task dispatch
+        truthy_task = Task(
+            task_id="truthy_test",
+            task_name="Truthy",
+            task_type="truthy",
+            level=0,
+            prompt="Test",
+            expected_answer={},
+        )
+        cl.session.add_task(truthy_task)
+
+        with patch.object(cl, "_compute_reward_truthy") as mock_truthy:
+            mock_truthy.return_value = (0.8, False, [], {})
+            with patch.object(
+                cl.aux_reward_functions["llm_judge"], "compute_reward"
+            ) as mock_judge:
+                mock_result = MagicMock()
+                mock_result.score = 0.8
+                mock_result.info = ""
+                mock_judge.return_value = mock_result
+
+                cl.compute_reward("truthy_test", "Response")
+
+                # Should call _compute_reward_truthy for truthy task
+                mock_truthy.assert_called_once()
 
 
 if __name__ == "__main__":

@@ -269,3 +269,45 @@ Please review the following guidelines carefully when solving this puzzle again:
 3. Ensure your solution follows the specified format structure
 """
     return reflective_prompt
+
+
+def format_truthy_judge_system_prompt(
+    user_input: str,
+    chosen: str,
+    rejected: str,
+) -> str:
+    """Format the system prompt for truthy tasks.
+
+    Args:
+        user_input: The original user input prompt
+        chosen: The chosen (better) response
+        rejected: The rejected (worse) response
+    Returns:
+        Formatted system prompt string for LLM as judge
+    """
+    system_prompt = f"## User Input:\n{user_input}\n\n## Chosen:\n{chosen}\n\n## Rejected:\n{rejected}"
+    return system_prompt
+
+
+def format_truthy_user_prompt(
+    system_prompt: str, user_input: str, think_tag: str
+) -> str:
+    """Format the prompt for truth tasks.
+
+    Args:
+        user_input: The original user input prompt
+    Returns:
+        Formatted prompt string for truth tasks
+    """
+    return f"""Analyze the provided System Prompt and User Input. You must first output your internal reasoning process, followed by your final response.
+
+### Constraints
+* **Thinking Language:** Your reasoning process MUST be written in **English**, regardless of the language of the user input.
+* **Thinking Format:** Wrap this process strictly inside <{think_tag}> tags.
+* **Final Answer:** The final response should be in the **same language** as the user input and must directly address the user's request.
+
+## Context
+**System Prompt:** {system_prompt}
+
+**User Input:** {user_input}
+"""

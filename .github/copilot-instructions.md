@@ -36,6 +36,13 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
   - Supports configurable score normalization
   - See `docs/LLM_JUDGE_REWARD_FUNCTION.md` for setup instructions
 - Reward functions return a `RewardFunctionScore(score, info)` with score ranging from 0.0 to 1.0 and `info` holding diagnostic text.
+- **GRPO Batch Architecture**: Clean Task → Generation hierarchy with zero redundancy:
+  - `Task.generations`: List of all generations for a task (replaces scattered dicts)
+  - `Task.add_generation()`: Adds a new generation with output, rewards, and primary score
+  - `Task.latest_generation`: Gets the most recent generation
+  - `Session.get_batch_data(task_id)`: Retrieves all generation data for analysis
+  - `Session.get_batch_stats(task_id)`: Provides comprehensive batch statistics
+  - No more `grpo_batch_*` dicts in CurriculumLearning - all state owned by Task
 - **Curriculum learning** uses sliding window success rates:
   - `_track_success()` records 1 (success) or 0 (failure) per task type
   - `_update_level()` checks: success_rate > threshold AND variance < variance_threshold for advancement, or success_rate < demote_threshold AND variance < variance_threshold for demotion

@@ -351,103 +351,11 @@ class Session:
             print(f"Error creating puzzle task: {e}")
             return None
 
-    def _get_format_failure_tasks(self) -> List[Task]:
-        """Get list of tasks that failed format validation.
-
-        Returns:
-            List of Task objects where format reward score is 0.
-        """
-        format_failures = []
-        for task in self.tasks.values():
-            # Skip tasks that are already reflective (to avoid reflective of reflective)
-            if "_reflective" in task.task_id:
-                continue
-
-            # Look for format reward in latest_generation.rewards
-            # Check both format_think and format_answer
-            for reward in task.latest_generation.rewards:
-                if (
-                    reward.reward_function_name in ["format_think", "format_answer"]
-                    and reward.score == 0
-                ):
-                    format_failures.append(task)
-                    break  # Only add once per task
-        return format_failures
-
     def _get_recent_task_ids(self) -> List[str]:
         """Get recent task base IDs from session history."""
         return [
             tid.rsplit("_", 1)[0] if "_" in tid else tid for tid in self.task_history
         ]
-
-    def _create_reflective_prompt(self, task: Task) -> str:
-        """Create a reflective learning prompt from a failed task.
-
-        Uses task-type-specific formatting (math vs puzzle).
-
-        Args:
-            task: The task that failed format validation
-
-        Returns:
-            A reflective prompt that guides the model to retry with proper formatting
-        """
-        if task.task_type == "math":
-            return format_reflective_math_prompt(
-                original_prompt=task.prompt,
-                previous_attempt=task.model_output,
-                answer_tag=self.answer_tag,
-                think_tag=self.think_tag,
-            )
-        else:  # puzzle
-            return format_reflective_puzzle_prompt(
-                original_prompt=task.prompt,
-                previous_attempt=task.model_output,
-                language=task.language or "python",
-                answer_tag=self.answer_tag,
-                think_tag=self.think_tag,
-            )
-
-    def get_reflective_task(self) -> Optional[Task]:
-        """Get a format-failure task wrapped with reflective prompt.
-
-        Key behaviors:
-        - Only selects from original (non-reflective) tasks that failed format validation
-        - Creates a NEW reflective version each time with an incrementing counter
-        - This allows unlimited reflective attempts on the same original task
-        - But prevents reflective tasks themselves from generating reflective versions
-
-        Returns:
-            A task with reflective prompt if available, None otherwise.
-        """
-        format_failures = self._get_format_failure_tasks()
-        if not format_failures:
-            return None
-
-        # Select a random format failure task (guaranteed to be non-reflective)
-        selected_task = random.choice(format_failures)
-
-        # Count how many reflective versions already exist for this original task
-        reflective_count = sum(
-            1
-            for task in self.tasks.values()
-            if task.task_id.startswith(f"{selected_task.task_id}_reflective")
-        )
-
-        # Create a reflective version with incrementing counter
-        # This allows unlimited reflective attempts on the same original task
-        reflective_task = Task(
-            task_id=f"{selected_task.task_id}_reflective_{reflective_count}",
-            task_name=f"{selected_task.task_name} (reflective attempt {reflective_count + 1})",
-            task_type=selected_task.task_type,
-            level=selected_task.level,
-            prompt=self._create_reflective_prompt(selected_task),
-            expected_answer=selected_task.expected_answer,
-            language=selected_task.language,
-        )
-
-        # Add to session
-        self.add_task(reflective_task)
-        return reflective_task
 
     def add_task(self, task: Task) -> None:
         """Add a task to the session."""

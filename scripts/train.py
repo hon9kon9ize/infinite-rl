@@ -94,7 +94,7 @@ class InfiniteRLConfig:
     demote_threshold: float = 0.4
     warmup_step: int = 100
     level_change_cooldown: int = 10
-    reflective_learning_rate: float = 0.2
+
     num_generations: int = 4
 
     # Reward function parameters
@@ -155,7 +155,6 @@ def create_curriculum(config: InfiniteRLConfig) -> CurriculumLearning:
         variance_threshold=config.variance_threshold,
         demote_threshold=config.demote_threshold,
         warmup_step=config.warmup_step,
-        reflective_learning_rate=config.reflective_learning_rate,
         level_change_cooldown=config.level_change_cooldown,
         num_generations=config.num_generations,
         log_file=config.log_file,

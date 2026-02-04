@@ -20,8 +20,6 @@ from .utils.param_extractor import extract_puzzle_inputs
 from .prompt_templates import (
     format_math_prompt,
     format_puzzle_prompt,
-    format_reflective_math_prompt,
-    format_reflective_puzzle_prompt,
     format_truthy_judge_system_prompt,
     format_truthy_user_prompt,
 )
@@ -58,7 +56,6 @@ class CurriculumLearning:
         variance_threshold: float = 0.15,
         demote_threshold: float = 0.4,
         warmup_step: int = 32,
-        reflective_learning_rate: float = 0.2,
         truthy_learning_rate: float = 0.2,
         level_change_cooldown: int = 5,
         num_generations: int = 4,
@@ -95,7 +92,7 @@ class CurriculumLearning:
             variance_threshold: Maximum variance for success rate stability (default: 0.15)
             demote_threshold: Success rate threshold for difficulty decrease (default: 0.4 = 40%)
             warmup_step: Number of initial steps to only use level 0 tasks (default: 32)
-            reflective_learning_rate: Probability of triggering reflective learning on format failures (default: 0.2). Set to 0 to disable.
+
             truthy_learning_rate: Probability of including truthy tasks in the curriculum (default: 0.2). Set to 0 to disable.
             level_change_cooldown: Minimum steps between level changes to prevent rapid fluctuations (default: 5)
             num_generations: Number of generations per prompt for GRPO batching (default: 4)
@@ -154,9 +151,6 @@ class CurriculumLearning:
         # Warmup stage configuration
         self.warmup_step = warmup_step
         self.global_step: int = 0  # Counter for total steps
-
-        # Reflective learning configuration
-        self.reflective_learning_rate = reflective_learning_rate
 
         # Truthy learning configuration
         self.truthy_learning_rate = truthy_learning_rate
@@ -343,35 +337,6 @@ class CurriculumLearning:
             for task_id, task in self.session.tasks.items()
             if task.is_correct is False
         }
-
-    def _get_format_failure_tasks(self) -> List[Task]:
-        """Get list of tasks that failed format validation (excluding already-reflective tasks).
-
-        Reflective tasks are excluded to prevent cascading reflective prompts.
-        Original tasks can be used for reflective learning unlimited times,
-        but reflective tasks themselves should not generate further reflective versions.
-
-        Returns:
-            List of Task objects where format reward score is 0 and task is not already reflective.
-        """
-        format_failures = []
-        for task in self.session.tasks.values():
-            # Skip tasks that are already reflective (to avoid reflective of reflective)
-            if "_reflective" in task.task_id:
-                continue
-
-            # Look for format reward in latest generation
-            # Check both format_think and format_answer
-            latest_gen = task.latest_generation
-            if latest_gen:
-                for reward in latest_gen.rewards:
-                    if (
-                        reward.reward_function_name in ["format_think", "format_answer"]
-                        and reward.score == 0
-                    ):
-                        format_failures.append(task)
-                        break  # Only add once per task
-        return format_failures
 
     def compute_reward(
         self,
@@ -1064,13 +1029,11 @@ class CurriculumLearning:
         """
         Get a task prompt appropriate for current difficulty level.
 
-        With probability reflective_learning_rate (default 0.2), returns a format-failure
-        task wrapped in a reflective prompt to help the model learn proper formatting.
         With probability truthy_learning_rate (default 0.2), returns a truthy task for conversation quality evaluation.
         Otherwise, returns a new task based on current difficulty level.
 
         During warmup stage (first warmup_step iterations), only level 0 tasks are used
-        (unless reflective learning or truthy is triggered).
+        (unless truthy is triggered).
 
         For GRPO batching: Each call creates a new task instance. The dataset ensures
         that within a batch, the same task is reused for multiple generations.
@@ -1078,16 +1041,6 @@ class CurriculumLearning:
         Returns:
             Task object with prompt, expected output, etc., or None if no tasks available.
         """
-        # Check for reflective learning trigger (only if not disabled and not in warmup)
-        if (
-            self.reflective_learning_rate > 0
-            and random.random() > (1.0 - self.reflective_learning_rate)
-            and not self.is_warmup()
-        ):
-            reflective_task = self.session.get_reflective_task()
-            if reflective_task is not None:
-                return reflective_task
-
         # Check for truthy task trigger (20% chance)
         if random.random() < self.truthy_learning_rate and self.session.truthy_tasks:
             selected_task = random.choice(self.session.truthy_tasks)
@@ -1231,6 +1184,8 @@ class CurriculumLearning:
         batched LLM Judge API calls. Each task's primary reward is updated with the
         LLM Judge score (for truthy) or added as auxiliary (for math/puzzle).
 
+        Format gate applies to judge: if format is invalid, final reward is zero.
+
         Modifies task.latest_generation.rewards in place to include LLM Judge results.
 
         Args:
@@ -1281,18 +1236,27 @@ class CurriculumLearning:
                     continue
 
                 if task.task_type == "truthy":
-                    # For truthy: replace primary score with LLM Judge score for each generation
+                    # For truthy: apply format gate and replace primary score with LLM Judge score
                     for gen_idx, gen in enumerate(task.generations):
                         if gen_idx < len(judge_scores):
                             judge_score = judge_scores[gen_idx]
+                            # Check format validity gate: if format is invalid, reward is zero
+                            format_valid, _ = self._check_format_validity(task)
+                            final_score = judge_score.score if format_valid else 0.0
+                            final_info = (
+                                judge_score.info
+                                if format_valid
+                                else f"Format invalid: judge reward({judge_score.score}) gated to zero"
+                            )
+
                             for i, reward in enumerate(gen.rewards):
                                 if reward.reward_function_name == "primary":
                                     gen.rewards[i] = RewardFunctionScore(
-                                        score=judge_score.score,
+                                        score=final_score,
                                         reward_function_name="primary",
-                                        info=judge_score.info or "",
+                                        info=final_info or "",
                                     )
-                                    gen.primary_score = judge_score.score
+                                    gen.primary_score = final_score
                                     # Recompute combined_score after updating judge score
                                     gen.combined_score = self._compute_combined_score(
                                         task, gen

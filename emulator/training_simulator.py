@@ -276,8 +276,8 @@ class TrainingSimulator:
             "length_score": 0.0,
             "llm_judge_score": 0.0,
         }
-        if updated_task.task_rewards:
-            for reward in updated_task.task_rewards:
+        if updated_task.generations:
+            for reward in updated_task.latest_generation.rewards:
                 if reward.reward_function_name == "format":
                     reward_scores["format_score"] = reward.score
                 elif reward.reward_function_name == "reasoning_steps":

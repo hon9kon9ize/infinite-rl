@@ -363,13 +363,16 @@ class TestGRPOBatching(unittest.TestCase):
             self.curriculum.get_rewards([task_id])
             self.assertEqual(self.curriculum.global_step, initial_step + 1)
 
-            # Submit 5th response - should accumulate
+            # Submit 5th response - should NOT accumulate (capped)
             self.curriculum.compute_reward(task_id, "<answer>4</answer>")
 
-            # Now call get_rewards - should raise ValueError
-            with self.assertRaises(ValueError) as cm:
-                self.curriculum.get_rewards([task_id])
-            self.assertIn("has 5 generations, expected 4", str(cm.exception))
+            # Task should still have only 4 generations
+            task_after = self.curriculum.session.get_task(task_id)
+            self.assertEqual(len(task_after.generations), 4)
+
+            # get_rewards should work fine
+            self.curriculum.get_rewards([task_id])
+            self.assertEqual(self.curriculum.global_step, initial_step + 1)
 
     def test_grpo_batch_different_tasks_independent(self):
         """Test that different tasks maintain independent batch counters."""

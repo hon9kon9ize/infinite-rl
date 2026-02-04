@@ -363,9 +363,9 @@ class Session:
             if "_reflective" in task.task_id:
                 continue
 
-            # Look for format reward in task_rewards
+            # Look for format reward in latest_generation.rewards
             # Check both format_think and format_answer
-            for reward in task.task_rewards:
+            for reward in task.latest_generation.rewards:
                 if (
                     reward.reward_function_name in ["format_think", "format_answer"]
                     and reward.score == 0
@@ -458,43 +458,6 @@ class Session:
         """Retrieve a task by its ID."""
         return self.tasks.get(task_id)
 
-    def set_reward(
-        self,
-        task_id: str,
-        task_rewards: List[RewardFunctionScore],
-        model_output: Optional[str] = None,
-        is_correct: Optional[bool] = None,
-    ) -> None:
-        """Set rewards for a task.
-
-        Args:
-            task_id: Task identifier
-            task_rewards: List of reward scores
-            model_output: Model output text
-            is_correct: Whether task was solved correctly. If None, infers from primary score.
-        """
-        task = self.get_task(task_id)
-        if not task:
-            raise ValueError(f"Task {task_id} not found in session")
-
-        # Use provided is_correct value, or infer from primary score if not provided
-        if is_correct is None:
-            is_correct = task_rewards[0].score >= 0.5 if task_rewards else False
-
-        # Add all rewards to the task
-        for reward in task_rewards:
-            task.add_reward(reward, is_correct=is_correct)
-
-        task.model_output = model_output
-        task.is_correct = is_correct
-
-    def get_task_rewards(self, task_id: str) -> List[RewardFunctionScore]:
-        """Get all rewards for a specific task."""
-        task = self.get_task(task_id)
-        if not task:
-            raise ValueError(f"Task {task_id} not found in session")
-        return task.task_rewards
-
     def task_weights(self) -> Dict[str, float]:
         """
         Calculate task weights based on recent performance.
@@ -520,7 +483,7 @@ class Session:
         """Get session statistics."""
         return {
             "total_tasks": len(self.tasks),
-            "tasks_evaluated": len([t for t in self.tasks.values() if t.task_rewards]),
+            "tasks_evaluated": len([t for t in self.tasks.values() if t.generations]),
             "total_evaluations": len(self.task_history),
         }
 

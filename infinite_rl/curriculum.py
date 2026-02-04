@@ -360,15 +360,17 @@ class CurriculumLearning:
             if "_reflective" in task.task_id:
                 continue
 
-            # Look for format reward in task_rewards
+            # Look for format reward in latest generation
             # Check both format_think and format_answer
-            for reward in task.task_rewards:
-                if (
-                    reward.reward_function_name in ["format_think", "format_answer"]
-                    and reward.score == 0
-                ):
-                    format_failures.append(task)
-                    break  # Only add once per task
+            latest_gen = task.latest_generation
+            if latest_gen:
+                for reward in latest_gen.rewards:
+                    if (
+                        reward.reward_function_name in ["format_think", "format_answer"]
+                        and reward.score == 0
+                    ):
+                        format_failures.append(task)
+                        break  # Only add once per task
         return format_failures
 
     def compute_reward(
@@ -417,12 +419,11 @@ class CurriculumLearning:
                 f"Warning: Task {task_id} already has {len(task.generations)} generations, not adding more (num_generations={self.num_generations})"
             )
             print(
-                f"DEBUG: Task generations: {[g['output'][:50] + '...' for g in task.generations]}"
+                f"DEBUG: Task generations: {[g.output[:50] + '...' for g in task.generations]}"
             )
 
-        self.session.set_reward(
-            task_id, task_rewards, model_output=task.model_output, is_correct=is_correct
-        )
+        # Set task correctness
+        task.is_correct = is_correct
 
         return score
 
@@ -601,13 +602,16 @@ class CurriculumLearning:
                 format_think_valid = False
                 failure_reason = format_result.info
 
-        if "format_answer" in self.aux_reward_functions:
+        if "format_answer" in self.aux_reward_functions and task.task_type != "truthy":
             format_fn = self.aux_reward_functions["format_answer"]
             format_result = format_fn.compute_reward(task, is_correct=False)
             if format_result.score < 1.0:
                 format_answer_valid = False
                 if not failure_reason:
                     failure_reason = format_result.info
+        else:
+            # Truthy tasks do not require answer tag format validation
+            format_answer_valid = True
 
         return format_think_valid and format_answer_valid, failure_reason
 
@@ -623,33 +627,38 @@ class CurriculumLearning:
         log_entry = task.to_dict()
         log_entry["timestamp"] = datetime.datetime.now().isoformat()
 
-        # Get primary score and info
-        primary_score = None
-        primary_info = ""
-        for reward in task.task_rewards:
-            if reward.reward_function_name == "primary":
-                primary_score = reward.score
-                primary_info = reward.info or ""
-                break
-        if primary_score is None:
-            primary_score = 0.0
-
-        log_entry["primary_score"] = primary_score
-        # For truthy tasks, primary score IS the judge score
-        if task.task_type == "truthy":
-            for reward in task.task_rewards:
-                if reward.reward_function_name == "llm_judge":
-                    log_entry["primary_score"] = reward.score
+        # Get primary score and info from latest generation
+        latest_gen = task.latest_generation
+        if latest_gen:
+            primary_score = latest_gen.primary_score
+            # Find primary reward info
+            primary_info = ""
+            for reward in latest_gen.rewards:
+                if reward.reward_function_name == "primary":
+                    primary_info = reward.info or ""
                     break
 
-        # Build aux_scores and info from task_rewards (excluding primary and format)
-        aux_scores = {}
-        aux_info = {}
-        for reward in task.task_rewards:
-            if reward.reward_function_name not in ["primary", "format"]:
-                aux_scores[reward.reward_function_name] = reward.score
-                aux_info[f"aux_{reward.reward_function_name}"] = reward.info or ""
+            # For truthy tasks, primary score IS the judge score
+            if task.task_type == "truthy":
+                for reward in latest_gen.rewards:
+                    if reward.reward_function_name == "llm_judge":
+                        primary_score = reward.score
+                        break
 
+            # Build aux_scores and info from latest generation rewards (excluding primary and format)
+            aux_scores = {}
+            aux_info = {}
+            for reward in latest_gen.rewards:
+                if reward.reward_function_name not in ["primary", "format"]:
+                    aux_scores[reward.reward_function_name] = reward.score
+                    aux_info[f"aux_{reward.reward_function_name}"] = reward.info or ""
+        else:
+            primary_score = 0.0
+            primary_info = "No generations"
+            aux_scores = {}
+            aux_info = {}
+
+        log_entry["primary_score"] = primary_score
         log_entry["aux_scores"] = aux_scores
         log_entry["info"] = {
             "primary": primary_info,
@@ -870,8 +879,8 @@ class CurriculumLearning:
         tasks_with_judge = 0
 
         for task in self.session.tasks.values():
-            # Extract LLM Judge score from task rewards
-            for reward in task.task_rewards:
+            # Extract LLM Judge score from latest generation rewards
+            for reward in task.latest_generation.rewards:
                 if reward.reward_function_name == "llm_judge":
                     # For math/puzzle tasks, judge score is stored as "llm_judge"
                     judge_scores.append(reward.score)
@@ -1044,8 +1053,12 @@ class CurriculumLearning:
             Dictionary mapping auxiliary reward function names to dicts with 'score' and 'info'
         """
         aux_scores = {}
+        is_truthy_task = task.task_type == "truthy"
 
         for aux_name, aux_fn in self.aux_reward_functions.items():
+            if is_truthy_task and aux_name == "format_answer":
+                # Skip format_answer for truthy tasks
+                continue
             try:
                 # All auxiliary functions now accept task as first parameter
                 aux_result = aux_fn.compute_reward(task, is_correct=is_correct)
@@ -1069,7 +1082,7 @@ class CurriculumLearning:
         batched LLM Judge API calls. Each task's primary reward is updated with the
         LLM Judge score (for truthy) or added as auxiliary (for math/puzzle).
 
-        Modifies task.task_rewards in place to include LLM Judge results.
+        Modifies task.latest_generation.rewards in place to include LLM Judge results.
 
         Args:
             task_ids: List of task identifiers to evaluate with LLM Judge
@@ -1087,7 +1100,8 @@ class CurriculumLearning:
                 continue
             # Collect all tasks that need LLM Judge evaluation (including truthy)
             has_judge_score = any(
-                r.reward_function_name == "llm_judge" for r in task.task_rewards
+                r.reward_function_name == "llm_judge"
+                for r in task.latest_generation.rewards
             )
             if not has_judge_score:
                 task_index_map[len(tasks_to_judge)] = task_id
@@ -1117,30 +1131,37 @@ class CurriculumLearning:
                     result = llm_judge_fn.compute_reward(task, is_correct=False)
                     judge_results.append(result)
 
+            print("Debug: judge_results", judge_results)
+
             # Update task rewards with LLM Judge scores
             for idx, judge_result in enumerate(judge_results):
                 task_id = task_index_map[idx]
                 task = self.session.get_task(task_id)
+                if not task:
+                    continue
 
                 if task.task_type == "truthy":
-                    # For truthy: replace primary score with LLM Judge score
-                    for i, reward in enumerate(task.task_rewards):
-                        if reward.reward_function_name == "primary":
-                            task.task_rewards[i] = RewardFunctionScore(
+                    # For truthy: replace primary score with LLM Judge score in ALL generations
+                    for gen in task.generations:
+                        for i, reward in enumerate(gen.rewards):
+                            if reward.reward_function_name == "primary":
+                                gen.rewards[i] = RewardFunctionScore(
+                                    score=judge_result.score,
+                                    reward_function_name="primary",
+                                    info=judge_result.info or "",
+                                )
+                                gen.primary_score = judge_result.score
+                                break
+                else:
+                    # For math/puzzle: add as auxiliary reward to ALL generations
+                    for gen in task.generations:
+                        gen.rewards.append(
+                            RewardFunctionScore(
                                 score=judge_result.score,
-                                reward_function_name="primary",
+                                reward_function_name="llm_judge",
                                 info=judge_result.info or "",
                             )
-                            break
-                else:
-                    # For math/puzzle: add as auxiliary reward
-                    task.task_rewards.append(
-                        RewardFunctionScore(
-                            score=judge_result.score,
-                            reward_function_name="llm_judge",
-                            info=judge_result.info or "",
                         )
-                    )
         except Exception as e:
             print(f"Warning: Batch LLM Judge evaluation failed: {e}")
             # Gracefully handle errors by skipping judge evaluation
@@ -1149,7 +1170,7 @@ class CurriculumLearning:
     def get_rewards(self, task_ids: List[str]) -> List[float]:
         """Calculate combined reward scores for multiple completed tasks.
 
-        Retrieves primary correctness and auxiliary scores from task_rewards,
+        Retrieves primary correctness and auxiliary scores from latest_generation.rewards,
         normalizes each auxiliary score to [0, 1] range, then applies aux_weight
         to blend primary with average normalized auxiliary scores.
 
@@ -1214,8 +1235,14 @@ class CurriculumLearning:
                 if task is None:
                     raise ValueError(f"Unknown task_id: {task_id}")
 
-                for reward in task.task_rewards:
+                for reward in task.latest_generation.rewards:
                     if reward.reward_function_name == "llm_judge":
+                        if reward.score > highest_judge_score:
+                            highest_judge_score = reward.score
+                        if reward.score < lowest_judge_score:
+                            lowest_judge_score = reward.score
+                    elif reward.reward_function_name == "primary" and task.task_type == "truthy":
+                        # For truthy tasks, judge score is stored as primary
                         if reward.score > highest_judge_score:
                             highest_judge_score = reward.score
                         if reward.score < lowest_judge_score:
@@ -1231,13 +1258,13 @@ class CurriculumLearning:
             if task is None:
                 raise ValueError(f"Unknown task_id: {task_id}")
 
-            # Extract primary and auxiliary scores from task_rewards
+            # Extract primary and auxiliary scores from latest_generation.rewards
             primary_score = None
             judge_score = 0.0
             aux_scores = {}
             is_truthy_task = task.task_type == "truthy"
 
-            for reward in task.task_rewards:
+            for reward in task.latest_generation.rewards:
                 if reward.reward_function_name == "primary":
                     primary_score = reward.score
                 elif reward.reward_function_name == "llm_judge":
@@ -1253,8 +1280,13 @@ class CurriculumLearning:
             if primary_score is None:
                 primary_score = 0.0
 
-            # For truthy tasks, primary score IS the judge score
+            # For truthy tasks, the judge score is stored as primary score
             if is_truthy_task:
+                judge_score = primary_score
+                # Normalize the judge score for truthy tasks
+                judge_score = self._normalize_score(
+                    judge_score, lowest_judge_score, highest_judge_score
+                )
                 primary_score = judge_score
 
             # Normalize auxiliary scores to [0, 1]

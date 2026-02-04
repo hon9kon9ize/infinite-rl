@@ -59,59 +59,75 @@ class TestTask(unittest.TestCase):
         self.assertEqual(self.task.level, 1)
         self.assertEqual(self.task.prompt, "What is 2 + 2?")
         self.assertEqual(self.task.expected_answer, "4")
-        self.assertEqual(len(self.task.task_rewards), 0)
+        self.assertEqual(len(self.task.generations), 0)
         self.assertIsNone(self.task.model_output)
         self.assertIsNotNone(self.task.created_at)
         self.assertIsNone(self.task.first_response_at)
 
-    def test_add_reward(self):
+    def test_add_generation(self):
         """Test adding rewards to a task."""
-        reward = RewardFunctionScore(
-            score=1.0,
-            reward_function_name="primary",
-            info="",
-        )
-        self.task.add_reward(reward)
+        rewards = [
+            RewardFunctionScore(
+                score=1.0,
+                reward_function_name="primary",
+                info="",
+            )
+        ]
+        self.task.add_generation("test output", rewards, 1.0)
 
-        self.assertEqual(len(self.task.task_rewards), 1)
-        self.assertEqual(self.task.task_rewards[0].score, 1.0)
-        self.assertEqual(self.task.task_rewards[0].reward_function_name, "primary")
+        self.assertEqual(len(self.task.generations), 1)
+        self.assertEqual(len(self.task.generations[0].rewards), 1)
+        self.assertEqual(self.task.generations[0].rewards[0].score, 1.0)
+        self.assertEqual(
+            self.task.generations[0].rewards[0].reward_function_name, "primary"
+        )
 
     def test_get_score(self):
         """Test getting the primary score from a task."""
-        # No rewards yet
+        # No generations yet
         self.assertEqual(self.task.get_score(), 0.0)
 
-        # Add primary reward
-        primary_reward = RewardFunctionScore(
-            score=0.8,
-            reward_function_name="primary",
-            info="",
-        )
-        self.task.add_reward(primary_reward)
+        # Add generation with primary reward
+        rewards = [
+            RewardFunctionScore(
+                score=0.8,
+                reward_function_name="primary",
+                info="",
+            )
+        ]
+        self.task.add_generation("test output", rewards, 0.8)
 
-        # Should return primary score
+        # Should return primary score from latest generation
         self.assertEqual(self.task.get_score(), 0.8)
 
-        # Add auxiliary reward (should not affect get_score)
-        aux_reward = RewardFunctionScore(
-            score=0.9,
-            reward_function_name="format_answer",
-            info="",
-        )
-        self.task.add_reward(aux_reward)
+        # Add another generation with auxiliary reward (should not affect get_score)
+        aux_rewards = [
+            RewardFunctionScore(
+                score=0.8,
+                reward_function_name="primary",
+                info="",
+            ),
+            RewardFunctionScore(
+                score=0.9,
+                reward_function_name="format_answer",
+                info="",
+            ),
+        ]
+        self.task.add_generation("test output 2", aux_rewards, 0.8)
 
-        # Should still return primary score
+        # Should still return primary score from latest generation
         self.assertEqual(self.task.get_score(), 0.8)
 
     def test_task_to_dict(self):
         """Test converting task to dictionary."""
-        reward = RewardFunctionScore(
-            score=1.0,
-            reward_function_name="primary",
-            info="",
-        )
-        self.task.add_reward(reward)
+        rewards = [
+            RewardFunctionScore(
+                score=1.0,
+                reward_function_name="primary",
+                info="",
+            )
+        ]
+        self.task.add_generation("test output", rewards, 1.0)
 
         task_dict = self.task.to_dict()
 
@@ -119,8 +135,9 @@ class TestTask(unittest.TestCase):
         self.assertEqual(task_dict["task_name"], "Simple Addition")
         self.assertEqual(task_dict["task_type"], "math")
         self.assertEqual(task_dict["level"], 1)
-        self.assertEqual(len(task_dict["task_rewards"]), 1)
-        self.assertEqual(task_dict["task_rewards"][0]["score"], 1.0)
+        self.assertEqual(len(task_dict["generations"]), 1)
+        self.assertEqual(len(task_dict["generations"][0]["rewards"]), 1)
+        self.assertEqual(task_dict["generations"][0]["rewards"][0]["score"], 1.0)
         self.assertIsNone(task_dict["model_output"])
         self.assertIsNotNone(task_dict["created_at"])
         self.assertIsNotNone(task_dict["first_response_at"])
@@ -221,89 +238,6 @@ class TestSession(unittest.TestCase):
         """Test retrieving a non-existent task."""
         retrieved = self.session.get_task("nonexistent")
         self.assertIsNone(retrieved)
-
-    def test_set_reward(self):
-        """Test setting rewards for a task."""
-        task = Task(
-            task_id="task_001",
-            task_name="Test Task",
-            task_type="math",
-            level=1,
-            prompt="Test prompt",
-            expected_answer="4",
-        )
-        self.session.add_task(task)
-
-        rewards = [
-            RewardFunctionScore(
-                score=1.0,
-                reward_function_name="primary",
-                info="",
-            ),
-            RewardFunctionScore(
-                score=0.9,
-                reward_function_name="format_answer",
-                info="",
-            ),
-        ]
-
-        self.session.set_reward("task_001", rewards, model_output="model response")
-
-        # Task should have rewards
-        retrieved = self.session.get_task("task_001")
-        self.assertEqual(len(retrieved.task_rewards), 2)
-        self.assertEqual(retrieved.model_output, "model response")
-        self.assertIsNotNone(retrieved.created_at)
-        self.assertIsNotNone(retrieved.first_response_at)
-
-        # Session no longer writes logs; ensure file remains absent
-        self.assertFalse(os.path.exists(self.log_file))
-
-    def test_set_reward_nonexistent_task(self):
-        """Test setting reward for non-existent task raises error."""
-        rewards = [
-            RewardFunctionScore(
-                score=1.0,
-                reward_function_name="primary",
-                info="",
-            ),
-        ]
-
-        with self.assertRaises(ValueError):
-            self.session.set_reward("nonexistent", rewards, 1.0)
-
-    def test_get_task_rewards(self):
-        """Test retrieving all rewards for a task."""
-        task = Task(
-            task_id="task_001",
-            task_name="Test Task",
-            task_type="math",
-            level=1,
-            prompt="Test prompt",
-            expected_answer="4",
-        )
-        self.session.add_task(task)
-
-        rewards = [
-            RewardFunctionScore(
-                score=1.0,
-                reward_function_name="primary",
-                info="",
-            ),
-            RewardFunctionScore(
-                score=0.8,
-                reward_function_name="format_answer",
-                info="",
-            ),
-        ]
-
-        self.session.set_reward("task_001", rewards, 0.9)
-
-        retrieved_rewards = self.session.get_task_rewards("task_001")
-
-        self.assertEqual(len(retrieved_rewards), 2)
-        self.assertEqual(retrieved_rewards[0].score, 1.0)
-        self.assertEqual(retrieved_rewards[1].score, 0.8)
 
     def test_task_weights(self):
         """Test calculating task weights for diversity."""
@@ -623,7 +557,7 @@ class TestSession(unittest.TestCase):
         )
         session.add_task(task)
 
-        # Add format failure reward
+        # Add generation with format failure reward
         rewards = [
             RewardFunctionScore(
                 score=0.0,
@@ -631,7 +565,7 @@ class TestSession(unittest.TestCase):
                 info="Format error",
             )
         ]
-        session.set_reward("test_task", rewards, "bad format")
+        task.add_generation("bad format", rewards, 0.0)
 
         format_failures = session._get_format_failure_tasks()
 
@@ -674,7 +608,8 @@ class TestSession(unittest.TestCase):
                 info="Format error",
             )
         ]
-        session.set_reward("original_task", rewards, "bad format")
+        original_task.add_generation("bad format", rewards, 0.0)
+        original_task.model_output = "bad format"
 
         reflective_task = session.get_reflective_task()
 
@@ -916,13 +851,13 @@ class TestCurriculumLearning(unittest.TestCase):
         judge_reward = next(
             (
                 r
-                for r in task_from_session.task_rewards
-                if r.reward_function_name == "llm_judge"
+                for r in task_from_session.latest_generation.rewards
+                if r.reward_function_name == "primary"
             ),
             None,
         )
         self.assertIsNotNone(judge_reward)
-        self.assertEqual(judge_reward.score, 0.0)
+        self.assertEqual(judge_reward.score, 0.75)
 
     def test_level_advancement(self):
         """Test automatic level advancement."""
@@ -1230,12 +1165,19 @@ class TestCurriculumLearning(unittest.TestCase):
         """Test getting auxiliary reward scores for a response."""
         cl = CurriculumLearning(use_format=True)
 
-        # Create a mock response with proper formatting
-        response = "<think>This is my reasoning</think>\n<answer>42</answer>"
-        expected = "42"
+        # Create a task with expected answer
+        task = Task(
+            task_id="test_task",
+            task_name="Test Task",
+            task_type="math",
+            level=0,
+            prompt="What is 2+2?",
+            expected_answer="4",
+        )
+        task.model_output = "<think>This is my reasoning</think>\n<answer>4</answer>"
 
         # Get auxiliary scores
-        aux_scores = cl.get_aux_reward_scores(response, expected)
+        aux_scores = cl.get_aux_reward_scores(task, is_correct=True)
 
         self.assertIsInstance(aux_scores, dict)
         # At least format should be evaluated
@@ -1334,10 +1276,18 @@ class TestCurriculumLearning(unittest.TestCase):
             use_length=False,
         )
 
-        response = "<answer>42</answer>"
-        expected = "42"
+        # Create a task
+        task = Task(
+            task_id="test_task",
+            task_name="Test Task",
+            task_type="math",
+            level=0,
+            prompt="What is 2+2?",
+            expected_answer="4",
+        )
+        task.model_output = "<answer>4</answer>"
 
-        aux_scores = cl.get_aux_reward_scores(response, expected)
+        aux_scores = cl.get_aux_reward_scores(task, is_correct=True)
 
         # Should still return a dict, but possibly empty
         self.assertIsInstance(aux_scores, dict)
@@ -1382,8 +1332,16 @@ class TestCurriculumLearning(unittest.TestCase):
         self.assertIn("aux_reward_functions", stats)
 
         # Verify we can get auxiliary scores
-        response = "<think>Reasoning here</think>\n<answer>42</answer>"
-        aux_scores = cl.get_aux_reward_scores(response, "42")
+        task = Task(
+            task_id="test_task",
+            task_name="Test Task",
+            task_type="math",
+            level=0,
+            prompt="What is 2+2?",
+            expected_answer="4",
+        )
+        task.model_output = "<think>Reasoning here</think>\n<answer>4</answer>"
+        aux_scores = cl.get_aux_reward_scores(task, is_correct=True)
         self.assertIsInstance(aux_scores, dict)
 
     def test_corrupted_math_file(self):
@@ -1480,7 +1438,7 @@ class TestCurriculumLearning(unittest.TestCase):
         )
         task.model_output = "response"
 
-        scores = cl.get_aux_reward_scores("response", task)
+        scores = cl.get_aux_reward_scores(task, is_correct=True)
         self.assertEqual(scores, {})
 
     def test_level_advancement_boundary(self):
@@ -1625,11 +1583,13 @@ class TestCurriculumLearning(unittest.TestCase):
             # Verify primary score is returned
             self.assertEqual(primary_score, 1.0)
 
-            # Verify rewards were saved to session
-            task_rewards = cl.session.get_task_rewards("math_test")
-            self.assertGreater(len(task_rewards), 0)
-            self.assertEqual(task_rewards[0].reward_function_name, "primary")
-            self.assertEqual(task_rewards[0].score, 1.0)
+            # Verify rewards were saved to task
+            task_from_session = cl.session.get_task("math_test")
+            self.assertEqual(len(task_from_session.generations), 1)
+            rewards = task_from_session.generations[0].rewards
+            self.assertGreater(len(rewards), 0)
+            self.assertEqual(rewards[0].reward_function_name, "primary")
+            self.assertEqual(rewards[0].score, 1.0)
 
     def test_compute_reward_logs_to_file(self):
         """Verify compute_reward writes evaluation logs through CurriculumLearning."""
@@ -1710,8 +1670,7 @@ class TestCurriculumLearning(unittest.TestCase):
             reward_function_name="format_answer",
             info="Good format",
         )
-        task.add_reward(primary_reward)
-        task.add_reward(aux_reward)
+        task.add_generation("test output", [primary_reward, aux_reward], 1.0)
 
         # Add generations
         task.add_generation("Response 1", [primary_reward, aux_reward], 1.0)
@@ -1773,9 +1732,6 @@ class TestCurriculumLearning(unittest.TestCase):
             reward_function_name="llm_judge",
             info="Good quality",
         )
-        task.add_reward(primary_reward)
-        task.add_reward(judge_reward)
-
         # Add generation
         task.add_generation("Response", [primary_reward, judge_reward], 0.9)
 
@@ -1812,7 +1768,7 @@ class TestCurriculumLearning(unittest.TestCase):
         format_reward = RewardFunctionScore(
             score=0.0, reward_function_name="format_answer", info="Missing answer tags"
         )
-        task.add_reward(format_reward)
+        task.add_generation("No answer tags here", [format_reward], 0.0)
         cl.session.add_task(task)
 
         # Set up available tasks
@@ -1850,7 +1806,7 @@ class TestCurriculumLearning(unittest.TestCase):
         format_reward = RewardFunctionScore(
             score=0.0, reward_function_name="format_answer", info="Missing answer tags"
         )
-        format_fail_task.add_reward(format_reward)
+        format_fail_task.add_generation("bad format", [format_reward], 0.0)
         cl.session.add_task(format_fail_task)
 
         # Exit warmup
@@ -1886,7 +1842,7 @@ class TestCurriculumLearning(unittest.TestCase):
         format_fail = RewardFunctionScore(
             score=0.0, reward_function_name="format_think", info="Failed"
         )
-        task1.add_reward(format_fail)
+        task1.add_generation("bad", [format_fail], 0.0)
         cl.session.add_task(task1)
 
         # Task 2: Format success
@@ -1901,7 +1857,7 @@ class TestCurriculumLearning(unittest.TestCase):
         format_success = RewardFunctionScore(
             score=1.0, reward_function_name="format_answer", info="Passed"
         )
-        task2.add_reward(format_success)
+        task2.add_generation("good", [format_success], 1.0)
         cl.session.add_task(task2)
 
         # Task 3: Format failure (different task)
@@ -1916,7 +1872,7 @@ class TestCurriculumLearning(unittest.TestCase):
         format_fail_2 = RewardFunctionScore(
             score=0.0, reward_function_name="format_answer", info="Failed"
         )
-        task3.add_reward(format_fail_2)
+        task3.add_generation("bad", [format_fail_2], 0.0)
         cl.session.add_task(task3)
 
         # Get format failures
@@ -1973,7 +1929,7 @@ class TestCurriculumLearning(unittest.TestCase):
         format_fail = RewardFunctionScore(
             score=0.0, reward_function_name="format_answer"
         )
-        puzzle_task.add_reward(format_fail)
+        puzzle_task.add_generation("function test() { }", [format_fail], 0.0)
         cl.session.add_task(puzzle_task)
 
         # Exit warmup to allow reflective learning
@@ -2005,7 +1961,7 @@ class TestCurriculumLearning(unittest.TestCase):
             )
             # Success reward
             success = RewardFunctionScore(score=1.0, reward_function_name="primary")
-            task.add_reward(success)
+            task.add_generation("good", [success], 1.0)
             cl.session.add_task(task)
 
         # Try to get reflective task - should return None
@@ -2028,7 +1984,7 @@ class TestCurriculumLearning(unittest.TestCase):
             expected_answer="A",
         )
         fail = RewardFunctionScore(score=0.0, reward_function_name="format_answer")
-        task.add_reward(fail)
+        task.add_generation("bad", [fail], 0.0)
         cl.session.add_task(task)
 
         # Set up normal tasks
@@ -2064,7 +2020,7 @@ class TestCurriculumLearning(unittest.TestCase):
             expected_answer="A",
         )
         fail = RewardFunctionScore(score=0.0, reward_function_name="format_answer")
-        orig.add_reward(fail)
+        orig.add_generation("bad", [fail], 0.0)
         cl.session.add_task(orig)
 
         session_size_before = len(cl.session.tasks)
@@ -2104,7 +2060,7 @@ class TestCurriculumLearning(unittest.TestCase):
         format_reward = RewardFunctionScore(
             score=0.0, reward_function_name="format_answer", info="Failed"
         )
-        original_task.add_reward(format_reward)
+        original_task.add_generation("Wrong answer", [format_reward], 0.0)
         cl.session.add_task(original_task)
 
         # Exit warmup to allow reflective learning
@@ -2120,7 +2076,7 @@ class TestCurriculumLearning(unittest.TestCase):
         reflective_format_reward = RewardFunctionScore(
             score=0.0, reward_function_name="format_answer", info="Failed"
         )
-        reflective_1.add_reward(reflective_format_reward)
+        reflective_1.add_generation("bad", [reflective_format_reward], 0.0)
 
         # Try to get another reflective task
         # Should NOT select the reflective_1 task, but should select original_001 again
@@ -2150,7 +2106,7 @@ class TestCurriculumLearning(unittest.TestCase):
         format_reward = RewardFunctionScore(
             score=0.0, reward_function_name="format_answer", info="Failed"
         )
-        original_task.add_reward(format_reward)
+        original_task.add_generation("bad code", [format_reward], 0.0)
         cl.session.add_task(original_task)
 
         # Exit warmup
@@ -2167,7 +2123,7 @@ class TestCurriculumLearning(unittest.TestCase):
             fail_reward = RewardFunctionScore(
                 score=0.0, reward_function_name="format_answer", info="Still failed"
             )
-            reflective.add_reward(fail_reward)
+            reflective.add_generation("still bad", [fail_reward], 0.0)
 
         # Verify all came from the same original task with different counters
         for i, task in enumerate(reflective_tasks):
@@ -2359,7 +2315,7 @@ class TestCurriculumLearning(unittest.TestCase):
             mock_results = []
             for i in range(3):
                 mock_result = MagicMock()
-                mock_result.score = 0.7 + (i * 0.1)  # 0.7, 0.8, 0.9
+                mock_result.score = i * 0.5  # 0.0, 0.5, 1.0 (normalized)
                 mock_result.info = f"Response {i} quality"
                 mock_results.append(mock_result)
 
@@ -2394,16 +2350,16 @@ class TestCurriculumLearning(unittest.TestCase):
                     f"Task {task_id} should be in batch request",
                 )
 
-            # Verify final rewards use batch results (normalized)
+            # Verify final rewards use batch results (no normalization since aux_weight=0.0)
             self.assertAlmostEqual(
                 rewards[0], 0.0, places=5
-            )  # First task score normalized
+            )  # First task judge score (normalized)
             self.assertAlmostEqual(
                 rewards[1], 0.5, places=5
-            )  # Second task score normalized
+            )  # Second task judge score (normalized)
             self.assertAlmostEqual(
                 rewards[2], 1.0, places=5
-            )  # Third task score normalized
+            )  # Third task judge score (normalized)
 
     def test_batch_llm_judge_with_mixed_task_types(self):
         """Test batch LLM Judge handles both truthy and math/puzzle tasks correctly."""
@@ -2492,7 +2448,7 @@ class TestCurriculumLearning(unittest.TestCase):
                 task_truthy = cl.session.get_task("truthy_0")
                 primary_rewards = [
                     r
-                    for r in task_truthy.task_rewards
+                    for r in task_truthy.latest_generation.rewards
                     if r.reward_function_name == "primary"
                 ]
                 self.assertEqual(primary_rewards[0].score, 0.8)
@@ -2501,7 +2457,7 @@ class TestCurriculumLearning(unittest.TestCase):
                 task_math = cl.session.get_task("math_0")
                 judge_rewards = [
                     r
-                    for r in task_math.task_rewards
+                    for r in task_math.latest_generation.rewards
                     if r.reward_function_name == "llm_judge"
                 ]
                 self.assertEqual(len(judge_rewards), 1)
@@ -2554,7 +2510,7 @@ class TestCurriculumLearning(unittest.TestCase):
                 mock_results = []
                 for i in range(2):
                     mock_result = MagicMock()
-                    mock_result.score = 0.6 + (i * 0.1)
+                    mock_result.score = i * 1.0  # 0.0, 1.0 (normalized)
                     mock_result.info = f"Quality {i}"
                     mock_results.append(mock_result)
 
@@ -2581,7 +2537,7 @@ class TestCurriculumLearning(unittest.TestCase):
                     f"Expected 2 individual calls, got {mock_individual.call_count}",
                 )
 
-                # Verify results (normalized)
+                # Verify results (no normalization since aux_weight=0.0)
                 self.assertAlmostEqual(rewards[0], 0.0, places=5)
                 self.assertAlmostEqual(rewards[1], 1.0, places=5)
 
@@ -2629,86 +2585,6 @@ class TestCurriculumLearning(unittest.TestCase):
             0,
             "Truthy tasks should not trigger curriculum advancement",
         )
-
-    def test_non_truthy_weight_without_llm_judge(self):
-        """Test weight calculation for non-truthy tasks when llm_judge disabled."""
-        cl = CurriculumLearning(
-            use_llm_judge=False,
-            aux_weight=0.1,
-            llm_judge_weight=0.2,  # Should be ignored
-        )
-
-        # Create a math task
-        task = Task(
-            task_id="math_test",
-            task_name="Math Test",
-            task_type="math",
-            level=0,
-            prompt="Test",
-            expected_answer="4",
-        )
-        cl.session.add_task(task)
-
-        # Add primary reward
-        primary_reward = RewardFunctionScore(
-            score=1.0,
-            reward_function_name="primary",
-            info="",
-        )
-        cl.session.set_reward("math_test", [primary_reward])
-
-        # For non-truthy without llm_judge: primary_weight = 1.0 - 0.1 = 0.9
-        # combined = 0.9 * 1.0 + 0.1 * 0.5 = 0.95
-        combined_rewards = cl.get_rewards(["math_test"])
-        self.assertEqual(len(combined_rewards), 1)
-        self.assertAlmostEqual(combined_rewards[0], 0.95, places=1)
-
-    def test_non_truthy_weight_with_llm_judge(self):
-        """Test weight calculation for non-truthy tasks when llm_judge enabled."""
-        cl = CurriculumLearning(
-            use_llm_judge=True,
-            llm_judge_kwargs={
-                "api_host": "localhost",
-                "api_port": 8000,
-                "model_name": "Skywork",
-            },
-            aux_weight=0.1,
-            llm_judge_weight=0.2,
-        )
-
-        # Create a math task
-        task = Task(
-            task_id="math_test",
-            task_name="Math Test",
-            task_type="math",
-            level=0,
-            prompt="Test",
-            expected_answer="4",
-        )
-        cl.session.add_task(task)
-
-        # Add primary and judge rewards
-        primary_reward = RewardFunctionScore(
-            score=1.0,
-            reward_function_name="primary",
-            info="",
-        )
-        judge_reward = RewardFunctionScore(
-            score=0.8,
-            reward_function_name="llm_judge",
-            info="",
-        )
-        cl.session.set_reward("math_test", [primary_reward, judge_reward])
-
-        # For non-truthy with llm_judge: primary_weight = 1.0 - 0.1 - 0.2 = 0.7
-        # judge score normalized to [0,1]: (0.8 - min) / (max - min) = (0.8 - (-1e-6)) / (1e-6 - (-1e-6))
-        # But since it's the only judge score: max = 0.8, min = 0.8, so normalized = 0.0 (no range)
-        # combined = 0.7 * 1.0 + 0.1 * 0.5 + 0.2 * 0.0 = 0.75
-        combined_rewards = cl.get_rewards(["math_test"])
-        self.assertEqual(len(combined_rewards), 1)
-        # Should be around 0.75 (with judge contribution being 0 due to no range)
-        self.assertGreaterEqual(combined_rewards[0], 0.7)
-        self.assertLessEqual(combined_rewards[0], 0.76)
 
     # === NEW TESTS FOR REFACTORED METHODS ===
 

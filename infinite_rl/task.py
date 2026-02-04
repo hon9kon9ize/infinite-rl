@@ -19,7 +19,6 @@ class Task:
         prompt: str,
         expected_answer: Union[str, dict],
         judge_system_prompt: Optional[str] = None,
-        task_rewards: Optional[List[RewardFunctionScore]] = None,
         model_output: Optional[str] = None,
         created_at: Optional[datetime.datetime] = None,
         first_response_at: Optional[datetime.datetime] = None,
@@ -34,7 +33,6 @@ class Task:
         self.prompt = prompt
         self.judge_system_prompt = judge_system_prompt
         self.expected_answer = expected_answer
-        self.task_rewards: List[RewardFunctionScore] = task_rewards or []
         self.is_correct: Optional[bool] = None  # Track if task was solved correctly
         self.model_output: Optional[str] = model_output
         self.created_at: datetime.datetime = created_at or datetime.datetime.now()
@@ -48,27 +46,10 @@ class Task:
         # NEW: Clean generation hierarchy
         self.generations: List[Generation] = []
 
-    def add_reward(
-        self, task_reward: RewardFunctionScore, is_correct: bool = False
-    ) -> None:
-        """Add a reward to the task.
-
-        Args:
-            task_reward: The reward function score
-            is_correct: Whether the task was answered correctly (primary score >= 0.5)
-        """
-        was_empty = len(self.task_rewards) == 0
-        self.task_rewards.append(task_reward)
-        if self.is_correct is None:
-            self.is_correct = is_correct
-        if was_empty and self.first_response_at is None:
-            self.first_response_at = datetime.datetime.now()
-
     def get_score(self) -> float:
-        """Get the primary reward score (first reward in the list)."""
-        if not self.task_rewards:
-            return 0.0
-        return self.task_rewards[0].score
+        """Get the primary reward score from the latest generation."""
+        latest = self.latest_generation
+        return latest.primary_score if latest else 0.0
 
     def add_generation(
         self, output: str, rewards: List[RewardFunctionScore], primary_score: float
@@ -76,6 +57,8 @@ class Task:
         """Add a generation to this task."""
         gen = Generation(output=output, rewards=rewards, primary_score=primary_score)
         self.generations.append(gen)
+        if self.first_response_at is None:
+            self.first_response_at = datetime.datetime.now()
         return gen
 
     @property
@@ -102,14 +85,6 @@ class Task:
                 self.first_response_at.isoformat() if self.first_response_at else None
             ),
             "is_correct": self.is_correct,
-            "task_rewards": [
-                {
-                    "reward_function_name": r.reward_function_name,
-                    "score": r.score,
-                    "info": r.info,
-                }
-                for r in self.task_rewards
-            ],
             # NEW: All generations
             "generations": [g.to_dict() for g in self.generations],
         }

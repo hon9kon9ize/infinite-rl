@@ -1794,23 +1794,6 @@ class TestCurriculumLearning(unittest.TestCase):
             task_from_session = cl.session.get_task("truthy_test")
             self.assertFalse(task_from_session.is_correct)
 
-    def test_format_gate_applies_to_judge(self):
-        """Test that format gate applies to judge: if format is invalid, judge reward is zero."""
-        cl = CurriculumLearning(
-            use_llm_judge=True,
-            use_format=True,  # Enable format gate
-            aux_weight=0.0,
-            num_generations=1,
-            llm_judge_kwargs={
-                "api_host": "localhost",
-                "api_port": 8000,
-                "model_name": "Skywork/Skywork-Reward-V2-Qwen3-4B",
-            },
-            use_whitespace_collapse=False,
-            use_lang_consistency=False,
-            use_repetition=False,
-        )
-
         # Set up mock tokenizer for LLM Judge
         setup_llm_judge_with_mock_tokenizer(cl)
 
@@ -1837,17 +1820,29 @@ class TestCurriculumLearning(unittest.TestCase):
 
             # Response missing answer tag (format invalid)
             response_invalid_format = "No answer tag here"
-            primary_reward = cl.compute_reward("truthy_format_test", response_invalid_format)
+            primary_reward = cl.compute_reward(
+                "truthy_format_test", response_invalid_format
+            )
 
             # Score should be 0.0 because format is invalid (judge reward gated)
-            self.assertEqual(primary_reward, 0.0, "Judge reward should be gated to zero when format is invalid")
+            self.assertEqual(
+                primary_reward,
+                0.0,
+                "Judge reward should be gated to zero when format is invalid",
+            )
 
             # Check that the reward info indicates format gate was applied
             task_from_session = cl.session.get_task("truthy_format_test")
             gen = task_from_session.latest_generation
-            primary_reward_obj = next((r for r in gen.rewards if r.reward_function_name == "primary"), None)
+            primary_reward_obj = next(
+                (r for r in gen.rewards if r.reward_function_name == "primary"), None
+            )
             self.assertIsNotNone(primary_reward_obj)
-            self.assertIn("Format invalid", primary_reward_obj.info, "Reward info should indicate format gate was applied")
+            self.assertIn(
+                "Format invalid",
+                primary_reward_obj.info,
+                "Reward info should indicate format gate was applied",
+            )
 
     def test_batch_llm_judge_validates_request_payload(self):
         """Test that batch LLM Judge request payload contains correct number of tasks."""
@@ -2235,6 +2230,8 @@ class TestCurriculumLearning(unittest.TestCase):
 
     def test_check_format_validity_both_tags_valid(self):
         """Test _check_format_validity returns True when both tags valid."""
+        from infinite_rl.generation import Generation
+
         cl = CurriculumLearning(use_format=True)
 
         task = Task(
@@ -2245,8 +2242,11 @@ class TestCurriculumLearning(unittest.TestCase):
             prompt="Test",
             expected_answer="4",
         )
-        task.model_output = "<think>Reasoning here</think>\n<answer>4</answer>"
         cl.session.add_task(task)
+
+        # Create a generation with valid format
+        output = "<think>Reasoning here</think>\n<answer>4</answer>"
+        gen = Generation(output=output, rewards=[], primary_score=1.0)
 
         # Mock both format functions to return 1.0 (valid)
         with patch.object(
@@ -2265,13 +2265,15 @@ class TestCurriculumLearning(unittest.TestCase):
                 mock_result.info = "Valid answer tag"
                 mock_answer.return_value = mock_result
 
-                valid, reason = cl._check_format_validity(task)
+                valid, reason = cl._check_format_validity(task, gen)
 
                 self.assertTrue(valid, "Format should be valid")
                 self.assertEqual(reason, "", "No failure reason when valid")
 
     def test_check_format_validity_think_tag_invalid(self):
         """Test _check_format_validity returns False when think tag invalid."""
+        from infinite_rl.generation import Generation
+
         cl = CurriculumLearning(use_format=True)
 
         task = Task(
@@ -2282,8 +2284,11 @@ class TestCurriculumLearning(unittest.TestCase):
             prompt="Test",
             expected_answer="4",
         )
-        task.model_output = "<answer>4</answer>"  # Missing think tag
         cl.session.add_task(task)
+
+        # Create a generation with missing think tag
+        output = "<answer>4</answer>"
+        gen = Generation(output=output, rewards=[], primary_score=1.0)
 
         # Mock format_think to return < 1.0 (invalid)
         with patch.object(
@@ -2302,7 +2307,7 @@ class TestCurriculumLearning(unittest.TestCase):
                 mock_result.info = "Valid answer tag"
                 mock_answer.return_value = mock_result
 
-                valid, reason = cl._check_format_validity(task)
+                valid, reason = cl._check_format_validity(task, gen)
 
                 self.assertFalse(valid, "Format should be invalid")
                 self.assertIn("think", reason, "Reason should mention think tag")

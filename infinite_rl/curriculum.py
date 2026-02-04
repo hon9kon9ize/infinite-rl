@@ -577,7 +577,7 @@ class CurriculumLearning:
 
         Standard tasks (math, puzzle):
         - Primary score is task correctness (1.0 for correct, 0.0 for incorrect)
-        - is_correct = primary_score == 1.0 (hard gate)
+        - is_correct is True only if BOTH format is valid AND primary score is 1.0
         - Format gates: BOTH think and answer tags must be valid
         - On success (format_valid AND is_correct): reward auxiliary fully
         - On failure: cap positive auxiliary rewards at 0
@@ -598,17 +598,11 @@ class CurriculumLearning:
         primary_score = result.score
         primary_info = result.info
 
-        # Check format validity (both think and answer tags)
-        format_valid, format_failure_reason = self._check_format_validity(task)
-
-        # Determine primary success (hard gates: format valid AND primary score == 1.0)
-        is_correct = format_valid and (primary_score == 1.0)
-
         # LLM Judge is deferred and will be computed in batch via get_rewards() for efficiency
         # Do not compute it here
         aux_score_dict = {}
 
-        # Build task rewards based on gates
+        # Build task rewards based on primary score
         primary_reward = RewardFunctionScore(
             score=primary_score,
             reward_function_name="primary",
@@ -616,8 +610,8 @@ class CurriculumLearning:
         )
         task_rewards = [primary_reward]
 
-        if format_valid and is_correct:
-            # Success: both gates passed
+        if primary_score == 1.0:
+            # Success: primary score is correct
             other_aux_scores = self.get_aux_reward_scores(task, is_correct=True)
             for name, data in other_aux_scores.items():
                 if name != "llm_judge":
@@ -630,18 +624,8 @@ class CurriculumLearning:
                     aux_score_dict[name] = data
             score = primary_score
         else:
-            # Failure: format invalid or answer incorrect
+            # Failure: primary score incorrect
             other_aux_scores = self.get_aux_reward_scores(task, is_correct=False)
-
-            # Add format feedback
-            if not format_valid:
-                task_rewards.append(
-                    RewardFunctionScore(
-                        score=0.0,
-                        reward_function_name="format",
-                        info=f"Format validation failed: {format_failure_reason}",
-                    )
-                )
 
             # Cap positive auxiliary rewards (but not llm_judge)
             for name, data in other_aux_scores.items():
@@ -662,16 +646,52 @@ class CurriculumLearning:
 
             score = 0.0
 
+        # Check format validity from rewards (already computed in get_aux_reward_scores)
+        # Both format_think and format_answer must be valid (score >= 1.0)
+        format_valid = True
+        if self.use_format:
+            # Check if format rewards exist and are valid
+            has_format_think = False
+            has_format_answer = False
+
+            for reward in task_rewards:
+                if reward.reward_function_name == "format_think":
+                    if reward.score < 1.0:
+                        format_valid = False
+                    has_format_think = True
+                elif reward.reward_function_name == "format_answer":
+                    if reward.score < 1.0:
+                        format_valid = False
+                    has_format_answer = True
+
+            # For non-truthy tasks, both format rewards are required
+            if task.task_type != "truthy":
+                if not has_format_think or not has_format_answer:
+                    # If format rewards not computed, fall back to checking
+                    # This shouldn't happen if use_format=True
+                    format_valid = False
+
+        # Apply format gate: if format invalid, set score to 0.0
+        if not format_valid and score > 0.0:
+            score = 0.0
+
+        # Determine is_correct: True only if format valid AND primary score is 1.0
+        if primary_score == 1.0 and format_valid:
+            is_correct = True
+        else:
+            is_correct = False
+
         return score, is_correct, task_rewards, aux_score_dict
 
-    def _check_format_validity(self, task: Task) -> tuple:
+    def _check_format_validity(self, task: Task, generation: "Generation") -> tuple:
         """
-        Check format validity for standard tasks.
+        Check format validity for a specific generation.
 
         Both think and answer tags must be valid for format_valid=True.
 
         Args:
-            task: Task with model_output
+            task: Task object (used only for task_type and auxiliary functions)
+            generation: Generation to check format for. Uses generation.output.
 
         Returns:
             Tuple of (format_valid: bool, failure_reason: str)
@@ -679,29 +699,40 @@ class CurriculumLearning:
         if not self.use_format:
             return True, ""
 
-        format_think_valid = True
-        format_answer_valid = True
-        failure_reason = ""
+        # Temporarily swap model_output to check format of specific generation
+        original_output = task.model_output
+        task.model_output = generation.output
 
-        if "format_think" in self.aux_reward_functions:
-            format_fn = self.aux_reward_functions["format_think"]
-            format_result = format_fn.compute_reward(task, is_correct=False)
-            if format_result.score < 1.0:
-                format_think_valid = False
-                failure_reason = format_result.info
-
-        if "format_answer" in self.aux_reward_functions and task.task_type != "truthy":
-            format_fn = self.aux_reward_functions["format_answer"]
-            format_result = format_fn.compute_reward(task, is_correct=False)
-            if format_result.score < 1.0:
-                format_answer_valid = False
-                if not failure_reason:
-                    failure_reason = format_result.info
-        else:
-            # Truthy tasks do not require answer tag format validation
+        try:
+            format_think_valid = True
             format_answer_valid = True
+            failure_reason = ""
 
-        return format_think_valid and format_answer_valid, failure_reason
+            if "format_think" in self.aux_reward_functions:
+                format_fn = self.aux_reward_functions["format_think"]
+                format_result = format_fn.compute_reward(task, is_correct=False)
+                if format_result.score < 1.0:
+                    format_think_valid = False
+                    failure_reason = format_result.info
+
+            if (
+                "format_answer" in self.aux_reward_functions
+                and task.task_type != "truthy"
+            ):
+                format_fn = self.aux_reward_functions["format_answer"]
+                format_result = format_fn.compute_reward(task, is_correct=False)
+                if format_result.score < 1.0:
+                    format_answer_valid = False
+                    if not failure_reason:
+                        failure_reason = format_result.info
+            else:
+                # Truthy tasks do not require answer tag format validation
+                format_answer_valid = True
+
+            return format_think_valid and format_answer_valid, failure_reason
+        finally:
+            # Restore original output
+            task.model_output = original_output
 
     def _log_completed_task(self, task: Task) -> None:
         """Log a completed task batch to the log file.
@@ -1238,23 +1269,16 @@ class CurriculumLearning:
                 if task.task_type == "truthy":
                     # For truthy: replace primary score with LLM Judge score
                     # Format gate will be applied in _compute_combined_score()
-                    # But update info message to indicate if format is invalid
-                    format_valid, _ = self._check_format_validity(task)
                     for gen_idx, gen in enumerate(task.generations):
                         if gen_idx < len(judge_scores):
                             judge_score = judge_scores[gen_idx]
-
-                            # If format is invalid, indicate it in the info message
-                            info_message = judge_score.info or ""
-                            if not format_valid:
-                                info_message = f"Format invalid: {info_message}"
 
                             for i, reward in enumerate(gen.rewards):
                                 if reward.reward_function_name == "primary":
                                     gen.rewards[i] = RewardFunctionScore(
                                         score=judge_score.score,
                                         reward_function_name="primary",
-                                        info=info_message,
+                                        info=judge_score.info or "",
                                     )
                                     gen.primary_score = judge_score.score
                                     # Recompute combined_score after updating judge score
@@ -1293,6 +1317,7 @@ class CurriculumLearning:
         """Compute combined score for a generation.
 
         Format gate applies: if format is invalid, combined score is gated to 0.0.
+        Format validity is extracted from generation rewards (format_think, format_answer).
 
         Args:
             task: The task
@@ -1301,8 +1326,29 @@ class CurriculumLearning:
         Returns:
             Combined score in [0, 1]
         """
+        # Extract format validity from generation rewards (already computed in generation.rewards)
+        # Both format_think and format_answer must be score >= 1.0
+        format_valid = True
+        if self.use_format:
+            has_format_think = False
+            has_format_answer = False
+
+            for reward in generation.rewards:
+                if reward.reward_function_name == "format_think":
+                    if reward.score < 1.0:
+                        format_valid = False
+                    has_format_think = True
+                elif reward.reward_function_name == "format_answer":
+                    if reward.score < 1.0:
+                        format_valid = False
+                    has_format_answer = True
+
+            # For non-truthy tasks, both format rewards are required
+            if task.task_type != "truthy":
+                if not has_format_think or not has_format_answer:
+                    format_valid = False
+
         # Apply format gate: if format is invalid, gate entire score to 0.0
-        format_valid, _ = self._check_format_validity(task)
         if not format_valid:
             return 0.0
 
@@ -1312,7 +1358,11 @@ class CurriculumLearning:
         for reward in generation.rewards:
             if reward.reward_function_name == "llm_judge":
                 judge_score = reward.score
-            elif reward.reward_function_name not in ["primary", "format"]:
+            elif reward.reward_function_name not in [
+                "primary",
+                "format_think",
+                "format_answer",
+            ]:
                 aux_scores[reward.reward_function_name] = reward.score
 
         # Normalize aux

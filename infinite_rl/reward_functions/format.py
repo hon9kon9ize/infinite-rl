@@ -156,6 +156,6 @@ class FormatRewardFunction(RewardFunction):
 
         # No code blocks - check if content is non-empty
         if raw_content.strip():
-            return RewardFunctionScore(score=1.0, info="Valid answer tag with content.")
+            return RewardFunctionScore(score=1.0, info="Valid tag with content.")
         else:
             return RewardFunctionScore(score=-1.0, info="Empty answer tag.")

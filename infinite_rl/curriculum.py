@@ -850,19 +850,6 @@ class CurriculumLearning:
 
         return False
 
-    def _track_success(self, level: int, is_correct: bool) -> None:
-        """Track success/failure in sliding window for a level (legacy single-response).
-
-        Args:
-            level: Difficulty level of the task (0-6)
-            is_correct: Whether the task was solved correctly
-        """
-        if level not in self.success_windows:
-            self.success_windows[level] = deque(maxlen=self.window_size)
-
-        # Add 1 for success, 0 for failure
-        self.success_windows[level].append(1 if is_correct else 0)
-
     def _track_success_group(self, level: int, primary_scores: List[float]) -> None:
         """Track success at prompt-level based on group of GRPO responses.
 
@@ -888,9 +875,9 @@ class CurriculumLearning:
         max_primary = max(primary_scores) if primary_scores else 0.0
 
         # More conservative success criteria for curriculum learning:
-        # Require BOTH: mean >= 0.8 AND at least one perfect response
+        # Require BOTH: mean >= 0.5 AND at least one perfect response
         # This ensures consistent performance across the batch, not just lucky guesses
-        group_success = 1 if (mean_primary >= 0.8 and max_primary == 1.0) else 0
+        group_success = 1 if (mean_primary >= 0.5 and max_primary == 1.0) else 0
 
         self.success_windows[level].append(group_success)
 

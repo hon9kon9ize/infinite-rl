@@ -1194,10 +1194,10 @@ class CurriculumLearning:
             # Gracefully handle errors by skipping judge evaluation
             # Tasks will use placeholder scores
 
-    def get_rewards(self, task_ids: List[str]) -> List[List[float]]:
+    def get_rewards(self, task_ids: List[str]) -> List[float]:
         """Calculate combined reward scores for multiple completed tasks.
 
-        For each task, computes combined scores for each generation in the task.
+        Computes combined scores for each generation across all tasks.
         Retrieves primary correctness and auxiliary scores from generation.rewards,
         normalizes each auxiliary score to [0, 1] range, then applies aux_weight
         to blend primary with average normalized auxiliary scores.
@@ -1212,8 +1212,8 @@ class CurriculumLearning:
             task_ids: List of task identifiers (should have been processed by compute_reward)
 
         Returns:
-            List of lists of combined reward scores in the range [0, 1] suitable for RL training.
-            Each sublist contains scores for each generation in the corresponding task.
+            List of combined reward scores in the range [0, 1] suitable for RL training.
+            One score per generation across all tasks.
 
         Raises:
             ValueError: If any task_id not found in session
@@ -1370,7 +1370,7 @@ class CurriculumLearning:
                 gen_combined_scores.append(combined_score)
                 gen.combined_score = combined_score
 
-            combined_rewards.append(gen_combined_scores)
+            combined_rewards.extend(gen_combined_scores)
 
             # Store the final combined score on the task for validation (use last generation)
             task.combined_score = gen_combined_scores[-1] if gen_combined_scores else 0

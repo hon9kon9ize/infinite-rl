@@ -35,13 +35,13 @@ class CurriculumLearning:
         timeout: int = 10,
         answer_tag: str = "answer",
         think_tag: str = "think",
-        aux_weight: float = 0.1,
+        aux_weight: float = 0.2,
         llm_judge_weight: float = 0.2,
-        use_lang_consistency: bool = False,
-        use_repetition: bool = False,
+        use_lang_consistency: bool = True,
+        use_repetition: bool = True,
         use_format: bool = True,
-        use_reasoning_steps: bool = False,
-        use_length: bool = False,
+        use_reasoning_steps: bool = True,
+        use_length: bool = True,
         use_whitespace_collapse: bool = True,
         use_llm_judge: bool = False,
         reasoning_language: str = "en",
@@ -72,13 +72,13 @@ class CurriculumLearning:
             timeout: Timeout for reward function execution
             answer_tag: Tag used to extract answers from model responses
             think_tag: Tag used to extract reasoning from model responses
-            aux_weight: Weight for auxiliary rewards in combined score (0-1, default: 0.1)
+            aux_weight: Weight for auxiliary rewards in combined score (0-1, default: 0.2)
             llm_judge_weight: Weight for LLM Judge reward, computed independently of format/correctness gates (0-1, default: 0.2)
-            use_lang_consistency: Enable language consistency auxiliary reward
-            use_repetition: Enable repetition penalty auxiliary reward
-            use_format: Enable format validation auxiliary reward
-            use_reasoning_steps: Enable chain-of-thought reasoning steps bonus
-            use_length: Enable response length regularizer
+            use_lang_consistency: Enable language consistency auxiliary reward (default: True)
+            use_repetition: Enable repetition penalty auxiliary reward (default: True)
+            use_format: Enable format validation auxiliary reward (default: True)
+            use_reasoning_steps: Enable chain-of-thought reasoning steps bonus (default: True)
+            use_length: Enable response length regularizer (default: True)
             use_whitespace_collapse: Enable whitespace collapse detector (default: True)
             use_llm_judge: Enable LLM-based quality evaluation via remote sglang server (default: False)
             reasoning_language: ISO language code for reasoning analysis (default: "en")
@@ -379,7 +379,7 @@ class CurriculumLearning:
         model_output: str,
     ) -> float:
         """
-        Evaluate model output and update learning state.
+        Evaluate a single model output and update learning state.
 
         Dispatches to task-type-specific handlers:
         - Truthy tasks: LLM Judge as primary score
@@ -387,11 +387,12 @@ class CurriculumLearning:
 
         Args:
             task_id: Task identifier
-            model_output: Raw model response
+            model_output: Raw model response (string)
 
         Returns:
-            Reward score (for curriculum tracking and GRPO batching)
+            Reward score (float)
         """
+        # Single completion path
         # Get task and store model output
         task = self.session.get_task(task_id)
         if task is None:
@@ -411,11 +412,6 @@ class CurriculumLearning:
         # Accumulate generation and save rewards (cap at num_generations for safety)
         if len(task.generations) < self.num_generations:
             task.add_generation(model_output, task_rewards, score)
-            print(
-                f"DEBUG: Added generation {len(task.generations)} to task {task_id} (type: {task.task_type})"
-            )
-            # Don't compute combined_score yet - wait for batch LLM Judge
-
         else:
             print(
                 f"Warning: Task {task_id} already has {len(task.generations)} generations, not adding more (num_generations={self.num_generations})"
@@ -424,40 +420,135 @@ class CurriculumLearning:
                 f"DEBUG: Task generations: {[g.output[:50] + '...' for g in task.generations]}"
             )
 
-        # Finalize completed batches: LLM Judge, combined score, curriculum tracking, and logging
+        # Finalize batch if complete
         combined_score = score  # Default to primary score for incomplete batches
         if len(task.generations) >= self.num_generations:
-            if task_id not in self.logged_tasks:
-                self.logged_tasks.add(task_id)
-
-                # Step 1: Compute batch LLM Judge (updates generation rewards in place)
-                self._compute_batch_llm_judge([task_id])
-
-                # Step 2: Recompute combined scores for all generations (now with judge scores available)
-                for gen in task.generations:
-                    gen.combined_score = self._compute_combined_score(task, gen)
-
-                # Get the latest generation's combined score to return
-                combined_score = task.generations[-1].combined_score
-
-                # Step 3: Track success at prompt level for curriculum
-                primary_scores = [g.primary_score for g in task.generations]
-                if task.task_type != "truthy":
-                    self._track_success_group(task.level, primary_scores)
-
-                # Increment step counter ONCE per complete prompt group
-                self.global_step += 1
-
-                # Check if we should advance/demote level
-                self._update_level()
-
-                # Log evaluation if configured
-                self._log_completed_task(task)
+            scores = self._finalize_batch([task_id])
+            combined_score = scores[0] if scores else score
 
         # Set task correctness
         task.is_correct = is_correct
 
         return combined_score
+
+    def compute_rewards(self, task_id: str, model_outputs: List[str]) -> List[float]:
+        """
+        Evaluate multiple completions for a task and compute rewards in batch.
+
+        Accumulates all generations first, then finalizes batch once:
+        - Computes LLM Judge scores
+        - Computes combined scores for all generations
+        - Tracks curriculum success
+        - Updates difficulty level
+        - Logs completed task
+
+        Args:
+            task_id: Task identifier
+            model_outputs: List of model responses
+
+        Returns:
+            List of reward scores corresponding to each completion
+        """
+        # Accumulate all generations (don't finalize yet)
+        for completion in model_outputs:
+            task = self.session.get_task(task_id)
+            if task is None:
+                raise ValueError(f"Unknown task_id: {task_id}")
+            task.model_output = completion
+
+            # Dispatch to task-type-specific handler
+            if task.task_type == "truthy":
+                score, is_correct, task_rewards, aux_score_dict = (
+                    self._compute_reward_truthy(task)
+                )
+            else:
+                score, is_correct, task_rewards, aux_score_dict = (
+                    self._compute_reward_standard(task)
+                )
+
+            # Accumulate generation without finalization
+            if len(task.generations) < self.num_generations:
+                task.add_generation(completion, task_rewards, score)
+            else:
+                print(
+                    f"Warning: Task {task_id} already has {len(task.generations)} generations, not adding more (num_generations={self.num_generations})"
+                )
+
+            task.is_correct = is_correct
+
+        # After all generations accumulated, finalize batch once
+        return self._finalize_batch([task_id])
+
+    def _finalize_batch(self, task_ids: List[str]) -> List[float]:
+        """
+        Finalize batch processing: compute LLM Judge, combined scores, and curriculum tracking.
+
+        This is called after all generations for a task are accumulated.
+
+        Args:
+            task_ids: List of task IDs to finalize (typically single-element list)
+
+        Returns:
+            List of combined scores for all generations of the first task
+        """
+        scores = []
+
+        for task_id in task_ids:
+            task = self.session.get_task(task_id)
+            if not task or len(task.generations) < self.num_generations:
+                # Not ready for finalization yet
+                for gen in task.generations if task else []:
+                    scores.append(gen.primary_score)
+                continue
+
+            if task_id in self.logged_tasks:
+                # Already finalized
+                for gen in task.generations:
+                    scores.append(
+                        gen.combined_score
+                        if gen.combined_score is not None
+                        else gen.primary_score
+                    )
+                continue
+
+            self.logged_tasks.add(task_id)
+
+            # Step 1: Compute batch LLM Judge (updates generation rewards in place)
+            self._compute_batch_llm_judge([task_id])
+
+            # Step 2: Recompute combined scores for all generations (now with judge scores available)
+            # This ensures combined_score is ALWAYS set, even if LLM Judge fails
+            for gen in task.generations:
+                if (
+                    gen.combined_score is None
+                ):  # Only compute if not already set by LLM Judge
+                    gen.combined_score = self._compute_combined_score(task, gen)
+
+            # Safety check: ensure all generations have combined_score set
+            for gen in task.generations:
+                if gen.combined_score is None:
+                    # Fallback to primary score if combined score computation failed
+                    gen.combined_score = gen.primary_score
+
+            # Collect scores to return
+            for gen in task.generations:
+                scores.append(gen.combined_score)
+
+            # Step 3: Track success at prompt level for curriculum
+            primary_scores = [g.primary_score for g in task.generations]
+            if task.task_type != "truthy":
+                self._track_success_group(task.level, primary_scores)
+
+            # Increment step counter ONCE per complete prompt group
+            self.global_step += 1
+
+            # Check if we should advance/demote level
+            self._update_level()
+
+            # Log evaluation if configured
+            self._log_completed_task(task)
+
+        return scores
 
     def _compute_reward_truthy(self, task: Task) -> tuple:
         """

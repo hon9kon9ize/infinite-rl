@@ -236,13 +236,14 @@ def create_curriculum_reward_func(
             else:
                 # Fallback if no metadata
                 task_id = f"task_{i // curriculum.num_generations}"
-            grouped[task_id].append((i, completion))
+            grouped[task_id].append(completion)
 
+        # Process each task's completions in batch
         for task_id, completion_list in grouped.items():
-            for orig_idx, completion in completion_list:
-                try:
-                    # Extract content from TRL's chat format
-                    # Completions come as: [{'role': 'assistant', 'content': '...'}]
+            try:
+                # Extract content from TRL's chat format for all completions
+                completion_texts = []
+                for completion in completion_list:
                     completion_text = completion
                     if isinstance(completion, list) and len(completion) > 0:
                         # Extract from list of dicts format
@@ -256,17 +257,19 @@ def create_curriculum_reward_func(
                         print(
                             f"Warning: Completion for task {task_id} is not a string after extraction. Type: {type(completion_text)}"
                         )
-                        rewards_list.append(0.0)
-                        continue
+                        completion_texts.append("")
+                    else:
+                        completion_texts.append(completion_text)
 
-                    # Compute reward using curriculum
-                    # Returns combined_score (includes LLM Judge if batch complete)
-                    combined_score = curriculum.compute_reward(task_id, completion_text)
-                    rewards_list.append(float(combined_score))
+                # Compute rewards for all completions in batch
+                # Returns combined_scores (includes LLM Judge if batch complete)
+                batch_scores = curriculum.compute_rewards(task_id, completion_texts)
+                rewards_list.extend([float(s) for s in batch_scores])
 
-                except Exception as e:
-                    print(f"Warning: Error computing reward for task {task_id}: {e}")
-                    rewards_list.append(0.0)
+            except Exception as e:
+                print(f"Warning: Error computing reward for task {task_id}: {e}")
+                # Add zero scores for all completions in this task
+                rewards_list.extend([0.0] * len(completion_list))
 
         return rewards_list
 

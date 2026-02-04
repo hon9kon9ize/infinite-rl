@@ -660,7 +660,9 @@ class CurriculumLearning:
 
         log_entry["primary_score"] = primary_score
         log_entry["aux_scores"] = aux_scores
-        log_entry["combined_score"] = getattr(task, "combined_score", None)
+        log_entry["combined_score"] = (
+            getattr(latest_gen, "combined_score", None) if latest_gen else None
+        )
         log_entry["info"] = {
             "primary": primary_info,
             **aux_info,
@@ -1366,6 +1368,7 @@ class CurriculumLearning:
                 # Ensure final score is in [0, 1]
                 combined_score = max(0.0, min(1.0, combined_score))
                 gen_combined_scores.append(combined_score)
+                gen.combined_score = combined_score
 
             combined_rewards.append(gen_combined_scores)
 

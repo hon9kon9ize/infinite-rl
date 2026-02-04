@@ -751,7 +751,7 @@ class TestCurriculumLearning(unittest.TestCase):
             # Now test get_rewards for blended score
             combined_rewards = cl.get_rewards(["math_test"])
             self.assertEqual(len(combined_rewards), 1)
-            self.assertGreaterEqual(combined_rewards[0], 0.5)
+            self.assertGreaterEqual(combined_rewards[0][0], 0.5)
 
             # Check that task has is_correct set to True
             task_from_session = cl.session.get_task("math_test")
@@ -797,7 +797,7 @@ class TestCurriculumLearning(unittest.TestCase):
             # Now test get_rewards for blended score
             combined_rewards = cl.get_rewards(["math_test"])
             self.assertEqual(len(combined_rewards), 1)
-            self.assertLess(combined_rewards[0], 0.5)
+            self.assertLess(combined_rewards[0][0], 0.5)
 
             # Check that task has is_correct set to False
             task_from_session = cl.session.get_task("math_test")
@@ -1239,7 +1239,7 @@ class TestCurriculumLearning(unittest.TestCase):
                 # Aux score 0.8 is normalized: clipped to [-1, 1] = 0.8, then (0.8 + 1) / 2 = 0.9
                 # Since only one auxiliary, aux_avg = 0.9
                 # Combined: 0.9 * 1.0 + 0.1 * 0.9 = 0.99 (with aux_weight=0.1)
-                combined_reward = cl.get_rewards(["math_test"])[0]
+                combined_reward = cl.get_rewards(["math_test"])[0][0]
                 # Result should be close to 0.99
                 self.assertAlmostEqual(combined_reward, 0.99, places=1)
         cl.current_level = 0
@@ -2267,7 +2267,7 @@ class TestCurriculumLearning(unittest.TestCase):
             rewards = cl.get_rewards(["truthy_test"])
 
             # Primary score should now be the judge score (normalized to 0.0 for single task) after batch processing
-            self.assertAlmostEqual(rewards[0], 0.0, places=5)
+            self.assertAlmostEqual(rewards[0][0], 0.0, places=5)
 
             # CRITICAL: Truthy tasks always have is_correct=False (never affects curriculum)
             task_from_session = cl.session.get_task("truthy_test")
@@ -2352,13 +2352,13 @@ class TestCurriculumLearning(unittest.TestCase):
 
             # Verify final rewards use batch results (no normalization since aux_weight=0.0)
             self.assertAlmostEqual(
-                rewards[0], 0.0, places=5
+                rewards[0][0], 0.0, places=5
             )  # First task judge score (normalized)
             self.assertAlmostEqual(
-                rewards[1], 0.5, places=5
+                rewards[1][0], 0.5, places=5
             )  # Second task judge score (normalized)
             self.assertAlmostEqual(
-                rewards[2], 1.0, places=5
+                rewards[2][0], 1.0, places=5
             )  # Third task judge score (normalized)
 
     def test_batch_llm_judge_with_mixed_task_types(self):
@@ -2522,8 +2522,8 @@ class TestCurriculumLearning(unittest.TestCase):
             self.assertTrue(mock_batch.called)
 
             # Verify results (no normalization since aux_weight=0.0)
-            self.assertAlmostEqual(rewards[0], 0.0, places=5)
-            self.assertAlmostEqual(rewards[1], 1.0, places=5)
+            self.assertAlmostEqual(rewards[0][0], 0.0, places=5)
+            self.assertAlmostEqual(rewards[1][0], 1.0, places=5)
 
     def test_truthy_task_does_not_affect_curriculum(self):
         """Test that truthy tasks never affect curriculum success windows."""
@@ -2819,7 +2819,7 @@ class TestCurriculumLearning(unittest.TestCase):
 
         # Should return the combined reward
         self.assertEqual(len(rewards), 1)
-        self.assertEqual(rewards[0], 1.0)
+        self.assertEqual(rewards[0], [1.0])
         # Check that success was tracked (via step counter)
         self.assertEqual(cl.global_step, 1, "Should increment global_step after batch")
 
@@ -2867,7 +2867,7 @@ class TestCurriculumLearning(unittest.TestCase):
 
         # Should return combined reward for the batch
         self.assertEqual(len(rewards), 1)
-        self.assertEqual(rewards[0], 1.0)
+        self.assertEqual(rewards[0], [1.0, 1.0, 1.0])
 
         # After batch complete, global_step should be 1 (one batch processed)
         self.assertEqual(cl.global_step, 1, "Batch complete should increment step once")

@@ -25,7 +25,6 @@ class Task:
         language: Optional[str] = None,
         reasoning_language: Optional[str] = None,
         dataset_id: Optional[str] = None,
-        combined_score: Optional[float] = None,
     ):
         self.task_id = task_id
         self.task_name = task_name
@@ -43,7 +42,6 @@ class Task:
         # For math: language is reasoning language, reasoning_language defaults to same
         self.reasoning_language: Optional[str] = reasoning_language or language or "en"
         self.dataset_id = dataset_id
-        self.combined_score = combined_score
 
         # NEW: Clean generation hierarchy
         self.generations: List[Generation] = []
@@ -89,5 +87,4 @@ class Task:
             "is_correct": self.is_correct,
             # NEW: All generations
             "generations": [g.to_dict() for g in self.generations],
-            "combined_score": self.combined_score,
         }

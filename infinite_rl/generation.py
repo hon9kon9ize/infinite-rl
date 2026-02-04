@@ -17,6 +17,7 @@ class Generation:
     output: str
     rewards: List[RewardFunctionScore]
     primary_score: float
+    combined_score: float = None
     created_at: datetime.datetime = field(default_factory=datetime.datetime.now)
 
     @property
@@ -30,6 +31,7 @@ class Generation:
             "output": self.output,
             "rewards": [r.to_dict() for r in self.rewards],
             "primary_score": self.primary_score,
+            "combined_score": self.combined_score,
             "is_correct": self.is_correct,
             "created_at": self.created_at.isoformat(),
         }

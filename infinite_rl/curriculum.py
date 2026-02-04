@@ -409,12 +409,16 @@ class CurriculumLearning:
         # Accumulate generation and save rewards (cap at num_generations for safety)
         if len(task.generations) < self.num_generations:
             task.add_generation(model_output, task_rewards, score)
-            print(f"DEBUG: Added generation {len(task.generations)} to task {task_id} (type: {task.task_type})")
+            print(
+                f"DEBUG: Added generation {len(task.generations)} to task {task_id} (type: {task.task_type})"
+            )
         else:
             print(
                 f"Warning: Task {task_id} already has {len(task.generations)} generations, not adding more (num_generations={self.num_generations})"
             )
-            print(f"DEBUG: Task generations: {[g['output'][:50] + '...' for g in task.generations]}")
+            print(
+                f"DEBUG: Task generations: {[g['output'][:50] + '...' for g in task.generations]}"
+            )
 
         self.session.set_reward(
             task_id, task_rewards, model_output=task.model_output, is_correct=is_correct
@@ -997,9 +1001,13 @@ class CurriculumLearning:
             0
         ]
         if selected_task["type"] == "math":
-            return self.session.create_math_task(selected_task)
+            task = self.session.create_math_task(selected_task)
+            print(f"DEBUG: Created new math task {task.task_id} for batch")
+            return task
         elif selected_task["type"] == "puzzle":
-            return self.session.create_puzzle_task(selected_task)
+            task = self.session.create_puzzle_task(selected_task)
+            print(f"DEBUG: Created new puzzle task {task.task_id} for batch")
+            return task
 
         return None
 

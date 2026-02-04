@@ -194,9 +194,11 @@ def create_curriculum_reward_func(
 ) -> Callable:
     """Create a reward function compatible with GRPOTrainer.
 
-    The reward function wraps Infinite-RL's curriculum reward computation
-    using curriculum.compute_reward() for each completion, then retrieves
-    normalized scores via curriculum.get_reward(task_id).
+    The reward function uses curriculum.compute_reward() which:
+    1. Computes primary + auxiliary rewards
+    2. Accumulates generations
+    3. When batch complete: computes LLM Judge, recomputes combined scores
+    4. Returns the combined score directly
 
     Args:
         curriculum: Initialized CurriculumLearning instance
@@ -220,50 +222,53 @@ def create_curriculum_reward_func(
             **kwargs: Additional arguments from trainer (ignored)
 
         Returns:
-            List of reward scores in range [0, 1] (normalized via get_rewards)
+            List of reward scores in range [0, 1] (combined scores with judge)
         """
-        task_ids = []
+        from collections import defaultdict
 
-        for idx, completion in enumerate(completions):
-            try:
-                # TRL's task_metadata is often a list of dicts corresponding to the prompts.
-                # If num_generations > 1, the metadata is repeated for each generation in the group.
-                meta = (
-                    task_metadata[idx]
-                    if task_metadata and idx < len(task_metadata)
-                    else {}
-                )
-                task_id = meta.get("task_id", f"task_{idx}")
-                task_ids.append(task_id)
+        rewards_list = []
 
-                # Extract content from TRL's chat format
-                # Completions come as: [{'role': 'assistant', 'content': '...'}]
-                completion_text = completion
-                if isinstance(completion, list) and len(completion) > 0:
-                    # Extract from list of dicts format
-                    completion_text = completion[0].get("content", "")
-                elif isinstance(completion, dict):
-                    # Extract from single dict format
-                    completion_text = completion.get("content", "")
+        # Group completions by task_id from metadata
+        grouped = defaultdict(list)
+        for i, completion in enumerate(completions):
+            if task_metadata and i < len(task_metadata):
+                task_id = task_metadata[i]["task_id"]
+            else:
+                # Fallback if no metadata
+                task_id = f"task_{i // curriculum.num_generations}"
+            grouped[task_id].append((i, completion))
 
-                # Ensure we have a string
-                if not isinstance(completion_text, str):
-                    print(
-                        f"Warning: Completion for task {idx} is not a string after extraction. Type: {type(completion_text)}"
-                    )
-                    continue
+        for task_id, completion_list in grouped.items():
+            for orig_idx, completion in completion_list:
+                try:
+                    # Extract content from TRL's chat format
+                    # Completions come as: [{'role': 'assistant', 'content': '...'}]
+                    completion_text = completion
+                    if isinstance(completion, list) and len(completion) > 0:
+                        # Extract from list of dicts format
+                        completion_text = completion[0].get("content", "")
+                    elif isinstance(completion, dict):
+                        # Extract from single dict format
+                        completion_text = completion.get("content", "")
 
-                # Compute reward using curriculum
-                # This computes and stores the reward internally, tracking curriculum progress
-                curriculum.compute_reward(task_id, completion_text)
+                    # Ensure we have a string
+                    if not isinstance(completion_text, str):
+                        print(
+                            f"Warning: Completion for task {task_id} is not a string after extraction. Type: {type(completion_text)}"
+                        )
+                        rewards_list.append(0.0)
+                        continue
 
-            except Exception as e:
-                print(f"Warning: Error computing reward for task {idx}: {e}")
+                    # Compute reward using curriculum
+                    # Returns combined_score (includes LLM Judge if batch complete)
+                    combined_score = curriculum.compute_reward(task_id, completion_text)
+                    rewards_list.append(float(combined_score))
 
-        # Retrieve normalized rewards for all tasks after computing all rewards
-        # This allows centralized score normalization logic in get_rewards()
-        normalized_rewards = curriculum.get_rewards(task_ids)
-        return [float(r) for r in normalized_rewards]
+                except Exception as e:
+                    print(f"Warning: Error computing reward for task {task_id}: {e}")
+                    rewards_list.append(0.0)
+
+        return rewards_list
 
     return reward_func
 

@@ -81,8 +81,6 @@ class TestNumGenerations(unittest.TestCase):
                 curriculum.compute_reward(
                     task_id, "<think>test</think>\n<answer>4</answer>"
                 )
-                # Call get_rewards to finalize the batch
-                curriculum.get_rewards([task_id])
                 # Should have triggered level update since we reached num_generations
                 task = curriculum.session.get_task(task_id)
                 self.assertEqual(len(task.generations), 2)
@@ -136,9 +134,6 @@ class TestNumGenerations(unittest.TestCase):
                 task_id, "<think>test</think>\n<answer>4</answer>"
             )
 
-            # Call get_rewards to finalize
-            curriculum.get_rewards([task_id])
-
             # global_step should have incremented by 1 (once per complete batch)
             self.assertEqual(curriculum.global_step, initial_step + 1)
             task = curriculum.session.get_task(task_id)
@@ -178,9 +173,6 @@ class TestNumGenerations(unittest.TestCase):
         # (batch should complete immediately)
         initial_step = curriculum.global_step
         curriculum.compute_reward(task.task_id, "response")
-
-        # Call get_rewards to finalize
-        curriculum.get_rewards([task.task_id])
 
         # Verify batch was completed (task should have 1 generation and global_step should increment)
         task = curriculum.session.get_task(task.task_id)
@@ -271,9 +263,6 @@ class TestGRPOBatching(unittest.TestCase):
             # Response 4 - should trigger batch completion
             self.curriculum.compute_reward(task_id, "<answer>4</answer>")
 
-            # Call get_rewards to finalize
-            self.curriculum.get_rewards([task_id])
-
             # Task should have all 4 generations
             task = self.curriculum.session.get_task(task_id)
             self.assertEqual(len(task.generations), 4)
@@ -359,8 +348,6 @@ class TestGRPOBatching(unittest.TestCase):
             for i in range(4):
                 self.curriculum.compute_reward(task_id, "<answer>4</answer>")
 
-            # Call get_rewards to finalize the first batch
-            self.curriculum.get_rewards([task_id])
             self.assertEqual(self.curriculum.global_step, initial_step + 1)
 
             # Submit 5th response - should NOT accumulate (capped)
@@ -369,10 +356,6 @@ class TestGRPOBatching(unittest.TestCase):
             # Task should still have only 4 generations
             task_after = self.curriculum.session.get_task(task_id)
             self.assertEqual(len(task_after.generations), 4)
-
-            # get_rewards should work fine
-            self.curriculum.get_rewards([task_id])
-            self.assertEqual(self.curriculum.global_step, initial_step + 1)
 
     def test_grpo_batch_different_tasks_independent(self):
         """Test that different tasks maintain independent batch counters."""
@@ -445,9 +428,6 @@ class TestGRPOBatching(unittest.TestCase):
             # Submit all 4 responses
             for i in range(4):
                 self.curriculum.compute_reward(task_id, "<answer>4</answer>")
-
-            # Call get_rewards to finalize
-            self.curriculum.get_rewards([task_id])
 
             # global_step should have incremented exactly once
             self.assertEqual(self.curriculum.global_step, initial_step + 1)

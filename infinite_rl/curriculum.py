@@ -777,17 +777,8 @@ class CurriculumLearning:
             aux_scores = {}
             aux_info = {}
 
-        log_entry["primary_score"] = primary_score
-        log_entry["aux_scores"] = aux_scores
-        log_entry["combined_score"] = (
-            getattr(latest_gen, "combined_score", None) if latest_gen else None
-        )
-        log_entry["info"] = {
-            "primary": primary_info,
-            **aux_info,
-        }
-
         # All GRPO batch information is already included in the generations array
+        # Task-level logging only includes task metadata; generation-level info is in generations[]
         with open(self.log_file, "a", encoding="utf-8") as f:
             json.dump(log_entry, f, ensure_ascii=False)
             f.write("\n")
@@ -1268,19 +1259,36 @@ class CurriculumLearning:
 
                 if task.task_type == "truthy":
                     # For truthy: replace primary score with LLM Judge score
-                    # Format gate will be applied in _compute_combined_score()
+                    # Apply format gate: if format invalid, gate judge reward to 0.0
                     for gen_idx, gen in enumerate(task.generations):
                         if gen_idx < len(judge_scores):
                             judge_score = judge_scores[gen_idx]
 
+                            # Check format validity from rewards (format_think, format_answer)
+                            format_valid = True
+                            if self.use_format:
+                                for reward in gen.rewards:
+                                    if reward.reward_function_name in [
+                                        "format_think",
+                                        "format_answer",
+                                    ]:
+                                        if reward.score < 1.0:
+                                            format_valid = False
+                                            break
+
+                            # Apply format gate: if format invalid, gate judge reward to 0.0
+                            final_judge_score = (
+                                judge_score.score if format_valid else 0.0
+                            )
+
                             for i, reward in enumerate(gen.rewards):
                                 if reward.reward_function_name == "primary":
                                     gen.rewards[i] = RewardFunctionScore(
-                                        score=judge_score.score,
+                                        score=final_judge_score,
                                         reward_function_name="primary",
                                         info=judge_score.info or "",
                                     )
-                                    gen.primary_score = judge_score.score
+                                    gen.primary_score = final_judge_score
                                     # Recompute combined_score after updating judge score
                                     gen.combined_score = self._compute_combined_score(
                                         task, gen

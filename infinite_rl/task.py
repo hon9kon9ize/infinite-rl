@@ -67,7 +67,11 @@ class Task:
         return self.generations[-1] if self.generations else None
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert task to dictionary for logging."""
+        """Convert task to dictionary for logging.
+
+        Returns task-level metadata only. Generation-level information
+        (expected_answer, model_output, is_correct, rewards, scores) is in generations[].
+        """
         return {
             "task_id": self.task_id,
             "dataset_id": self.dataset_id,
@@ -78,13 +82,9 @@ class Task:
             "reasoning_language": self.reasoning_language,
             "prompt": self.prompt,
             "judge_system_prompt": self.judge_system_prompt,
-            "expected_answer": self.expected_answer,
-            "model_output": self.model_output,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "first_response_at": (
                 self.first_response_at.isoformat() if self.first_response_at else None
             ),
-            "is_correct": self.is_correct,
-            # NEW: All generations
             "generations": [g.to_dict() for g in self.generations],
         }

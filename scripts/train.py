@@ -926,15 +926,24 @@ def main():
 
     # Print final curriculum stats
     final_stats = curriculum.get_learning_stats()
+    judge_stats = curriculum.get_judge_scores()
     print(f"\nFinal Curriculum Statistics:")
     print(f"  - Current level: {final_stats['current_level']}")
     print(f"  - Sliding window stats: {final_stats['sliding_window_stats']}")
+    print(f"  - Judge scores: avg={judge_stats['avg_judge_score']:.3f}, count={judge_stats['judge_score_count']}")
 
     # Log final stats to W&B
     if args.use_wandb and wandb.run is not None:
         final_wandb_logs = {
             "curriculum/final_level": final_stats.get("current_level", 0),
         }
+
+        # Log judge scores
+        final_wandb_logs["judge/final_avg_score"] = judge_stats.get("avg_judge_score", 0.0)
+        final_wandb_logs["judge/final_min_score"] = judge_stats.get("min_judge_score", 0.0)
+        final_wandb_logs["judge/final_max_score"] = judge_stats.get("max_judge_score", 0.0)
+        final_wandb_logs["judge/final_score_count"] = judge_stats.get("judge_score_count", 0)
+        final_wandb_logs["judge/final_total_tasks_with_judge"] = judge_stats.get("total_tasks_with_judge", 0)
 
         # Log final success rates and statistics
         sliding_window = final_stats.get("sliding_window_stats", {})
@@ -967,8 +976,12 @@ def main():
         print(f"\n✓ Final stats logged to W&B")
 
     # Save final stats
+    final_stats_with_judge = {
+        **final_stats,
+        "judge_scores": judge_stats
+    }
     with open(output_dir / "final_stats.json", "w") as f:
-        json.dump(final_stats, f, indent=2, default=str)
+        json.dump(final_stats_with_judge, f, indent=2, default=str)
     print(f"✓ Final stats saved to {output_dir / 'final_stats.json'}")
 
 

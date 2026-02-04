@@ -1662,8 +1662,7 @@ class TestCurriculumLearning(unittest.TestCase):
         task.add_generation("Response 2", [primary_reward, aux_reward], 1.0)
 
         # Call _log_completed_task
-        primary_scores = [1.0, 1.0]
-        cl._log_completed_task(task, primary_scores)
+        cl._log_completed_task(task)
 
         # Check log file
         self.assertTrue(os.path.exists(self.log_file))
@@ -1681,9 +1680,6 @@ class TestCurriculumLearning(unittest.TestCase):
         self.assertEqual(log_entry["aux_scores"]["format_answer"], 0.8)
         self.assertEqual(log_entry["info"]["primary"], "Correct answer")
         self.assertEqual(log_entry["info"]["aux_format_answer"], "Good format")
-        self.assertEqual(log_entry["grpo_batch_size"], 2)
-        self.assertEqual(log_entry["grpo_primary_scores"], [1.0, 1.0])
-        self.assertEqual(log_entry["grpo_model_outputs"], ["Response 1", "Response 2"])
         self.assertIn("timestamp", log_entry)
 
     def test_log_completed_task_truthy(self):
@@ -1728,8 +1724,7 @@ class TestCurriculumLearning(unittest.TestCase):
         task.add_generation("Response", [primary_reward, judge_reward], 0.9)
 
         # Call _log_completed_task
-        primary_scores = [0.9]
-        cl._log_completed_task(task, primary_scores)
+        cl._log_completed_task(task)
 
         # Check log file
         self.assertTrue(os.path.exists(self.log_file))

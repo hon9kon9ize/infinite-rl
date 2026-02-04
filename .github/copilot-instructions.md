@@ -23,6 +23,7 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
      - Advances difficulty when success rate > 80% AND variance < 0.05 (configurable)
      - Ensures agent has truly mastered current level, not just "catching up"
      - Per-task-type windows allow independent progression for math and puzzles
+     - **Simplified GRPO batch management**: Clean separation between batches with automatic diversity weighting
 
 ## What to know before changing code
 - Reward functions are designed to integrate with fine-tuning frameworks (e.g., Tunix).
@@ -35,14 +36,22 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
   - Requires sglang server running Skywork model (V2-Qwen3-4B)
   - Supports configurable score normalization
   - See `docs/LLM_JUDGE_REWARD_FUNCTION.md` for setup instructions
-- Reward functions return a `RewardFunctionScore(score, info)` with score ranging from 0.0 to 1.0 and `info` holding diagnostic text.
+- **GRPO Task Management**: Simplified approach with clean batch separation:
+  - Each GRPO batch gets a fresh task instance from `get_prompt()`
+  - `DynamicCurriculumDataset` handles within-batch reuse automatically
+  - Dataset row weighting ensures diversity across batches
+  - No complex active task tracking - removed error-prone `active_tasks` logic
 - **GRPO Batch Architecture**: Clean Task → Generation hierarchy with zero redundancy:
   - `Task.generations`: List of all generations for a task (replaces scattered dicts)
   - `Task.add_generation()`: Adds a new generation with output, rewards, and primary score
   - `Task.latest_generation`: Gets the most recent generation
   - `Session.get_batch_data(task_id)`: Retrieves all generation data for analysis
   - `Session.get_batch_stats(task_id)`: Provides comprehensive batch statistics
-  - No more `grpo_batch_*` dicts in CurriculumLearning - all state owned by Task
+  - **Simplified Task Management**: Each GRPO batch gets a fresh task instance; within-batch reuse handled by `DynamicCurriculumDataset` caching; dataset row weighting ensures diversity across batches
+- **Dataset Uniqueness**: Critical for preventing GRPO batching errors:
+  - Each dataset row must have a unique identifier to prevent task collision
+  - Unique IDs use format: `math_{idx}`, `puzzle_{lang}_{name}`, `truthy_{idx}`
+  - Task selection uses full history weighting to ensure diversity across batches
 - **Curriculum learning** uses sliding window success rates:
   - `_track_success()` records 1 (success) or 0 (failure) per task type
   - `_update_level()` checks: success_rate > threshold AND variance < variance_threshold for advancement, or success_rate < demote_threshold AND variance < variance_threshold for demotion
@@ -51,6 +60,7 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
     - `success_rate_threshold` (default: 0.8 = 80%) for advancement
     - `demote_threshold` (default: 0.4 = 40%) for demotion
     - `variance_threshold` (default: 0.05) for stability requirement
+    - `level_change_cooldown` (default: 5) for minimum steps between level changes to prevent rapid fluctuations
   - Per-task-type windows in `self.success_windows` allow independent progression
 
 ## Developer workflows & commands
@@ -128,7 +138,7 @@ RUNTIME_RELEASE_TAG=v1.2.3 RUNTIME_GITHUB_REPO=owner/repo python -m pip install 
 - Update CI if you change system dependencies (runtimes, Node/Java/g++ requirements).
 
 ## Files to inspect when debugging a change
-- `infinite_rl/curriculum.py` — curriculum learning implementation and task difficulty progression
+- `infinite_rl/curriculum.py` — curriculum learning implementation and task difficulty progression (simplified GRPO batch management)
 - `infinite_rl/reward_functions/*.py` — reward function implementations and interfaces
 - `infinite_rl/executor.py` — how code is run securely (WASM path)
 - `infinite_rl/runner.py` — Python puzzle evaluation via local subprocess

@@ -259,7 +259,9 @@ The `CurriculumLearning` class provides adaptive task difficulty progression bas
 - **Dual-Criterion Demotion**: Demotes difficulty when **both** conditions are met:
   - Average success rate < 40% (configurable via `demote_threshold`)
   - Variance < 0.05 (configurable via `variance_threshold`)
+- **Level Change Cooldown**: Prevents rapid level fluctuations by enforcing a minimum of 5 steps (configurable via `level_change_cooldown`) between changes
 - **Per-Task-Type Windows**: Maintains independent sliding windows for math and puzzle tasks
+- **Simplified Task Management**: Clean separation between GRPO batches with automatic diversity weighting
 - **Weighted Selection**: Avoids recently trained tasks to promote variety
 - **Multi-Task Support**: Works with math problems and programming puzzles
 
@@ -281,6 +283,7 @@ cl = CurriculumLearning(
     success_rate_threshold=0.8,  # Require 80% success rate for advancement
     demote_threshold=0.4,        # Demote if success rate falls below 40%
     variance_threshold=0.05,     # Require low variance for consistency
+    level_change_cooldown=5,     # Minimum steps between level changes
 )
 ```
 
@@ -292,13 +295,13 @@ cl = CurriculumLearning()
 
 # Get a task appropriate for current skill level
 task = cl.get_prompt()
-print(f"Task type: {task['task_type']}, Difficulty level: {task['level']}")
-print(f"Prompt: {task['prompt']}")
+print(f"Task type: {task.task_type}, Difficulty level: {task.level}")
+print(f"Prompt: {task.prompt}")
 
 # Evaluate model response and update learning state
 model_response = "<answer>4</answer>"
 reward = cl.compute_reward(
-    task_id=task['task_id'],
+    task_id=task.task_id,
     model_output=model_response
 )
 
@@ -328,12 +331,19 @@ The system implements a clean **Task → Generation hierarchy** for GRPO (Group 
 - **`Session.get_batch_data(task_id)`**: Retrieves all generation data for analysis
 - **`Session.get_batch_stats(task_id)`**: Provides comprehensive batch statistics
 
+**Simplified Task Management:**
+- **Fresh Tasks per Batch**: Each GRPO batch gets a fresh task instance from the dataset
+- **Within-Batch Reuse**: `DynamicCurriculumDataset` caches and reuses the same task for all `num_generations` completions within a batch
+- **Dataset Diversity**: Built-in weighting reduces probability of recently used dataset rows across batches
+- **Clean Separation**: No complex state tracking - each batch is independent
+
 **Key Benefits:**
 - **Zero Redundancy**: No scattered state across multiple dicts
 - **Single Source of Truth**: Task owns all its generations
 - **Automatic Cleanup**: No manual dict management needed
 - **Full Queryability**: Complete generation history tracking
 - **Clean Integration**: Seamless GRPO/non-GRPO task handling
+- **Simplified Logic**: Removed error-prone active task tracking
 
 **Usage Examples:**
 ```python
@@ -341,11 +351,12 @@ from infinite_rl import CurriculumLearning
 
 cl = CurriculumLearning()
 
-# GRPO batch automatically tracked
+# GRPO batch automatically handled by DynamicCurriculumDataset
+# Each batch gets a fresh task, within-batch reuse is automatic
 for generation in range(4):  # GRPO with 4 generations
-    task = cl.get_prompt()
-    model_output = generate_response(task['prompt'])
-    reward = cl.compute_reward(task['task_id'], model_output)
+    task = cl.get_prompt()  # Fresh task per batch, cached within batch
+    model_output = generate_response(task.prompt)
+    reward = cl.compute_reward(task.task_id, model_output)
     # Task automatically accumulates generations
 
 # Query generation statistics
@@ -353,11 +364,11 @@ from infinite_rl.session import Session
 session = cl.session  # Access internal session
 
 # Get all generation data
-batch_data = session.get_batch_data(task['task_id'])
+batch_data = session.get_batch_data(task.task_id)
 print(f"Generated {len(batch_data)} responses")
 
 # Get batch statistics
-stats = session.get_batch_stats(task['task_id'])
+stats = session.get_batch_stats(task.task_id)
 print(f"Average score: {stats['scores']['avg']:.3f}")
 print(f"Best generation index: {stats['best_generation']['index']}")
 ```

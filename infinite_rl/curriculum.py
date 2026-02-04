@@ -59,6 +59,7 @@ class CurriculumLearning:
         demote_threshold: float = 0.4,
         warmup_step: int = 32,
         reflective_learning_rate: float = 0.2,
+        truthy_learning_rate: float = 0.2,
         level_change_cooldown: int = 5,
         num_generations: int = 4,
         puzzle_one_shot: bool = False,
@@ -94,7 +95,8 @@ class CurriculumLearning:
             variance_threshold: Maximum variance for success rate stability (default: 0.15)
             demote_threshold: Success rate threshold for difficulty decrease (default: 0.4 = 40%)
             warmup_step: Number of initial steps to only use level 0 tasks (default: 32)
-            reflective_learning_rate: Probability of triggering reflective learning on format failures (default: 0.1). Set to 0 to disable.
+            reflective_learning_rate: Probability of triggering reflective learning on format failures (default: 0.2). Set to 0 to disable.
+            truthy_learning_rate: Probability of including truthy tasks in the curriculum (default: 0.2). Set to 0 to disable.
             level_change_cooldown: Minimum steps between level changes to prevent rapid fluctuations (default: 5)
             num_generations: Number of generations per prompt for GRPO batching (default: 4)
             puzzle_one_shot: Whether to include one-shot examples in puzzle prompts (default: False)
@@ -156,9 +158,15 @@ class CurriculumLearning:
         # Reflective learning configuration
         self.reflective_learning_rate = reflective_learning_rate
 
+        # Truthy learning configuration
+        self.truthy_learning_rate = truthy_learning_rate
+
         # Session management
         self.session = session or Session()
         self.log_file = Path(log_file) if log_file is not None else None
+
+        # Track which tasks have been logged to prevent duplicate logging
+        self.logged_tasks: set = set()
 
         # Sliding window tracking for success rate
         self.window_size = window_size
@@ -173,13 +181,6 @@ class CurriculumLearning:
         self.last_level_change_step: int = -999  # Track when last level change occurred
         self.level_change_cooldown: int = level_change_cooldown
 
-        # GRPO batch tracking: REMOVED - now handled by Task.generations
-        # self.grpo_batch_primary_scores: Dict[str, List[float]] = (
-        #     {}
-        # )  # Maps task_id -> list of primary scores (for curriculum)
-        # self.grpo_batch_outputs: Dict[str, List[str]] = (
-        #     {}
-        # )  # Maps task_id -> list of model outputs (for logging all generations)
         self.num_generations: int = (
             num_generations  # Number of generations per prompt (configurable)
         )
@@ -599,12 +600,11 @@ class CurriculumLearning:
 
         return format_think_valid and format_answer_valid, failure_reason
 
-    def _log_completed_task(self, task: Task, primary_scores: List[float]) -> None:
+    def _log_completed_task(self, task: Task) -> None:
         """Log a completed task batch to the log file.
 
         Args:
             task: The completed task
-            primary_scores: List of primary scores for the batch
         """
         if self.log_file is None:
             return
@@ -645,10 +645,7 @@ class CurriculumLearning:
             **aux_info,
         }
 
-        # Add GRPO batch information
-        log_entry["grpo_batch_size"] = len(primary_scores)
-        log_entry["grpo_primary_scores"] = primary_scores
-        log_entry["grpo_model_outputs"] = [g.output for g in task.generations]
+        # All GRPO batch information is already included in the generations array
         with open(self.log_file, "a", encoding="utf-8") as f:
             json.dump(log_entry, f, ensure_ascii=False)
             f.write("\n")
@@ -698,6 +695,7 @@ class CurriculumLearning:
                 self.last_level_change_step = self.global_step
                 # Clear windows to start fresh at new difficulty
                 self.success_windows.clear()
+                self.logged_tasks.clear()
                 return True
 
         # DEMOTE: Low success rate at current level AND stable (consistent failure)
@@ -755,7 +753,11 @@ class CurriculumLearning:
             sum(primary_scores) / len(primary_scores) if primary_scores else 0.0
         )
         max_primary = max(primary_scores) if primary_scores else 0.0
-        group_success = 1 if (max_primary == 1.0 or mean_primary >= 0.7) else 0
+
+        # More conservative success criteria for curriculum learning:
+        # Require BOTH: mean >= 0.8 AND at least one perfect response
+        # This ensures consistent performance across the batch, not just lucky guesses
+        group_success = 1 if (mean_primary >= 0.8 and max_primary == 1.0) else 0
 
         self.success_windows[level].append(group_success)
 
@@ -838,41 +840,45 @@ class CurriculumLearning:
                 "by_level": all_stats,
             }
 
-    def get_truthy_judge_scores(self) -> Dict[str, Any]:
-        """Get statistics on truthy task LLM Judge scores.
+    def get_judge_scores(self) -> Dict[str, Any]:
+        """Get statistics on LLM Judge scores across all task types.
 
-        Computes average, min, max, and count of truthy task judge scores.
-        This is separate from success rates (which only track binary correct/incorrect).
+        Computes average, min, max, and count of LLM Judge scores for all tasks
+        that have been evaluated with LLM Judge. This includes both truthy tasks
+        (where judge score is primary) and math/puzzle tasks (where judge score is auxiliary).
 
         Returns:
             Dictionary with:
             - avg_judge_score: Average LLM Judge score (0.0-1.0)
             - min_judge_score: Minimum LLM Judge score
             - max_judge_score: Maximum LLM Judge score
-            - judge_score_count: Number of truthy tasks evaluated
-            - truthy_count: Total truthy task evaluations (for monitoring)
+            - judge_score_count: Number of tasks with LLM Judge scores
+            - total_tasks_with_judge: Total tasks that have LLM Judge evaluation
         """
-        truthy_judge_scores = []
-        truthy_count = 0
+        judge_scores = []
+        tasks_with_judge = 0
 
         for task in self.session.tasks.values():
-            if task.task_type == "truthy":
-                truthy_count += 1
-                # Extract LLM Judge or primary score from task rewards
-                for reward in task.task_rewards:
-                    if reward.reward_function_name in ("primary", "llm_judge"):
-                        # For truthy, primary IS the judge score
-                        if (
-                            task.task_type == "truthy"
-                            and reward.reward_function_name == "primary"
-                        ):
-                            truthy_judge_scores.append(reward.score)
-                            break
+            # Extract LLM Judge score from task rewards
+            for reward in task.task_rewards:
+                if reward.reward_function_name == "llm_judge":
+                    # For math/puzzle tasks, judge score is stored as "llm_judge"
+                    judge_scores.append(reward.score)
+                    tasks_with_judge += 1
+                    break
+                elif (
+                    task.task_type == "truthy"
+                    and reward.reward_function_name == "primary"
+                ):
+                    # For truthy tasks, primary score IS the judge score
+                    judge_scores.append(reward.score)
+                    tasks_with_judge += 1
+                    break
 
-        if truthy_judge_scores:
-            avg_judge_score = sum(truthy_judge_scores) / len(truthy_judge_scores)
-            min_judge_score = min(truthy_judge_scores)
-            max_judge_score = max(truthy_judge_scores)
+        if judge_scores:
+            avg_judge_score = sum(judge_scores) / len(judge_scores)
+            min_judge_score = min(judge_scores)
+            max_judge_score = max(judge_scores)
         else:
             avg_judge_score = 0.0
             min_judge_score = 0.0
@@ -882,21 +888,24 @@ class CurriculumLearning:
             "avg_judge_score": avg_judge_score,
             "min_judge_score": min_judge_score,
             "max_judge_score": max_judge_score,
-            "judge_score_count": len(truthy_judge_scores),
-            "truthy_count": truthy_count,
+            "judge_score_count": len(judge_scores),
+            "total_tasks_with_judge": tasks_with_judge,
         }
 
     def get_prompt(self) -> Optional[Task]:
         """
         Get a task prompt appropriate for current difficulty level.
 
-        With probability reflective_learning_rate (default 0.1), returns a format-failure
+        With probability reflective_learning_rate (default 0.2), returns a format-failure
         task wrapped in a reflective prompt to help the model learn proper formatting.
-        With probability 0.2, returns a truthy task for conversation quality evaluation.
+        With probability truthy_learning_rate (default 0.2), returns a truthy task for conversation quality evaluation.
         Otherwise, returns a new task based on current difficulty level.
 
         During warmup stage (first warmup_step iterations), only level 0 tasks are used
         (unless reflective learning or truthy is triggered).
+
+        For GRPO batching: Each call creates a new task instance. The dataset ensures
+        that within a batch, the same task is reused for multiple generations.
 
         Returns:
             Task object with prompt, expected output, etc., or None if no tasks available.
@@ -912,50 +921,74 @@ class CurriculumLearning:
                 return reflective_task
 
         # Check for truthy task trigger (20% chance)
-        if random.random() < 0.2 and self.session.truthy_tasks:
+        if random.random() < self.truthy_learning_rate and self.session.truthy_tasks:
             selected_task = random.choice(self.session.truthy_tasks)
             return self.session.create_truthy_task(selected_task)
 
         # Normal task selection logic
-        # Determine which level to use
+        # Collect tasks from all levels with level-based weighting for diversity
+        all_available_tasks = []
+        level_weights = []
+
+        # During warmup, only use level 0
         if self.is_warmup():
-            # Warmup stage: use level 0 (math tasks only)
-            selected_level = 0
+            available_tasks = self.session.tasks_by_level.get(0, [])
+            if available_tasks:
+                all_available_tasks.extend(available_tasks)
+                level_weights.extend([1.0] * len(available_tasks))
+            else:
+                # Fallback to any available tasks during warmup if level 0 is empty
+                for level in range(0, 7):
+                    if self.session.tasks_by_level[level]:
+                        available_tasks = self.session.tasks_by_level[level]
+                        all_available_tasks.extend(available_tasks)
+                        level_weights.extend([1.0] * len(available_tasks))
+                        break
         else:
-            # Normal curriculum: use current level
-            selected_level = self.current_level
+            # Normal curriculum: collect from all levels with preference for current level
+            current_level_weight = 2.0  # 2x weight for current level
+            other_level_weight = 0.5  # 0.5x weight for other levels
 
-        # Get available tasks for selected level
-        available_tasks = self.session.tasks_by_level.get(selected_level, [])
-
-        if not available_tasks:
-            # Fallback to any available tasks
             for level in range(0, 7):
-                if self.session.tasks_by_level[level]:
-                    available_tasks = self.session.tasks_by_level[level]
-                    break
+                level_tasks = self.session.tasks_by_level.get(level, [])
+                if level_tasks:
+                    # Limit tasks per level to prevent performance issues
+                    max_tasks_per_level = 50
+                    if len(level_tasks) > max_tasks_per_level:
+                        level_tasks = random.sample(level_tasks, max_tasks_per_level)
 
-        if not available_tasks:
+                    all_available_tasks.extend(level_tasks)
+
+                    # Apply level-based weighting
+                    level_weight = (
+                        current_level_weight
+                        if level == self.current_level
+                        else other_level_weight
+                    )
+                    level_weights.extend([level_weight] * len(level_tasks))
+
+        if not all_available_tasks:
             return None
 
-        # Weight against recent tasks
+        # Weight against recent tasks to ensure diversity (using dataset IDs)
         recent_task_ids = self.session._get_recent_task_ids()
-        weights = []
-        for task in available_tasks:
-            weight = 1.0
 
-            # Reduce weight for recent tasks
+        final_weights = []
+        for i, task in enumerate(all_available_tasks):
+            weight = level_weights[i]
+
+            # Reduce weight for recent tasks (even if not excluded)
             if task["id"] in recent_task_ids:
                 recency_penalty = recent_task_ids.count(task["id"]) / max(
                     len(recent_task_ids), 1
                 )
                 weight = max(0.1, weight * (1.0 - recency_penalty))
-            weights.append(weight)
+            final_weights.append(weight)
 
-        # Select task with weighting
-        selected_task = random.choices(available_tasks, weights=weights, k=1)[0]
-
-        # Dispatch to task-type-specific handler
+        # Select task with combined weighting
+        selected_task = random.choices(all_available_tasks, weights=final_weights, k=1)[
+            0
+        ]
         if selected_task["type"] == "math":
             return self.session.create_math_task(selected_task)
         elif selected_task["type"] == "puzzle":
@@ -1134,19 +1167,24 @@ class CurriculumLearning:
                     raise ValueError(
                         f"Task {task_id} has {len(task.generations)} generations, expected {self.num_generations}"
                     )
-                # Complete group: track success at prompt level
-                primary_scores = [g.primary_score for g in task.generations]
-                if task.task_type != "truthy":
-                    self._track_success_group(task.level, primary_scores)
 
-                # Increment step counter ONCE per complete prompt group
-                self.global_step += 1
+                # Only log and track success for tasks we haven't logged before
+                if task_id not in self.logged_tasks:
+                    self.logged_tasks.add(task_id)
 
-                # Check if we should advance/demote level
-                self._update_level()
+                    # Complete group: track success at prompt level
+                    primary_scores = [g.primary_score for g in task.generations]
+                    if task.task_type != "truthy":
+                        self._track_success_group(task.level, primary_scores)
 
-                # Log evaluation if configured
-                self._log_completed_task(task, primary_scores)
+                    # Increment step counter ONCE per complete prompt group
+                    self.global_step += 1
+
+                    # Check if we should advance/demote level
+                    self._update_level()
+
+                    # Log evaluation if configured
+                    self._log_completed_task(task)
 
         combined_rewards = []
 

@@ -89,12 +89,14 @@ class Session:
         math_data = load_runtime_json("math.json")
         if math_data:
             try:
-                for item in math_data:
+                for idx, item in enumerate(math_data):
+                    # Add unique dataset ID to prevent collisions
+                    dataset_id = f"math_{idx}"
                     task_info = {
                         "type": "math",
                         "data": item,
                         "rating": item.get("rating", 0),
-                        "id": f"math_{hash(str(item))}",
+                        "id": dataset_id,  # Unique dataset ID
                     }
                     level = min(task_info["rating"], 6)  # Ensure level <= 6
                     self.tasks_by_level[level].append(task_info)
@@ -159,7 +161,7 @@ class Session:
                             "type": "truthy",
                             "data": truthy_item,
                             "rating": None,  # Truthy tasks not limited by rating
-                            "id": f"truthy_{idx}_{truthy_item.get('id', '')}",
+                            "id": f"truthy_{idx}",  # Unique dataset ID
                         }
                         # Store truthy tasks separately
                         self.truthy_tasks.append(task_info)
@@ -251,6 +253,7 @@ class Session:
                 expected_answer=expected_answer,
                 reasoning_language=truthy_data.get("reasoning_language", "en"),
                 language=truthy_data.get("language", "en"),
+                dataset_id=base_task_id,
             )
             self.add_task(task_obj)
             return task_obj
@@ -291,6 +294,7 @@ class Session:
                 prompt=prompt,
                 expected_answer=expected_output,
                 language=language,
+                dataset_id=base_task_id,
             )
             self.add_task(task_obj)
             return task_obj
@@ -339,6 +343,7 @@ class Session:
                 prompt=prompt,
                 expected_answer=expected_output,
                 language=language,
+                dataset_id=base_task_id,
             )
             self.add_task(task_obj)
             return task_obj

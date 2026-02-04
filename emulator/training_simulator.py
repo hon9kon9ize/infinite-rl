@@ -68,6 +68,7 @@ class TrainingSimulator:
         use_llm_judge: bool = False,
         llm_judge_weight: float = 0.2,
         llm_judge_kwargs: Dict[str, Any] = None,
+        log_file: Optional[str] = None,
     ):
         """Initialize the simulator.
 
@@ -86,6 +87,7 @@ class TrainingSimulator:
             use_llm_judge: Whether to use LLM Judge for truthy tasks
             llm_judge_weight: Weight for LLM Judge reward
             llm_judge_kwargs: Additional kwargs for LLM Judge initialization
+            log_file: Path to the logging file (JSON Lines format)
         """
         self.num_generations = num_generations
         self.use_format = use_format
@@ -98,6 +100,7 @@ class TrainingSimulator:
         self.llm_judge_weight = llm_judge_weight
         self.demote_threshold = demote_threshold
         self.window_size = window_size
+        self.log_file = log_file
 
         # Build curriculum kwargs
         curriculum_kwargs = {
@@ -115,6 +118,7 @@ class TrainingSimulator:
             "puzzle_one_shot": False,
             "use_llm_judge": use_llm_judge,
             "llm_judge_weight": llm_judge_weight,
+            "log_file": log_file,
         }
 
         # Add LLM Judge kwargs if using LLM Judge

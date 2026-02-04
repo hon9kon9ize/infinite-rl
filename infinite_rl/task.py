@@ -25,6 +25,7 @@ class Task:
         first_response_at: Optional[datetime.datetime] = None,
         language: Optional[str] = None,
         reasoning_language: Optional[str] = None,
+        dataset_id: Optional[str] = None,
     ):
         self.task_id = task_id
         self.task_name = task_name
@@ -37,11 +38,12 @@ class Task:
         self.is_correct: Optional[bool] = None  # Track if task was solved correctly
         self.model_output: Optional[str] = model_output
         self.created_at: datetime.datetime = created_at or datetime.datetime.now()
-        self.first_response_at: Optional[datetime.datetime] = first_response_at
+        self.first_response_at: Optional[datetime.datetime] = None
         self.language: Optional[str] = language
         # For puzzles: language is programming language (javascript/python), reasoning_language is the <think> tag language
         # For math: language is reasoning language, reasoning_language defaults to same
         self.reasoning_language: Optional[str] = reasoning_language or language or "en"
+        self.dataset_id = dataset_id
 
         # NEW: Clean generation hierarchy
         self.generations: List[Generation] = []
@@ -85,6 +87,7 @@ class Task:
         """Convert task to dictionary for logging."""
         return {
             "task_id": self.task_id,
+            "dataset_id": self.dataset_id,
             "task_name": self.task_name,
             "task_type": self.task_type,
             "level": self.level,

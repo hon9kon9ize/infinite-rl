@@ -330,6 +330,8 @@ class LLMJudgeRewardFunction(RewardFunction):
             # Call batch judge API
             scores = self._call_judge_api(formatted_texts)
 
+            print("DEBUG", scores)
+
             if scores is None or len(scores) != len(formatted_texts):
                 # API call failed - return empty lists for all tasks
                 return [[] for _ in tasks]

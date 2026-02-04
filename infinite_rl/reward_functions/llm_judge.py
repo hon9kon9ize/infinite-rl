@@ -156,10 +156,25 @@ class LLMJudgeRewardFunction(RewardFunction):
                 "text": formatted_texts,
             }
 
+            # Debug: log the first few texts to see if they're different
+            print(f"Debug: Sending {len(formatted_texts)} texts to judge API")
+            for i, text in enumerate(formatted_texts[:3]):  # Show first 3
+                print(f"Debug: Text {i}: {text[:200]}...")
+
             response = requests.post(self.base_url, json=payload, timeout=self.timeout)
             response.raise_for_status()
 
             responses = response.json()
+            print(f"Debug: Got {len(responses)} responses from judge API")
+            for i, resp in enumerate(responses[:3]):  # Show first 3 responses
+                if "embedding" in resp and len(resp["embedding"]) > 0:
+                    embedding = resp["embedding"]
+                    print(
+                        f"Debug: Response {i} embedding length: {len(embedding)}, first few values: {embedding[:min(4, len(embedding))]}"
+                    )
+                else:
+                    print(f"Debug: Response {i} missing embedding")
+
             scores = []
 
             for resp in responses:
@@ -256,12 +271,10 @@ class LLMJudgeRewardFunction(RewardFunction):
                     info=f"Judge score {raw_score:.4f} is below threshold {self.score_threshold}.",
                 )
 
-            # Normalize and return score
-            normalized_score = self._normalize_score(raw_score)
-
+            # Return raw score (normalization done in batch method)
             return RewardFunctionScore(
-                score=normalized_score,
-                info=f"Judge score: {raw_score:.4f} → normalized: {normalized_score:.4f}",
+                score=raw_score,
+                info=f"Judge score: {raw_score:.4f} (raw)",
             )
 
         except Exception as e:
@@ -284,7 +297,7 @@ class LLMJudgeRewardFunction(RewardFunction):
             tasks: List of Task objects to evaluate
 
         Returns:
-            List of RewardFunctionScore objects in the same order as input tasks
+            List of lists of RewardFunctionScore objects, one list per task with scores for each generation
         """
         if not self.initialized:
             self.initialize()
@@ -295,98 +308,58 @@ class LLMJudgeRewardFunction(RewardFunction):
         try:
             # Prepare all formatted texts for batch API call
             formatted_texts = []
-            task_data = []  # Store task data for error handling
+            task_gen_data = []  # Store (task_idx, gen_idx) for each text
 
-            for task in tasks:
-                # Validate inputs
-                if not task.prompt or not task.model_output:
-                    # Invalid task - mark for later
-                    formatted_texts.append(None)
-                    task_data.append((task, None))
-                    continue
+            for task_idx, task in enumerate(tasks):
+                for gen_idx, gen in enumerate(task.generations):
+                    # Validate generation has output
+                    if not gen.output:
+                        continue
 
-                # Format conversation
-                judge_system_prompt = getattr(task, "judge_system_prompt", None)
-                conversation = self._format_conversation(
-                    task.prompt, task.model_output, judge_system_prompt
-                )
-
-                # Apply chat template
-                formatted_text = self._apply_chat_template(conversation)
-                formatted_texts.append(formatted_text)
-                task_data.append((task, formatted_text))
-
-            # Call batch judge API (filter out None values)
-            valid_indices = [
-                i for i, text in enumerate(formatted_texts) if text is not None
-            ]
-            valid_texts = [formatted_texts[i] for i in valid_indices]
-
-            if not valid_texts:
-                # All tasks were invalid
-                return [
-                    RewardFunctionScore(
-                        score=0.0,
-                        info="Task has no prompt or model output.",
+                    # Format conversation for this generation
+                    judge_system_prompt = getattr(task, "judge_system_prompt", None)
+                    conversation = self._format_conversation(
+                        task.prompt, gen.output, judge_system_prompt
                     )
-                    for _ in tasks
-                ]
 
-            scores = self._call_judge_api(valid_texts)
+                    # Apply chat template
+                    formatted_text = self._apply_chat_template(conversation)
+                    formatted_texts.append(formatted_text)
+                    task_gen_data.append((task_idx, gen_idx))
 
-            if scores is None or len(scores) != len(valid_texts):
-                # API call failed - return default scores for all tasks
-                return [
-                    RewardFunctionScore(
+            # Call batch judge API
+            scores = self._call_judge_api(formatted_texts)
+
+            if scores is None or len(scores) != len(formatted_texts):
+                # API call failed - return empty lists for all tasks
+                return [[] for _ in tasks]
+
+            # Group scores by task
+            task_scores = [[] for _ in tasks]
+            for (task_idx, gen_idx), score in zip(task_gen_data, scores):
+                # Check if score is below threshold
+                if score < self.score_threshold:
+                    reward_score = RewardFunctionScore(
                         score=0.0,
-                        info="Failed to get scores from judge API.",
-                    )
-                    for _ in tasks
-                ]
-
-            # Build results array in original task order
-            results = []
-            valid_score_idx = 0
-
-            for i, (task, formatted_text) in enumerate(task_data):
-                if formatted_text is None:
-                    # This task was invalid
-                    results.append(
-                        RewardFunctionScore(
-                            score=0.0,
-                            info="Task has no prompt or model output.",
-                        )
+                        info=f"Judge score {score:.4f} is below threshold {self.score_threshold}.",
                     )
                 else:
-                    raw_score = scores[valid_score_idx]
-                    valid_score_idx += 1
+                    # Normalize and create result
+                    normalized_score = self._normalize_score(score)
+                    reward_score = RewardFunctionScore(
+                        score=normalized_score,
+                        info=f"Judge score: {score:.4f} → normalized: {normalized_score:.4f}",
+                    )
+                task_scores[task_idx].append((gen_idx, reward_score))
 
-                    # Check if score is below threshold
-                    if raw_score < self.score_threshold:
-                        results.append(
-                            RewardFunctionScore(
-                                score=0.0,
-                                info=f"Judge score {raw_score:.4f} is below threshold {self.score_threshold}.",
-                            )
-                        )
-                    else:
-                        # Normalize and add result
-                        normalized_score = self._normalize_score(raw_score)
-                        results.append(
-                            RewardFunctionScore(
-                                score=normalized_score,
-                                info=f"Judge score: {raw_score:.4f} → normalized: {normalized_score:.4f}",
-                            )
-                        )
+            # Sort by generation index and return just the scores
+            result = []
+            for task_scores_list in task_scores:
+                sorted_scores = [score for _, score in sorted(task_scores_list)]
+                result.append(sorted_scores)
 
-            return results
+            return result
 
         except Exception as e:
-            # Return error score for all tasks
-            return [
-                RewardFunctionScore(
-                    score=0.0,
-                    info=f"Error computing batch judge rewards: {str(e)}",
-                )
-                for _ in tasks
-            ]
+            # On error, return empty lists
+            return [[] for _ in tasks]

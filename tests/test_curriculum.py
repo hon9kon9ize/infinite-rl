@@ -840,7 +840,7 @@ class TestCurriculumLearning(unittest.TestCase):
         mock_result = MagicMock()
         mock_result.score = 0.75
         mock_result.info = "Good response"
-        mock_judge.compute_rewards_batch.return_value = [mock_result]
+        mock_judge.compute_rewards_batch.return_value = [[mock_result]]
 
         # Now test get_rewards for blended score
         combined_rewards = cl.get_rewards(["truthy_test"])
@@ -2311,13 +2311,13 @@ class TestCurriculumLearning(unittest.TestCase):
         with patch.object(
             cl.aux_reward_functions["llm_judge"], "compute_rewards_batch"
         ) as mock_batch:
-            # Create mock results for each task
+            # Create mock results for each task (list of lists for generations)
             mock_results = []
             for i in range(3):
                 mock_result = MagicMock()
                 mock_result.score = i * 0.5  # 0.0, 0.5, 1.0 (normalized)
                 mock_result.info = f"Response {i} quality"
-                mock_results.append(mock_result)
+                mock_results.append([mock_result])  # One result per generation
 
             mock_batch.return_value = mock_results
 
@@ -2415,7 +2415,7 @@ class TestCurriculumLearning(unittest.TestCase):
                 mock_result.info = f"Quality {i}"
                 mock_results.append(mock_result)
 
-            mock_batch.return_value = mock_results
+            mock_batch.return_value = [[mock_result] for mock_result in mock_results]
 
             # Manually add the method so hasattr works
             cl.aux_reward_functions["llm_judge"].compute_rewards_batch = mock_batch
@@ -2497,49 +2497,33 @@ class TestCurriculumLearning(unittest.TestCase):
             task.model_output = f"Response {i}"
             task_ids.append(f"truthy_{i}")
 
-        # Mock compute_rewards_batch to not exist (hasattr will return False)
-        # and mock compute_reward to handle fallback
+        # Mock compute_rewards_batch to return results
         with patch.object(
-            cl.aux_reward_functions["llm_judge"],
-            "compute_rewards_batch",
-            side_effect=AttributeError("compute_rewards_batch not available"),
-        ):
-            with patch.object(
-                cl.aux_reward_functions["llm_judge"], "compute_reward"
-            ) as mock_individual:
-                mock_results = []
-                for i in range(2):
-                    mock_result = MagicMock()
-                    mock_result.score = i * 1.0  # 0.0, 1.0 (normalized)
-                    mock_result.info = f"Quality {i}"
-                    mock_results.append(mock_result)
+            cl.aux_reward_functions["llm_judge"], "compute_rewards_batch"
+        ) as mock_batch:
+            mock_results = []
+            for i in range(2):
+                mock_result = MagicMock()
+                mock_result.score = i * 1.0  # 0.0, 1.0 (normalized)
+                mock_result.info = f"Quality {i}"
+                mock_results.append(mock_result)
 
-                # Set up individual calls to be used
-                mock_individual.side_effect = mock_results
+            # Return list of lists for batch
+            mock_batch.return_value = [[mock_result] for mock_result in mock_results]
 
-                # Compute initial rewards
-                for task_id in task_ids:
-                    cl.compute_reward(task_id, "Test")
+            # Compute initial rewards
+            for task_id in task_ids:
+                cl.compute_reward(task_id, "Test")
 
-                # Reset the mock for get_rewards call
-                mock_individual.reset_mock()
-                mock_individual.side_effect = mock_results
+            # Get rewards (should use batch)
+            rewards = cl.get_rewards(task_ids)
 
-                # Get rewards (should fallback to individual calls since batch raises AttributeError)
-                rewards = cl.get_rewards(task_ids)
+            # Verify batch was called
+            self.assertTrue(mock_batch.called)
 
-                # Verify individual calls were made
-                self.assertTrue(mock_individual.called)
-                # Should be called twice (once for each task in batch processing)
-                self.assertEqual(
-                    mock_individual.call_count,
-                    2,
-                    f"Expected 2 individual calls, got {mock_individual.call_count}",
-                )
-
-                # Verify results (no normalization since aux_weight=0.0)
-                self.assertAlmostEqual(rewards[0], 0.0, places=5)
-                self.assertAlmostEqual(rewards[1], 1.0, places=5)
+            # Verify results (no normalization since aux_weight=0.0)
+            self.assertAlmostEqual(rewards[0], 0.0, places=5)
+            self.assertAlmostEqual(rewards[1], 1.0, places=5)
 
     def test_truthy_task_does_not_affect_curriculum(self):
         """Test that truthy tasks never affect curriculum success windows."""

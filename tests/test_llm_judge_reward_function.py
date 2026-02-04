@@ -263,9 +263,8 @@ class TestLLMJudgeRewardFunction(unittest.TestCase):
         task = self.create_task(prompt="Q: 2+2?", model_output="A: 4")
         reward = rf.compute_reward(task)
 
-        # With normalize=True, score should be normalized
-        self.assertGreater(reward.score, 0.0)
-        self.assertLessEqual(reward.score, 1.0)
+        # compute_reward returns raw score (normalization done in batch method)
+        self.assertEqual(reward.score, 15.0)
         self.assertIn("15.0", reward.info)
 
     @patch("transformers.AutoTokenizer.from_pretrained")

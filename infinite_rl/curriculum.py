@@ -875,10 +875,32 @@ class CurriculumLearning:
             - judge_score_count: Number of tasks with LLM Judge scores
             - total_tasks_with_judge: Total tasks that have LLM Judge evaluation
         """
+        # Compute any missing LLM Judge scores before collecting statistics
+        task_ids_to_compute = []
+        for task in self.session.tasks.values():
+            if not task.latest_generation:
+                continue
+            has_judge = False
+            for reward in task.latest_generation.rewards:
+                if reward.reward_function_name == "llm_judge" or (
+                    task.task_type == "truthy"
+                    and reward.reward_function_name == "primary"
+                ):
+                    has_judge = True
+                    break
+            if not has_judge:
+                task_ids_to_compute.append(task.task_id)
+        if task_ids_to_compute:
+            self._compute_batch_llm_judge(task_ids_to_compute)
+
         judge_scores = []
         tasks_with_judge = 0
 
         for task in self.session.tasks.values():
+            # Skip tasks that haven't been processed yet (no generations)
+            if not task.latest_generation:
+                continue
+
             # Extract LLM Judge score from latest generation rewards
             for reward in task.latest_generation.rewards:
                 if reward.reward_function_name == "llm_judge":
@@ -1098,6 +1120,9 @@ class CurriculumLearning:
             task = self.session.get_task(task_id)
             if task is None:
                 continue
+            # Skip tasks that haven't been processed yet (no generations)
+            if not task.latest_generation:
+                continue
             # Collect all tasks that need LLM Judge evaluation (including truthy)
             has_judge_score = any(
                 r.reward_function_name == "llm_judge"
@@ -1113,55 +1138,42 @@ class CurriculumLearning:
         # Batch evaluate all tasks with LLM Judge
         try:
             llm_judge_fn = self.aux_reward_functions["llm_judge"]
-            # Try batch evaluation if supported
-            judge_results = None
-
-            if hasattr(llm_judge_fn, "compute_rewards_batch"):
-                try:
-                    # Batch API call
-                    judge_results = llm_judge_fn.compute_rewards_batch(tasks_to_judge)
-                except (AttributeError, TypeError):
-                    # Batch method not available or failed, fallback to individual
-                    judge_results = None
-
-            if judge_results is None:
-                # Fallback: individual calls (still batched, but without API optimization)
-                judge_results = []
-                for task in tasks_to_judge:
-                    result = llm_judge_fn.compute_reward(task, is_correct=False)
-                    judge_results.append(result)
-
-            print("Debug: judge_results", judge_results)
+            # Batch API call (always use batch method)
+            judge_results = llm_judge_fn.compute_rewards_batch(tasks_to_judge)
 
             # Update task rewards with LLM Judge scores
-            for idx, judge_result in enumerate(judge_results):
+            for idx, judge_scores in enumerate(judge_results):
                 task_id = task_index_map[idx]
                 task = self.session.get_task(task_id)
                 if not task:
                     continue
 
                 if task.task_type == "truthy":
-                    # For truthy: replace primary score with LLM Judge score in ALL generations
-                    for gen in task.generations:
-                        for i, reward in enumerate(gen.rewards):
-                            if reward.reward_function_name == "primary":
-                                gen.rewards[i] = RewardFunctionScore(
-                                    score=judge_result.score,
-                                    reward_function_name="primary",
-                                    info=judge_result.info or "",
-                                )
-                                gen.primary_score = judge_result.score
-                                break
+                    # For truthy: replace primary score with LLM Judge score for each generation
+                    for gen_idx, gen in enumerate(task.generations):
+                        if gen_idx < len(judge_scores):
+                            judge_score = judge_scores[gen_idx]
+                            for i, reward in enumerate(gen.rewards):
+                                if reward.reward_function_name == "primary":
+                                    gen.rewards[i] = RewardFunctionScore(
+                                        score=judge_score.score,
+                                        reward_function_name="primary",
+                                        info=judge_score.info or "",
+                                    )
+                                    gen.primary_score = judge_score.score
+                                    break
                 else:
-                    # For math/puzzle: add as auxiliary reward to ALL generations
-                    for gen in task.generations:
-                        gen.rewards.append(
-                            RewardFunctionScore(
-                                score=judge_result.score,
-                                reward_function_name="llm_judge",
-                                info=judge_result.info or "",
+                    # For math/puzzle: add as auxiliary reward to each generation
+                    for gen_idx, gen in enumerate(task.generations):
+                        if gen_idx < len(judge_scores):
+                            judge_score = judge_scores[gen_idx]
+                            gen.rewards.append(
+                                RewardFunctionScore(
+                                    score=judge_score.score,
+                                    reward_function_name="llm_judge",
+                                    info=judge_score.info or "",
+                                )
                             )
-                        )
         except Exception as e:
             print(f"Warning: Batch LLM Judge evaluation failed: {e}")
             # Gracefully handle errors by skipping judge evaluation
@@ -1234,6 +1246,9 @@ class CurriculumLearning:
                 task = self.session.get_task(task_id)
                 if task is None:
                     raise ValueError(f"Unknown task_id: {task_id}")
+                # Skip tasks that haven't been processed yet
+                if not task.latest_generation:
+                    continue
 
                 for reward in task.latest_generation.rewards:
                     if reward.reward_function_name == "llm_judge":
@@ -1241,7 +1256,10 @@ class CurriculumLearning:
                             highest_judge_score = reward.score
                         if reward.score < lowest_judge_score:
                             lowest_judge_score = reward.score
-                    elif reward.reward_function_name == "primary" and task.task_type == "truthy":
+                    elif (
+                        reward.reward_function_name == "primary"
+                        and task.task_type == "truthy"
+                    ):
                         # For truthy tasks, judge score is stored as primary
                         if reward.score > highest_judge_score:
                             highest_judge_score = reward.score
@@ -1257,6 +1275,10 @@ class CurriculumLearning:
             task = self.session.get_task(task_id)
             if task is None:
                 raise ValueError(f"Unknown task_id: {task_id}")
+            # Skip tasks that haven't been processed yet
+            if not task.latest_generation:
+                combined_rewards.append(0.0)
+                continue
 
             # Extract primary and auxiliary scores from latest_generation.rewards
             primary_score = None

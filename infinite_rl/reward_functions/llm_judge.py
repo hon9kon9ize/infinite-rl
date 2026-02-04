@@ -155,34 +155,17 @@ class LLMJudgeRewardFunction(RewardFunction):
                 "model": self.model_name,
                 "text": formatted_texts,
             }
-
-            # Debug: log the first few texts to see if they're different
-            print(f"Debug: Sending {len(formatted_texts)} texts to judge API")
-            for i, text in enumerate(formatted_texts[:3]):  # Show first 3
-                print(f"Debug: Text {i}: {text[:200]}...")
-
             response = requests.post(self.base_url, json=payload, timeout=self.timeout)
             response.raise_for_status()
-
             responses = response.json()
-            print(f"Debug: Got {len(responses)} responses from judge API")
-            for i, resp in enumerate(responses[:3]):  # Show first 3 responses
-                if "embedding" in resp and len(resp["embedding"]) > 0:
-                    embedding = resp["embedding"]
-                    print(
-                        f"Debug: Response {i} embedding length: {len(embedding)}, first few values: {embedding[:min(4, len(embedding))]}"
-                    )
-                else:
-                    print(f"Debug: Response {i} missing embedding")
-
             scores = []
 
             for resp in responses:
-                # Extract embedding[0] as the score
-                if "embedding" in resp and len(resp["embedding"]) > 0:
-                    scores.append(resp["embedding"][0])
-                else:
-                    return None
+                scores.append(resp["embedding"][0])
+
+            assert len(scores) == len(
+                formatted_texts
+            ), "Mismatch in number of scores returned"
 
             return scores
 
@@ -255,6 +238,8 @@ class LLMJudgeRewardFunction(RewardFunction):
 
             # Call judge API
             scores = self._call_judge_api([formatted_text])
+
+            print("DEBUG", scores)
 
             if scores is None or len(scores) == 0:
                 return RewardFunctionScore(
@@ -329,8 +314,6 @@ class LLMJudgeRewardFunction(RewardFunction):
 
             # Call batch judge API
             scores = self._call_judge_api(formatted_texts)
-
-            print("DEBUG", scores)
 
             if scores is None or len(scores) != len(formatted_texts):
                 # API call failed - return empty lists for all tasks

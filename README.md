@@ -264,6 +264,7 @@ The `CurriculumLearning` class provides adaptive task difficulty progression bas
 - **Simplified Task Management**: Clean separation between GRPO batches with automatic diversity weighting
 - **Weighted Selection**: Avoids recently trained tasks to promote variety
 - **Multi-Task Support**: Works with math problems and programming puzzles
+- **Automatic Judge Score Computation**: `get_judge_scores()` computes missing LLM Judge scores on-demand for accurate statistics during training
 
 This ensures the model has truly *mastered* a difficulty level rather than just "catching up" with lucky guesses.
 

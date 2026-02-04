@@ -36,6 +36,7 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
   - Requires sglang server running Skywork model (V2-Qwen3-4B)
   - Supports configurable score normalization
   - See `docs/LLM_JUDGE_REWARD_FUNCTION.md` for setup instructions
+  - `get_judge_scores()` automatically computes missing LLM Judge scores before collecting statistics to ensure up-to-date metrics during training
 - **GRPO Task Management**: Simplified approach with clean batch separation:
   - Each GRPO batch gets a fresh task instance from `get_prompt()`
   - `DynamicCurriculumDataset` handles within-batch reuse automatically

@@ -660,6 +660,7 @@ class CurriculumLearning:
 
         log_entry["primary_score"] = primary_score
         log_entry["aux_scores"] = aux_scores
+        log_entry["combined_score"] = getattr(task, "combined_score", None)
         log_entry["info"] = {
             "primary": primary_info,
             **aux_info,
@@ -1365,6 +1366,9 @@ class CurriculumLearning:
             # Ensure final score is in [0, 1]
             combined_score = max(0.0, min(1.0, combined_score))
             combined_rewards.append(combined_score)
+
+            # Store the final combined score on the task for validation
+            task.combined_score = combined_score
 
         return combined_rewards
 

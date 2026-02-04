@@ -1236,27 +1236,27 @@ class CurriculumLearning:
                     continue
 
                 if task.task_type == "truthy":
-                    # For truthy: apply format gate and replace primary score with LLM Judge score
+                    # For truthy: replace primary score with LLM Judge score
+                    # Format gate will be applied in _compute_combined_score()
+                    # But update info message to indicate if format is invalid
+                    format_valid, _ = self._check_format_validity(task)
                     for gen_idx, gen in enumerate(task.generations):
                         if gen_idx < len(judge_scores):
                             judge_score = judge_scores[gen_idx]
-                            # Check format validity gate: if format is invalid, reward is zero
-                            format_valid, _ = self._check_format_validity(task)
-                            final_score = judge_score.score if format_valid else 0.0
-                            final_info = (
-                                judge_score.info
-                                if format_valid
-                                else f"Format invalid: judge reward({judge_score.score}) gated to zero"
-                            )
+
+                            # If format is invalid, indicate it in the info message
+                            info_message = judge_score.info or ""
+                            if not format_valid:
+                                info_message = f"Format invalid: {info_message}"
 
                             for i, reward in enumerate(gen.rewards):
                                 if reward.reward_function_name == "primary":
                                     gen.rewards[i] = RewardFunctionScore(
-                                        score=final_score,
+                                        score=judge_score.score,
                                         reward_function_name="primary",
-                                        info=final_info or "",
+                                        info=info_message,
                                     )
-                                    gen.primary_score = final_score
+                                    gen.primary_score = judge_score.score
                                     # Recompute combined_score after updating judge score
                                     gen.combined_score = self._compute_combined_score(
                                         task, gen
@@ -1292,6 +1292,8 @@ class CurriculumLearning:
     def _compute_combined_score(self, task: Task, generation: "Generation") -> float:
         """Compute combined score for a generation.
 
+        Format gate applies: if format is invalid, combined score is gated to 0.0.
+
         Args:
             task: The task
             generation: The generation
@@ -1299,6 +1301,11 @@ class CurriculumLearning:
         Returns:
             Combined score in [0, 1]
         """
+        # Apply format gate: if format is invalid, gate entire score to 0.0
+        format_valid, _ = self._check_format_validity(task)
+        if not format_valid:
+            return 0.0
+
         primary_score = generation.primary_score
         aux_scores = {}
         judge_score = 0.0

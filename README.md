@@ -172,6 +172,7 @@ Conversation-based quality evaluation using LLM Judge as the primary evaluator. 
 - Distributed across all difficulty levels (not rating-limited)
 - 20% weight in task selection during training
 - Multilingual support (yue, zh, en)
+- **Format gate on judge**: If response format is invalid (missing `<answer>` tag), judge reward is gated to zero
 
 **Requirements:**
 - Running sglang server with Skywork Reward Model
@@ -349,6 +350,7 @@ def compute_reward(task_id: str, model_output: str) -> float
 - **Math Tasks** (Level 0): Binary correctness (0.0 or 1.0) + optional LLM Judge auxiliary score
 - **Puzzle Tasks** (Levels 1-5): Binary correctness (0.0 or 1.0) + optional LLM Judge auxiliary score
 - **Truthy Tasks** (All Levels): Primary score = LLM Judge score (continuous 0.0-1.0), deferred to batch completion
+  - **Format Gate**: If format is invalid (missing `<answer>` tag), primary score is gated to 0.0 regardless of judge quality
 
 **Score Composition:**
 When all auxiliary functions are enabled, the combined score is:

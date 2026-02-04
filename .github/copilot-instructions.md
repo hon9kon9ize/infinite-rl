@@ -39,6 +39,7 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
   - Batch evaluation: Deferred until all generations in a batch are accumulated (when `len(task.generations) >= num_generations`)
   - Uses `compute_rewards_batch()` for efficient batch API calls
   - Updated reward scores are recomputed with judge scores included in final combined score
+  - **Format gate applies to judge**: For truthy tasks, if format is invalid (missing `<answer>` tag), the final judge reward is gated to zero regardless of judge quality score
 - **GRPO Task Management**: Simplified approach with clean batch separation:
   - Each GRPO batch gets a fresh task instance from `get_prompt()`
   - `DynamicCurriculumDataset` handles within-batch reuse automatically

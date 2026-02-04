@@ -1192,10 +1192,11 @@ class CurriculumLearning:
             # Gracefully handle errors by skipping judge evaluation
             # Tasks will use placeholder scores
 
-    def get_rewards(self, task_ids: List[str]) -> List[float]:
+    def get_rewards(self, task_ids: List[str]) -> List[List[float]]:
         """Calculate combined reward scores for multiple completed tasks.
 
-        Retrieves primary correctness and auxiliary scores from latest_generation.rewards,
+        For each task, computes combined scores for each generation in the task.
+        Retrieves primary correctness and auxiliary scores from generation.rewards,
         normalizes each auxiliary score to [0, 1] range, then applies aux_weight
         to blend primary with average normalized auxiliary scores.
 
@@ -1203,13 +1204,14 @@ class CurriculumLearning:
         - Primary score: already binary (0 or 1)
         - Auxiliary scores: clip to [-1, 1], then shift to [0, 1]
           (assumes auxiliary rewards designed to be in [-1, 1] range)
-        - Combined: primary_weight * primary + aux_weight * avg(normalized_aux)
+        - Combined: primary_weight * primary + aux_weight * avg(normalized_aux) + judge_weight * judge
 
         Args:
             task_ids: List of task identifiers (should have been processed by compute_reward)
 
         Returns:
-            List of combined reward scores in the range [0, 1] suitable for RL training
+            List of lists of combined reward scores in the range [0, 1] suitable for RL training.
+            Each sublist contains scores for each generation in the corresponding task.
 
         Raises:
             ValueError: If any task_id not found in session
@@ -1288,87 +1290,87 @@ class CurriculumLearning:
             task = self.session.get_task(task_id)
             if task is None:
                 raise ValueError(f"Unknown task_id: {task_id}")
-            # Skip tasks that haven't been processed yet
-            if not task.latest_generation:
-                combined_rewards.append(0.0)
-                continue
 
-            # Extract primary and auxiliary scores from latest_generation.rewards
-            primary_score = None
-            judge_score = 0.0
-            aux_scores = {}
-            is_truthy_task = task.task_type == "truthy"
+            gen_combined_scores = []
+            for gen in task.generations:
+                # Extract primary and auxiliary scores from generation.rewards
+                primary_score = None
+                judge_score = 0.0
+                aux_scores = {}
+                is_truthy_task = task.task_type == "truthy"
 
-            for reward in task.latest_generation.rewards:
-                if reward.reward_function_name == "primary":
-                    primary_score = reward.score
-                elif reward.reward_function_name == "llm_judge":
+                for reward in gen.rewards:
+                    if reward.reward_function_name == "primary":
+                        primary_score = reward.score
+                    elif reward.reward_function_name == "llm_judge":
+                        judge_score = self._normalize_score(
+                            reward.score,
+                            lowest_judge_score,
+                            highest_judge_score,
+                        )
+                    elif reward.reward_function_name not in ["format"]:
+                        # Collect all auxiliary scores (format is a hard gate, not blended)
+                        aux_scores[reward.reward_function_name] = reward.score
+
+                if primary_score is None:
+                    primary_score = 0.0
+
+                # For truthy tasks, the judge score is stored as primary score
+                if is_truthy_task:
+                    judge_score = primary_score
+                    # Normalize the judge score for truthy tasks
                     judge_score = self._normalize_score(
-                        reward.score,
-                        lowest_judge_score,
-                        highest_judge_score,
+                        judge_score, lowest_judge_score, highest_judge_score
                     )
-                elif reward.reward_function_name not in ["format"]:
-                    # Collect all auxiliary scores (format is a hard gate, not blended)
-                    aux_scores[reward.reward_function_name] = reward.score
+                    primary_score = judge_score
 
-            if primary_score is None:
-                primary_score = 0.0
+                # Normalize auxiliary scores to [0, 1]
+                if aux_scores:
+                    normalized_aux_list = []
+                    for aux_name, aux_value in aux_scores.items():
+                        # Clip to [-1, 1] range (auxiliary rewards designed to be in this range)
+                        clipped = max(-1.0, min(1.0, aux_value))
+                        # Shift from [-1, 1] to [0, 1]
+                        normalized = (clipped + 1.0) / 2.0
+                        normalized_aux_list.append(normalized)
 
-            # For truthy tasks, the judge score is stored as primary score
-            if is_truthy_task:
-                judge_score = primary_score
-                # Normalize the judge score for truthy tasks
-                judge_score = self._normalize_score(
-                    judge_score, lowest_judge_score, highest_judge_score
-                )
-                primary_score = judge_score
-
-            # Normalize auxiliary scores to [0, 1]
-            if aux_scores:
-                normalized_aux_list = []
-                for aux_name, aux_value in aux_scores.items():
-                    # Clip to [-1, 1] range (auxiliary rewards designed to be in this range)
-                    clipped = max(-1.0, min(1.0, aux_value))
-                    # Shift from [-1, 1] to [0, 1]
-                    normalized = (clipped + 1.0) / 2.0
-                    normalized_aux_list.append(normalized)
-
-                aux_avg = sum(normalized_aux_list) / len(normalized_aux_list)
-            else:
-                # No auxiliary scores: use middle value
-                aux_avg = 0.5
-
-            # Blend primary and normalized auxiliary using aux_weight
-            # Weight calculation depends on task type and whether llm_judge is enabled
-            if is_truthy_task:
-                # For truthy tasks, primary score IS judge score
-                primary_weight = 1.0 - self.aux_weight
-            else:
-                # For non-truthy tasks, only subtract llm_judge_weight if enabled
-                if self.use_llm_judge:
-                    primary_weight = 1.0 - self.aux_weight - self.llm_judge_weight
+                    aux_avg = sum(normalized_aux_list) / len(normalized_aux_list)
                 else:
+                    # No auxiliary scores: use middle value
+                    aux_avg = 0.5
+
+                # Blend primary and normalized auxiliary using aux_weight
+                # Weight calculation depends on task type and whether llm_judge is enabled
+                if is_truthy_task:
+                    # For truthy tasks, primary score IS judge score
                     primary_weight = 1.0 - self.aux_weight
+                else:
+                    # For non-truthy tasks, only subtract llm_judge_weight if enabled
+                    if self.use_llm_judge:
+                        primary_weight = 1.0 - self.aux_weight - self.llm_judge_weight
+                    else:
+                        primary_weight = 1.0 - self.aux_weight
 
-            # Combine scores: only include judge term if llm_judge is enabled
-            judge_contribution = (
-                self.llm_judge_weight * judge_score
-                if (self.use_llm_judge and not is_truthy_task)
-                else 0.0
-            )
-            combined_score = (
-                (primary_weight * primary_score)
-                + (self.aux_weight * aux_avg)
-                + judge_contribution
-            )
+                # Combine scores: only include judge term if llm_judge is enabled
+                judge_contribution = (
+                    self.llm_judge_weight * judge_score
+                    if (self.use_llm_judge and not is_truthy_task)
+                    else 0.0
+                )
+                combined_score = (
+                    (primary_weight * primary_score)
+                    + (self.aux_weight * aux_avg)
+                    + judge_contribution
+                )
 
-            # Ensure final score is in [0, 1]
-            combined_score = max(0.0, min(1.0, combined_score))
-            combined_rewards.append(combined_score)
+                # Ensure final score is in [0, 1]
+                combined_score = max(0.0, min(1.0, combined_score))
+                gen_combined_scores.append(combined_score)
 
-            # Store the final combined score on the task for validation
-            task.combined_score = combined_score
+            combined_rewards.append(gen_combined_scores)
+
+            # Store the final combined score on the task for validation (use last generation)
+            task.combined_score = gen_combined_scores[-1] if gen_combined_scores else 0
 
         return combined_rewards
 

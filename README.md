@@ -321,6 +321,118 @@ print(f"Variance: {stats['sliding_window_stats']['mean_variance']:.4f}")
 - Advances to next difficulty level when success rate and consistency thresholds are both met
 - Provides detailed statistics to monitor curriculum progression
 
+## Simplified Reward API
+
+The `CurriculumLearning` class provides a **single-call reward API** that streamlines integration with GRPO and fine-tuning frameworks. The design consolidates reward computation, batch processing, and curriculum tracking into one unified method.
+
+**Core API Method:**
+```python
+def compute_reward(task_id: str, model_output: str) -> float
+```
+
+**Behavior:**
+- **Returns**: A combined reward score (float between 0.0 and 1.0)
+- **Incomplete Batches** (< `num_generations` completions): Returns the primary score immediately
+- **Complete Batches** (>= `num_generations` completions): 
+  1. Triggers batch LLM Judge evaluation (if enabled and not already computed)
+  2. Recomputes combined score with auxiliary metrics blended in
+  3. Updates curriculum tracking for non-truthy tasks
+  4. Returns final combined score
+
+**Design Benefits:**
+- **Single Integration Point**: No need to track task state externally or call separate methods for rewards vs. metrics
+- **Deferred LLM Judge**: Batch evaluations happen automatically when all generations are ready, improving efficiency
+- **Automatic Curriculum**: Task difficulty progresses transparently without separate state management
+- **Integrated Generation Tracking**: Each task accumulates generations internally with full history preserved
+
+**Task Types & Scoring:**
+- **Math Tasks** (Level 0): Binary correctness (0.0 or 1.0) + optional LLM Judge auxiliary score
+- **Puzzle Tasks** (Levels 1-5): Binary correctness (0.0 or 1.0) + optional LLM Judge auxiliary score
+- **Truthy Tasks** (All Levels): Primary score = LLM Judge score (continuous 0.0-1.0), deferred to batch completion
+
+**Score Composition:**
+When all auxiliary functions are enabled, the combined score is:
+```
+combined_score = primary_weight * primary_score + aux_weight * avg(auxiliary_scores) + judge_contribution
+```
+
+Where:
+- `primary_score`: Task-specific correctness (binary for math/puzzle, continuous for truthy)
+- `auxiliary_scores`: Optional metrics like format validity, repetition penalty, reasoning steps bonus
+- `judge_contribution`: Normalized LLM Judge score (0.0 when `llm_judge_weight=0.0`)
+
+**Configuration:**
+```python
+from infinite_rl import CurriculumLearning
+
+# Basic: Single-call API with all defaults
+cl = CurriculumLearning()
+
+# Customize scoring:
+cl = CurriculumLearning(
+    num_generations=4,           # GRPO with 4 completions per task
+    aux_weight=0.1,              # Auxiliary metrics contribute 10% of final score
+    llm_judge_weight=0.2,        # LLM Judge score contributes 20% (when available)
+    use_format=True,             # Enable format validation (default)
+    use_llm_judge=True,          # Enable LLM Judge for auxiliary evaluation
+)
+```
+
+**Usage in GRPO Training:**
+```python
+from infinite_rl import CurriculumLearning
+
+cl = CurriculumLearning(num_generations=4)
+
+# Training loop
+for batch_idx in range(num_batches):
+    task = cl.get_prompt()
+    
+    for generation in range(4):  # 4 completions per GRPO batch
+        model_output = generate_response(task.prompt)
+        
+        # Single-call API: computes and returns reward immediately
+        reward = cl.compute_reward(task.task_id, model_output)
+        
+        # For batch 1: returns primary_score (incomplete batch)
+        # For batch 4+: returns combined_score (batch completed, LLM Judge applied)
+        rewards.append(reward)
+    
+    # Process rewards for policy optimization
+    process_grpo_batch(task.task_id, rewards)
+```
+
+**Common Patterns:**
+
+1. **Simple Correctness Only** (no auxiliary metrics):
+   ```python
+   cl = CurriculumLearning(aux_weight=0.0, use_llm_judge=False)
+   reward = cl.compute_reward(task_id, model_output)
+   # Returns: 0.0 (wrong) or 1.0 (correct)
+   ```
+
+2. **With Auxiliary Quality Metrics**:
+   ```python
+   cl = CurriculumLearning(aux_weight=0.15)  # 15% weight for format, length, repetition penalties
+   reward = cl.compute_reward(task_id, model_output)
+   # Returns: 0.0-1.0 blending correctness + auxiliary scores
+   ```
+
+3. **With LLM Judge for Truthy Tasks**:
+   ```python
+   cl = CurriculumLearning(
+       use_llm_judge=True,
+       llm_judge_kwargs={"api_host": "localhost", "api_port": 8000, ...}
+   )
+   reward = cl.compute_reward(task_id, model_output)
+   # For truthy: returns 0.0-1.0 LLM Judge score (deferred to batch completion)
+   # For math/puzzle: returns 0.0 or 1.0 correctness
+   ```
+
+**Removed Methods:**
+- `get_reward()` - Consolidated into `compute_reward()` return value
+- `_normalize_score()` - No longer needed with unified API
+
 ## GRPO Batch Architecture
 
 The system implements a clean **Task → Generation hierarchy** for GRPO (Group Relative Policy Optimization) batch management with zero redundancy:

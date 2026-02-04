@@ -36,7 +36,9 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
   - Requires sglang server running Skywork model (V2-Qwen3-4B)
   - Supports configurable score normalization
   - See `docs/LLM_JUDGE_REWARD_FUNCTION.md` for setup instructions
-  - `get_judge_scores()` automatically computes missing LLM Judge scores before collecting statistics to ensure up-to-date metrics during training
+  - Batch evaluation: Deferred until all generations in a batch are accumulated (when `len(task.generations) >= num_generations`)
+  - Uses `compute_rewards_batch()` for efficient batch API calls
+  - Updated reward scores are recomputed with judge scores included in final combined score
 - **GRPO Task Management**: Simplified approach with clean batch separation:
   - Each GRPO batch gets a fresh task instance from `get_prompt()`
   - `DynamicCurriculumDataset` handles within-batch reuse automatically
@@ -49,6 +51,12 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
   - `Session.get_batch_data(task_id)`: Retrieves all generation data for analysis
   - `Session.get_batch_stats(task_id)`: Provides comprehensive batch statistics
   - **Simplified Task Management**: Each GRPO batch gets a fresh task instance; within-batch reuse handled by `DynamicCurriculumDataset` caching; dataset row weighting ensures diversity across batches
+- **Simplified Reward API**: Single-call architecture with deferred batch processing:
+  - `compute_reward(task_id, model_output)` → `float`: Primary method that computes and returns the combined score
+  - Returns primary score immediately for incomplete batches (< num_generations)
+  - When batch completes (>= num_generations), defers LLM Judge computation, recomputes combined scores, and returns final combined score
+  - No need for separate `get_reward()` calls - rewards are finalized internally at batch completion
+  - Generation accumulation, LLM Judge evaluation, curriculum tracking, and logging all happen within `compute_reward()`
 - **Dataset Uniqueness**: Critical for preventing GRPO batching errors:
   - Each dataset row must have a unique identifier to prevent task collision
   - Unique IDs use format: `math_{idx}`, `puzzle_{lang}_{name}`, `truthy_{idx}`
@@ -139,10 +147,11 @@ RUNTIME_RELEASE_TAG=v1.2.3 RUNTIME_GITHUB_REPO=owner/repo python -m pip install 
 - Update CI if you change system dependencies (runtimes, Node/Java/g++ requirements).
 
 ## Files to inspect when debugging a change
-- `infinite_rl/curriculum.py` — curriculum learning implementation and task difficulty progression (simplified GRPO batch management)
+- `infinite_rl/curriculum.py` — curriculum learning implementation with single-call `compute_reward()` API, task difficulty progression, batch LLM Judge evaluation, and deferred combined score computation
 - `infinite_rl/reward_functions/*.py` — reward function implementations and interfaces
 - `infinite_rl/executor.py` — how code is run securely (WASM path)
 - `infinite_rl/runner.py` — Python puzzle evaluation via local subprocess
+- `scripts/train.py` — GRPO training integration using simplified `compute_reward()` API
 
 ## References
 

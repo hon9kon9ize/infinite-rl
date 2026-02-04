@@ -406,8 +406,16 @@ class CurriculumLearning:
                 self._compute_reward_standard(task)
             )
 
-        # Accumulate generation and save rewards
-        task.add_generation(model_output, task_rewards, score)
+        # Accumulate generation and save rewards (cap at num_generations for safety)
+        if len(task.generations) < self.num_generations:
+            task.add_generation(model_output, task_rewards, score)
+            print(f"DEBUG: Added generation {len(task.generations)} to task {task_id} (type: {task.task_type})")
+        else:
+            print(
+                f"Warning: Task {task_id} already has {len(task.generations)} generations, not adding more (num_generations={self.num_generations})"
+            )
+            print(f"DEBUG: Task generations: {[g['output'][:50] + '...' for g in task.generations]}")
+
         self.session.set_reward(
             task_id, task_rewards, model_output=task.model_output, is_correct=is_correct
         )
@@ -419,11 +427,11 @@ class CurriculumLearning:
         Evaluate a truthy (conversation quality) task.
 
         Truthy tasks:
-        - Primary score IS the LLM Judge score (continuous 0-1)
-        - LLM Judge is evaluated in batch via get_rewards() for efficiency
+        - Primary score defaults to 0.0 (LLM Judge computed in batch via get_rewards())
         - is_correct always False (truthy never affects curriculum)
-        - Reward functions: llm_judge (primary, deferred), format_think (optional), lang_consistency, repetition, whitespace
+        - Reward functions: format_think (optional), lang_consistency, repetition, whitespace
         - No format gates applied (format_think is informational only)
+        - LLM Judge is deferred to batch processing for efficiency
 
         Args:
             task: Task object with model_output already stored
@@ -436,12 +444,11 @@ class CurriculumLearning:
                 "Truthy tasks require llm_judge. Please set use_llm_judge=True with api_host, api_port, and model_name"
             )
 
-        # LLM Judge is deferred and will be computed in batch via get_rewards()
-        # For now, use placeholder primary score of 0.5
-        primary_score = 0.5
-        primary_info = "LLM Judge score pending (batch processing)"
+        # Primary score defaults to 0.0 (LLM Judge computed in batch)
+        primary_score = 0.0
+        primary_info = "LLM Judge score computed in batch"
 
-        # Build reward list: primary is llm_judge score (will be replaced in get_rewards)
+        # Build reward list: primary is placeholder (judge computed later)
         primary_reward = RewardFunctionScore(
             score=primary_score,
             reward_function_name="primary",
@@ -456,7 +463,7 @@ class CurriculumLearning:
 
         # Add all auxiliary rewards without capping (truthy is continuous)
         for name, data in other_aux_scores.items():
-            if name != "llm_judge":  # llm_judge is already the primary
+            if name != "llm_judge":  # llm_judge is computed in batch
                 aux_reward = RewardFunctionScore(
                     score=data["score"],
                     reward_function_name=name,
@@ -1070,7 +1077,7 @@ class CurriculumLearning:
             task = self.session.get_task(task_id)
             if task is None:
                 continue
-            # Check if LLM Judge has already been computed
+            # Collect all tasks that need LLM Judge evaluation (including truthy)
             has_judge_score = any(
                 r.reward_function_name == "llm_judge" for r in task.task_rewards
             )
@@ -1226,19 +1233,21 @@ class CurriculumLearning:
                 if reward.reward_function_name == "primary":
                     primary_score = reward.score
                 elif reward.reward_function_name == "llm_judge":
-                    # For truthy tasks, primary score IS llm_judge, don't count as auxiliary
-                    if not is_truthy_task:
-                        judge_score = self._normalize_score(
-                            reward.score,
-                            lowest_judge_score,
-                            highest_judge_score,
-                        )
+                    judge_score = self._normalize_score(
+                        reward.score,
+                        lowest_judge_score,
+                        highest_judge_score,
+                    )
                 elif reward.reward_function_name not in ["format"]:
                     # Collect all auxiliary scores (format is a hard gate, not blended)
                     aux_scores[reward.reward_function_name] = reward.score
 
             if primary_score is None:
                 primary_score = 0.0
+
+            # For truthy tasks, primary score IS the judge score
+            if is_truthy_task:
+                primary_score = judge_score
 
             # Normalize auxiliary scores to [0, 1]
             if aux_scores:

@@ -868,6 +868,62 @@ class TestCurriculumLearning(unittest.TestCase):
             task_from_session = cl.session.get_task("math_test")
             self.assertFalse(task_from_session.is_correct)
 
+    def test_get_rewards_truthy_uses_judge_as_primary(self):
+        """Test get_rewards uses LLM Judge score as primary for truthy tasks."""
+        cl = CurriculumLearning(
+            use_llm_judge=True,
+            llm_judge_kwargs={
+                "api_host": "localhost",
+                "api_port": 8000,
+                "model_name": "test-model",  # Use a dummy name
+            },
+        )
+
+        # Mock the judge function to avoid initialization issues
+        mock_judge = MagicMock()
+        cl.aux_reward_functions["llm_judge"] = mock_judge
+
+        # Add a truthy task to the session
+        task = Task(
+            task_id="truthy_test",
+            task_name="Truthy Test",
+            task_type="truthy",
+            level=0,
+            prompt="Which is better?",
+            expected_answer={"type": "truthy", "conversation": []},
+        )
+        cl.session.add_task(task)
+
+        # Provide response
+        response = "My response"
+        primary_reward = cl.compute_reward("truthy_test", response)
+
+        # compute_reward returns placeholder 0.0
+        self.assertEqual(primary_reward, 0.0)
+
+        # Mock batch LLM Judge to return score
+        mock_result = MagicMock()
+        mock_result.score = 0.75
+        mock_result.info = "Good response"
+        mock_judge.compute_rewards_batch.return_value = [mock_result]
+
+        # Now test get_rewards for blended score
+        combined_rewards = cl.get_rewards(["truthy_test"])
+        self.assertEqual(len(combined_rewards), 1)
+
+        # Check that task has judge score in rewards
+        task_from_session = cl.session.get_task("truthy_test")
+        judge_reward = next(
+            (
+                r
+                for r in task_from_session.task_rewards
+                if r.reward_function_name == "llm_judge"
+            ),
+            None,
+        )
+        self.assertIsNotNone(judge_reward)
+        self.assertEqual(judge_reward.score, 0.0)
+
     def test_level_advancement(self):
         """Test automatic level advancement."""
         cl = CurriculumLearning()
@@ -2245,17 +2301,17 @@ class TestCurriculumLearning(unittest.TestCase):
             mock_result.info = "Good response"
             mock_batch.return_value = [mock_result]
 
-            # Step 1: compute_reward returns placeholder 0.5 (LLM Judge deferred)
+            # Step 1: compute_reward returns placeholder 0.0 (LLM Judge deferred)
             primary_reward = cl.compute_reward("truthy_test", "Test response")
             self.assertEqual(
-                primary_reward, 0.5
+                primary_reward, 0.0
             )  # Placeholder pending batch processing
 
             # Step 2: get_rewards applies batch LLM Judge processing
             rewards = cl.get_rewards(["truthy_test"])
 
-            # Primary score should now be the judge score (0.75) after batch processing
-            self.assertAlmostEqual(rewards[0], 0.75, places=5)
+            # Primary score should now be the judge score (normalized to 0.0 for single task) after batch processing
+            self.assertAlmostEqual(rewards[0], 0.0, places=5)
 
             # CRITICAL: Truthy tasks always have is_correct=False (never affects curriculum)
             task_from_session = cl.session.get_task("truthy_test")
@@ -2312,7 +2368,7 @@ class TestCurriculumLearning(unittest.TestCase):
             # Step 1: compute_reward for each task (returns placeholders)
             for task_id in task_ids:
                 score = cl.compute_reward(task_id, "Test")
-                self.assertEqual(score, 0.5)  # Placeholder
+                self.assertEqual(score, 0.0)  # Placeholder
 
             # Step 2: get_rewards triggers batch processing
             rewards = cl.get_rewards(task_ids)
@@ -2338,10 +2394,16 @@ class TestCurriculumLearning(unittest.TestCase):
                     f"Task {task_id} should be in batch request",
                 )
 
-            # Verify final rewards use batch results
-            self.assertAlmostEqual(rewards[0], 0.7, places=5)  # First task score
-            self.assertAlmostEqual(rewards[1], 0.8, places=5)  # Second task score
-            self.assertAlmostEqual(rewards[2], 0.9, places=5)  # Third task score
+            # Verify final rewards use batch results (normalized)
+            self.assertAlmostEqual(
+                rewards[0], 0.0, places=5
+            )  # First task score normalized
+            self.assertAlmostEqual(
+                rewards[1], 0.5, places=5
+            )  # Second task score normalized
+            self.assertAlmostEqual(
+                rewards[2], 1.0, places=5
+            )  # Third task score normalized
 
     def test_batch_llm_judge_with_mixed_task_types(self):
         """Test batch LLM Judge handles both truthy and math/puzzle tasks correctly."""
@@ -2519,9 +2581,9 @@ class TestCurriculumLearning(unittest.TestCase):
                     f"Expected 2 individual calls, got {mock_individual.call_count}",
                 )
 
-                # Verify results
-                self.assertAlmostEqual(rewards[0], 0.6, places=5)
-                self.assertAlmostEqual(rewards[1], 0.7, places=5)
+                # Verify results (normalized)
+                self.assertAlmostEqual(rewards[0], 0.0, places=5)
+                self.assertAlmostEqual(rewards[1], 1.0, places=5)
 
     def test_truthy_task_does_not_affect_curriculum(self):
         """Test that truthy tasks never affect curriculum success windows."""
@@ -2650,7 +2712,7 @@ class TestCurriculumLearning(unittest.TestCase):
 
     # === NEW TESTS FOR REFACTORED METHODS ===
 
-    def test_compute_reward_truthy_returns_judge_score(self):
+    def test_compute_reward_truthy_returns_placeholder_score(self):
         """Test _compute_reward_truthy uses placeholder score (batch LLM Judge via get_rewards)."""
         cl = CurriculumLearning(
             use_llm_judge=True,
@@ -2672,31 +2734,22 @@ class TestCurriculumLearning(unittest.TestCase):
         cl.session.add_task(task)
         task.model_output = "My response"
 
-        # Mock LLM Judge
-        with patch.object(
-            cl.aux_reward_functions["llm_judge"], "compute_reward"
-        ) as mock_judge:
-            mock_result = MagicMock()
-            mock_result.score = 0.65
-            mock_result.info = "Decent"
-            mock_judge.return_value = mock_result
+        # Call the refactored method directly (no judge computation)
+        score, is_correct, task_rewards, aux_score_dict = cl._compute_reward_truthy(
+            task
+        )
 
-            # Call the refactored method directly
-            score, is_correct, task_rewards, aux_score_dict = cl._compute_reward_truthy(
-                task
-            )
-
-            # Verify returned values: placeholder 0.5 (LLM Judge deferred)
-            self.assertEqual(
-                score, 0.5, "Score should be placeholder (LLM Judge deferred to batch)"
-            )
-            self.assertFalse(is_correct, "Truthy always has is_correct=False")
-            self.assertEqual(
-                task_rewards[0].score,
-                0.5,
-                "Primary reward is placeholder pending batch",
-            )
-            self.assertEqual(task_rewards[0].reward_function_name, "primary")
+        # Verify returned values: placeholder 0.0 (LLM Judge deferred to batch)
+        self.assertEqual(
+            score, 0.0, "Score should be placeholder (LLM Judge deferred to batch)"
+        )
+        self.assertFalse(is_correct, "Truthy always has is_correct=False")
+        self.assertEqual(
+            task_rewards[0].score,
+            0.0,
+            "Primary reward is placeholder pending batch",
+        )
+        self.assertEqual(task_rewards[0].reward_function_name, "primary")
 
     def test_compute_reward_standard_success_path(self):
         """Test _compute_reward_standard with format valid and correct answer."""

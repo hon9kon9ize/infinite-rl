@@ -1033,11 +1033,9 @@ class CurriculumLearning:
         ]
         if selected_task["type"] == "math":
             task = self.session.create_math_task(selected_task)
-            print(f"DEBUG: Created new math task {task.task_id} for batch")
             return task
         elif selected_task["type"] == "puzzle":
             task = self.session.create_puzzle_task(selected_task)
-            print(f"DEBUG: Created new puzzle task {task.task_id} for batch")
             return task
 
         return None
@@ -1080,6 +1078,9 @@ class CurriculumLearning:
         for aux_name, aux_fn in self.aux_reward_functions.items():
             if is_truthy_task and aux_name == "format_answer":
                 # Skip format_answer for truthy tasks
+                continue
+            if aux_name == "llm_judge":
+                # Skip llm_judge as it's computed in batch via get_rewards()
                 continue
             try:
                 # All auxiliary functions now accept task as first parameter
@@ -1124,11 +1125,16 @@ class CurriculumLearning:
             if not task.latest_generation:
                 continue
             # Collect all tasks that need LLM Judge evaluation (including truthy)
-            has_judge_score = any(
-                r.reward_function_name == "llm_judge"
-                for r in task.latest_generation.rewards
-            )
-            if not has_judge_score:
+            # Check if any generation needs judge (not just latest)
+            needs_judge = False
+            for gen in task.generations:
+                has_judge = any(
+                    r.reward_function_name == "llm_judge" for r in gen.rewards
+                )
+                if not has_judge:
+                    needs_judge = True
+                    break
+            if needs_judge:
                 task_index_map[len(tasks_to_judge)] = task_id
                 tasks_to_judge.append(task)
 
@@ -1163,17 +1169,23 @@ class CurriculumLearning:
                                     gen.primary_score = judge_score.score
                                     break
                 else:
-                    # For math/puzzle: add as auxiliary reward to each generation
+                    # For math/puzzle: add as auxiliary reward to each generation that doesn't have it
                     for gen_idx, gen in enumerate(task.generations):
                         if gen_idx < len(judge_scores):
                             judge_score = judge_scores[gen_idx]
-                            gen.rewards.append(
-                                RewardFunctionScore(
-                                    score=judge_score.score,
-                                    reward_function_name="llm_judge",
-                                    info=judge_score.info or "",
-                                )
+                            # Check if this generation already has llm_judge
+                            has_judge = any(
+                                r.reward_function_name == "llm_judge"
+                                for r in gen.rewards
                             )
+                            if not has_judge:
+                                gen.rewards.append(
+                                    RewardFunctionScore(
+                                        score=judge_score.score,
+                                        reward_function_name="llm_judge",
+                                        info=judge_score.info or "",
+                                    )
+                                )
         except Exception as e:
             print(f"Warning: Batch LLM Judge evaluation failed: {e}")
             # Gracefully handle errors by skipping judge evaluation

@@ -239,8 +239,6 @@ class LLMJudgeRewardFunction(RewardFunction):
             # Call judge API
             scores = self._call_judge_api([formatted_text])
 
-            print("DEBUG", scores)
-
             if scores is None or len(scores) == 0:
                 return RewardFunctionScore(
                     score=0.0,

@@ -95,7 +95,7 @@ Now the actual thinking content
             model_output=out,
         )
         score = fn.compute_reward(task)
-        self.assertEqual(score.score, -1.0)
+        self.assertEqual(score.score, 0.0)
         self.assertIn("before", score.info.lower())
 
     def test_content_before_opening_tag_answer(self):
@@ -159,7 +159,7 @@ The result is 108.
             model_output=out,
         )
         score = fn.compute_reward(task)
-        self.assertEqual(score.score, -1.0)
+        self.assertEqual(score.score, 0.0)
         self.assertIn("nested", score.info.lower())
         self.assertIn("answer", score.info.lower())
 
@@ -183,7 +183,7 @@ The result is 108.
             model_output=out,
         )
         score = fn.compute_reward(task)
-        self.assertEqual(score.score, -1.0)
+        self.assertEqual(score.score, 0.0)
         self.assertIn("nested", score.info.lower())
         self.assertIn("think", score.info.lower())
 
@@ -206,7 +206,7 @@ My reasoning process
             model_output=out,
         )
         score = fn.compute_reward(task)
-        self.assertEqual(score.score, -1.0)
+        self.assertEqual(score.score, 0.0)
         self.assertIn("nested", score.info.lower())
 
     def test_proper_structure_with_both_tags_accepted(self):
@@ -272,7 +272,7 @@ More reasoning
             model_output=out,
         )
         score = fn.compute_reward(task)
-        self.assertEqual(score.score, -1.0)
+        self.assertEqual(score.score, 0.0)
         self.assertIn("nested", score.info.lower())
 
     def test_text_containing_tag_word_but_not_tag_accepted(self):

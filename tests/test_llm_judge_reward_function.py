@@ -198,16 +198,21 @@ class TestLLMJudgeRewardFunction(unittest.TestCase):
         """Test score normalization when enabled."""
         rf = self.create_reward_function(normalize=True)
 
-        # Test specific score normalizations using tanh
-        # Expected: (tanh(raw_score / 10) + 1) / 2
+        # Test specific score normalizations using sigmoid-like formula: score / (score + k)
+        # where k = 20/9, ensuring score 20 maps to 0.9
+        k = 20 / 9
+
         normalized_0 = rf._normalize_score(0.0)
-        self.assertAlmostEqual(normalized_0, 0.5, places=3)  # tanh(0) = 0
+        self.assertAlmostEqual(normalized_0, 0.0, places=3)  # 0 / (0 + k) = 0
 
         normalized_pos = rf._normalize_score(10.0)
-        self.assertGreater(normalized_pos, 0.5)  # tanh(1) ≈ 0.76
+        expected_pos = 10.0 / (10.0 + k)
+        self.assertAlmostEqual(normalized_pos, expected_pos, places=3)  # ≈ 0.818
 
         normalized_neg = rf._normalize_score(-10.0)
-        self.assertLess(normalized_neg, 0.5)  # tanh(-1) ≈ -0.76
+        self.assertAlmostEqual(
+            normalized_neg, 0.0, places=3
+        )  # negative scores return 0.0
 
         # All scores should be in [0, 1]
         self.assertGreaterEqual(normalized_pos, 0.0)

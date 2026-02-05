@@ -1074,25 +1074,15 @@ class CurriculumLearning:
                         level_weights.extend([1.0] * len(available_tasks))
                         break
         else:
-            # Normal curriculum: ONLY use current level (don't mix levels)
-            # This ensures success is tracked per-level correctly
-            level_tasks = self.session.tasks_by_level.get(self.current_level, [])
-            if level_tasks:
-                # Limit tasks per level to prevent performance issues
-                max_tasks_per_level = 50
-                if len(level_tasks) > max_tasks_per_level:
-                    level_tasks = random.sample(level_tasks, max_tasks_per_level)
-
-                all_available_tasks.extend(level_tasks)
-                level_weights.extend([1.0] * len(level_tasks))
-            else:
-                # Fallback: if current level has no tasks, use level 0
-                level_tasks = self.session.tasks_by_level.get(0, [])
+            # Normal curriculum: sample from level 0 through current level for diversity
+            # This allows the model to see a mix of difficulties while progressing
+            for level in range(0, self.current_level + 1):
+                level_tasks = self.session.tasks_by_level.get(level, [])
                 if level_tasks:
-                    if len(level_tasks) > 50:
-                        level_tasks = random.sample(level_tasks, 50)
                     all_available_tasks.extend(level_tasks)
-                    level_weights.extend([1.0] * len(level_tasks))
+                    # Weight current level tasks higher (2x) to focus training
+                    weight = 2.0 if level == self.current_level else 1.0
+                    level_weights.extend([weight] * len(level_tasks))
 
         if not all_available_tasks:
             return None

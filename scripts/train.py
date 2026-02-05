@@ -225,24 +225,32 @@ def create_curriculum_reward_func(
         """
         from collections import defaultdict
 
-        rewards_list = []
+        # CRITICAL: Preserve original completion order by storing (index, completion) pairs
+        # This prevents rewards from being assigned to wrong generations
+        indexed_completions = []  # List of (original_index, task_id, completion)
+        grouped = defaultdict(list)  # task_id -> list of (original_index, completion)
 
-        # Group completions by task_id from metadata
-        grouped = defaultdict(list)
         for i, completion in enumerate(completions):
             if task_metadata and i < len(task_metadata):
                 task_id = task_metadata[i]["task_id"]
             else:
                 # Fallback if no metadata
                 task_id = f"task_{i // curriculum.num_generations}"
-            grouped[task_id].append(completion)
+
+            indexed_completions.append((i, task_id, completion))
+            grouped[task_id].append((i, completion))
+
+        # Collect all rewards with their original indices
+        reward_with_index = {}  # original_index -> reward_score
 
         # Process each task's completions in batch
-        for task_id, completion_list in grouped.items():
+        for task_id, index_completion_list in grouped.items():
             try:
                 # Extract content from TRL's chat format for all completions
                 completion_texts = []
-                for completion in completion_list:
+                indices = []
+                for orig_idx, completion in index_completion_list:
+                    indices.append(orig_idx)
                     completion_text = completion
                     if isinstance(completion, list) and len(completion) > 0:
                         # Extract from list of dicts format
@@ -263,13 +271,19 @@ def create_curriculum_reward_func(
                 # Compute rewards for all completions in batch
                 # Returns combined_scores (includes LLM Judge if batch complete)
                 batch_scores = curriculum.compute_rewards(task_id, completion_texts)
-                rewards_list.extend([float(s) for s in batch_scores])
+
+                # Map scores back to original indices
+                for idx, score in zip(indices, batch_scores):
+                    reward_with_index[idx] = float(score)
 
             except Exception as e:
                 print(f"Warning: Error computing reward for task {task_id}: {e}")
                 # Add zero scores for all completions in this task
-                rewards_list.extend([0.0] * len(completion_list))
+                for idx, _ in index_completion_list:
+                    reward_with_index[idx] = 0.0
 
+        # Reconstruct rewards in original order
+        rewards_list = [reward_with_index.get(i, 0.0) for i in range(len(completions))]
         return rewards_list
 
     return reward_func

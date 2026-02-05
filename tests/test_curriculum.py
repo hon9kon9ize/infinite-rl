@@ -1153,9 +1153,9 @@ class TestCurriculumLearning(unittest.TestCase):
         cl.current_level = 0
 
         # Simulate good performance with success window data (what actually drives advancement)
-        # Track at current level (0)
+        # Track at current level (0) using GRPO batch-level tracking (primary_scores)
         for _ in range(50):
-            cl._track_success(0, True)  # All successes at level 0
+            cl._track_success_group(0, [1.0])  # Batch with perfect score (1.0)
 
         # Trigger level update
         cl._update_level()

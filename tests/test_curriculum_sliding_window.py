@@ -22,12 +22,12 @@ def test_sliding_window_tracking():
         variance_threshold=0.05,
     )
 
-    # Simulate some successes and failures for level 0
-    curriculum._track_success(0, True)  # 1/1
-    curriculum._track_success(0, True)  # 2/2
-    curriculum._track_success(0, True)  # 3/3
-    curriculum._track_success(0, False)  # 3/4
-    curriculum._track_success(0, True)  # 4/5
+    # Simulate some successes and failures for level 0 (using GRPO batch-level tracking)
+    curriculum._track_success_group(0, [1.0])  # 1/1 - batch with perfect score
+    curriculum._track_success_group(0, [1.0])  # 2/2
+    curriculum._track_success_group(0, [1.0])  # 3/3
+    curriculum._track_success_group(0, [0.0])  # 3/4 - batch with no perfect score
+    curriculum._track_success_group(0, [1.0])  # 4/5
 
     # Check success rate
     stats = curriculum.get_success_rate(0)
@@ -42,10 +42,10 @@ def test_sliding_window_tracking():
 
     # Test with multiple levels
     for _ in range(8):
-        curriculum._track_success(1, True)
+        curriculum._track_success_group(1, [1.0])
 
-    curriculum._track_success(1, False)
-    curriculum._track_success(1, False)
+    curriculum._track_success_group(1, [0.0])
+    curriculum._track_success_group(1, [0.0])
 
     stats = curriculum.get_success_rate(1)
     print(f"\nLevel 1 success rate: {stats['success_rate']:.2%}")
@@ -72,7 +72,7 @@ def test_sliding_window_tracking():
 
     # Test sliding window overflow (should only keep last N)
     for i in range(20):
-        curriculum._track_success(0, True)
+        curriculum._track_success_group(0, [1.0])
 
     window = curriculum.success_windows[0]
     print(f"\nWindow size after adding 20 more: {len(window)}")
@@ -96,7 +96,7 @@ def test_level_advancement():
 
     # Add consistent success at current level (0) - should eventually advance
     for _ in range(15):
-        curriculum._track_success(0, True)
+        curriculum._track_success_group(0, [1.0])
 
     curriculum._update_level()
     print(f"After 15 successes at level 0: level={curriculum.current_level}")
@@ -107,7 +107,7 @@ def test_level_advancement():
 
     # Create high variance (alternating success/failure)
     for i in range(10):
-        curriculum._track_success(0, i % 2 == 0)
+        curriculum._track_success_group(0, [1.0] if i % 2 == 0 else [0.0])
 
     stats = curriculum.get_success_rate(0)
     print(

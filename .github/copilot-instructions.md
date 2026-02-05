@@ -63,7 +63,7 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
   - Unique IDs use format: `math_{idx}`, `puzzle_{lang}_{name}`, `truthy_{idx}`
   - Task selection uses full history weighting to ensure diversity across batches
 - **Curriculum learning** uses sliding window success rates:
-  - `_track_success()` records 1 (success) or 0 (failure) per task type
+  - `_track_success_group(level, primary_scores)` records GRPO batch-level success: `group_success = 1 if max_primary == 1.0 else 0`
   - `_update_level()` checks: success_rate > threshold AND variance < variance_threshold for advancement, or success_rate < demote_threshold AND variance < variance_threshold for demotion
   - `get_success_rate()` provides detailed statistics for debugging
   - Thresholds are configurable:

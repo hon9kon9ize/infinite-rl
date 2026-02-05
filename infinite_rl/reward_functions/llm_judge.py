@@ -177,8 +177,8 @@ class LLMJudgeRewardFunction(RewardFunction):
     def _normalize_score(self, raw_score: float) -> float:
         """Normalize raw score to [0, 1] range.
 
-        Uses tanh-based normalization: normalized = (tanh(raw_score / 10) + 1) / 2
-        This maps extreme values to [0, 1] while preserving relative ordering.
+        Uses simple sigmoid-like normalization: score / (score + k)
+        where k = 20/9 ensures that score 20 maps to 0.9
 
         Args:
             raw_score: Raw score from judge model
@@ -190,11 +190,13 @@ class LLMJudgeRewardFunction(RewardFunction):
             # If normalization disabled, clip to [0, 1]
             return max(0.0, min(1.0, raw_score))
 
-        import math
+        # k = 20/9 ensures that 20 maps to 0.9
+        k = 20 / 9
 
-        # Use tanh for smooth normalization
-        normalized = (math.tanh(raw_score / 10.0) + 1.0) / 2.0
-        return max(0.0, min(1.0, normalized))
+        if raw_score < 0:
+            return 0.0
+
+        return raw_score / (raw_score + k)
 
     def compute_reward(
         self,

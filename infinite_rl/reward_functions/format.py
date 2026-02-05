@@ -59,13 +59,13 @@ class FormatRewardFunction(RewardFunction):
 
         if start_count > 1 or end_count > 1:
             return RewardFunctionScore(
-                score=-1.0,
+                score=0.0,
                 info=f"Multiple <{self.target_tag}> tags found.",
             )
 
         if not matches:
             return RewardFunctionScore(
-                score=-1.0,
+                score=0.0,
                 info=f"No content found in the <{self.target_tag}> tag.",
             )
 
@@ -79,7 +79,7 @@ class FormatRewardFunction(RewardFunction):
             # Think tag must be first - no content allowed before it
             if content_before_tag:
                 return RewardFunctionScore(
-                    score=-1.0,
+                    score=0.0,
                     info=f"Content found before <{self.target_tag}> opening tag. Tags must appear at the start.",
                 )
         elif self.target_tag == self.answer_tag:
@@ -92,7 +92,7 @@ class FormatRewardFunction(RewardFunction):
                 ).strip()
                 if content_without_think:
                     return RewardFunctionScore(
-                        score=-1.0,
+                        score=0.0,
                         info=f"Content found before <{self.target_tag}> opening tag (excluding valid <{self.think_tag}> section).",
                     )
 
@@ -113,7 +113,7 @@ class FormatRewardFunction(RewardFunction):
             forbidden_end = f"</{forbidden_tag}>"
             if forbidden_start in raw_content or forbidden_end in raw_content:
                 return RewardFunctionScore(
-                    score=-1.0,
+                    score=0.0,
                     info=f"<{forbidden_tag}> tag found inside <{self.target_tag}> tag. Tags cannot be nested.",
                 )
 
@@ -121,14 +121,14 @@ class FormatRewardFunction(RewardFunction):
         if self.task_name == "math":
             if "```" in raw_content:
                 return RewardFunctionScore(
-                    score=-1.0,
+                    score=0.0,
                     info=f"Math task should not contain code blocks.",
                 )
             # Math should have non-empty content without code blocks
             if raw_content.strip():
                 return RewardFunctionScore(score=1.0, info="Valid math answer.")
             else:
-                return RewardFunctionScore(score=-1.0, info="Empty math answer.")
+                return RewardFunctionScore(score=0.0, info="Empty math answer.")
 
         # For code/puzzle tasks, check proper code block formatting
         if "```" in raw_content:
@@ -138,7 +138,7 @@ class FormatRewardFunction(RewardFunction):
             if opening_count % 2 != 0:
                 # Odd number of triple-backtick sequences = malformed
                 return RewardFunctionScore(
-                    score=-1.0,
+                    score=0.0,
                     info=f"Code block not properly closed (missing closing ```).",
                 )
             # Check if code blocks have language specifier
@@ -158,4 +158,4 @@ class FormatRewardFunction(RewardFunction):
         if raw_content.strip():
             return RewardFunctionScore(score=1.0, info="Valid tag with content.")
         else:
-            return RewardFunctionScore(score=-1.0, info="Empty answer tag.")
+            return RewardFunctionScore(score=0.0, info="Empty answer tag.")

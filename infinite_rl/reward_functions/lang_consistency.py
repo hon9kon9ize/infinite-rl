@@ -80,7 +80,7 @@ class LangConsistencyRewardFunction(RewardFunction):
 
         if not norm_detected:
             return RewardFunctionScore(
-                score=-1.0,
+                score=0.0,
                 info=f"Failed to detect language of the response inside <{self.target_tag}>.",
             )
 
@@ -95,7 +95,7 @@ class LangConsistencyRewardFunction(RewardFunction):
             final_score = 1.0
             info_msg = ""
         else:
-            final_score = -1.0
+            final_score = 0.0
             info_msg = f"Detected language '{norm_detected}' does not match expected '{norm_expected}'."
 
         return RewardFunctionScore(

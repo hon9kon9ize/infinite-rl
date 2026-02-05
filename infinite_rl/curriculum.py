@@ -1357,14 +1357,9 @@ class CurriculumLearning:
             ]:
                 aux_scores[reward.reward_function_name] = reward.score
 
-        # Normalize aux
+        # Normalize aux (assuming aux scores are now in [0, 1])
         if aux_scores:
-            normalized_aux_list = []
-            for aux_value in aux_scores.values():
-                clipped = max(-1.0, min(1.0, aux_value))
-                normalized = (clipped + 1.0) / 2.0
-                normalized_aux_list.append(normalized)
-            aux_avg = sum(normalized_aux_list) / len(normalized_aux_list)
+            aux_avg = sum(aux_scores.values()) / len(aux_scores)
         else:
             aux_avg = 0.5
 

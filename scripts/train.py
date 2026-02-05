@@ -209,7 +209,6 @@ def create_curriculum_reward_func(
     def reward_func(
         prompts: List[str],
         completions: List[str],
-        task_metadata: Optional[List[Dict[str, Any]]] = None,
         **kwargs,
     ) -> List[float]:
         """Compute rewards for completions using Infinite-RL's curriculum.
@@ -217,12 +216,12 @@ def create_curriculum_reward_func(
         Args:
             prompts: List of prompts (can be strings or list-of-dicts from TRL)
             completions: List of model completions
-            task_metadata: Metadata for each task (task_id, task_type, etc.)
-            **kwargs: Additional arguments from trainer (ignored)
+            **kwargs: Additional arguments from trainer, including task_metadata
 
         Returns:
             List of reward scores in range [0, 1] (combined scores with judge)
         """
+        task_metadata = kwargs.get("task_metadata")
         from collections import defaultdict
 
         # CRITICAL: Preserve original completion order by storing (index, completion) pairs
@@ -262,7 +261,7 @@ def create_curriculum_reward_func(
                     # Ensure we have a string
                     if not isinstance(completion_text, str):
                         print(
-                            f"Warning: Completion for task {task_id} is not a string after extraction. Type: {type(completion_text)}"
+                            f"Warning: Completion for task {task_id} is not a string after extraction. Type: {type(completion_text)}, value: {completion_text}"
                         )
                         completion_texts.append("")
                     else:
@@ -456,9 +455,9 @@ def setup_training_args(
         max_completion_length=max_completion_length,
         gradient_accumulation_steps=gradient_accumulation_steps,
         warmup_steps=warmup_steps,
-        temperature=1.0,
-        top_p=1.0,
-        repetition_penalty=1.1,
+        temperature=0.7,
+        top_p=0.9,
+        repetition_penalty=1.0,  # CRITICAL: Must be 1.0 to match base policy logprobs
         # vLLM COLOCATE mode is always enabled
         use_vllm=True,
         vllm_gpu_memory_utilization=0.5,
@@ -470,8 +469,8 @@ def setup_training_args(
         save_steps=200,
         save_strategy="steps",
         eval_strategy="no",
-        log_completions=True,
-        num_completions_to_print=5,
+        log_completions=False,  # avoid Rich library bugs
+        num_completions_to_print=0,
         model_init_kwargs={
             "torch_dtype": torch.bfloat16,
             "attn_implementation": "kernels-community/flash-attn2",
@@ -909,7 +908,7 @@ def main():
 
     trainer = GRPOTrainer(
         model=model,
-        reward_funcs=reward_func,
+        reward_funcs=[reward_func],  # Pass as list
         args=training_args,
         train_dataset=train_dataset,
         processing_class=tokenizer,

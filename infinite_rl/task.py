@@ -70,7 +70,7 @@ class Task:
         """Convert task to dictionary for logging.
 
         Returns task-level metadata only. Generation-level information
-        (expected_answer, model_output, is_correct, rewards, scores) is in generations[].
+        (model_output, is_correct, rewards, scores) is in generations[].
         """
         return {
             "task_id": self.task_id,
@@ -81,6 +81,7 @@ class Task:
             "language": self.language,
             "reasoning_language": self.reasoning_language,
             "prompt": self.prompt,
+            "expected_answer": self.expected_answer,
             "judge_system_prompt": self.judge_system_prompt,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "first_response_at": (

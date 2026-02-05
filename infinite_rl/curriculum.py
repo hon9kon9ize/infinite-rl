@@ -874,10 +874,9 @@ class CurriculumLearning:
         )
         max_primary = max(primary_scores) if primary_scores else 0.0
 
-        # More conservative success criteria for curriculum learning:
-        # Require BOTH: mean >= 0.5 AND at least one perfect response
-        # This ensures consistent performance across the batch, not just lucky guesses
-        group_success = 1 if (mean_primary >= 0.5 and max_primary == 1.0) else 0
+        # Success criteria: count as success if ANY response is perfect (1.0)
+        # This allows curriculum progression when model occasionally gets correct answers
+        group_success = 1 if max_primary == 1.0 else 0
 
         self.success_windows[level].append(group_success)
 
@@ -1075,27 +1074,25 @@ class CurriculumLearning:
                         level_weights.extend([1.0] * len(available_tasks))
                         break
         else:
-            # Normal curriculum: collect from all levels with preference for current level
-            current_level_weight = 2.0  # 2x weight for current level
-            other_level_weight = 0.5  # 0.5x weight for other levels
+            # Normal curriculum: ONLY use current level (don't mix levels)
+            # This ensures success is tracked per-level correctly
+            level_tasks = self.session.tasks_by_level.get(self.current_level, [])
+            if level_tasks:
+                # Limit tasks per level to prevent performance issues
+                max_tasks_per_level = 50
+                if len(level_tasks) > max_tasks_per_level:
+                    level_tasks = random.sample(level_tasks, max_tasks_per_level)
 
-            for level in range(0, 7):
-                level_tasks = self.session.tasks_by_level.get(level, [])
+                all_available_tasks.extend(level_tasks)
+                level_weights.extend([1.0] * len(level_tasks))
+            else:
+                # Fallback: if current level has no tasks, use level 0
+                level_tasks = self.session.tasks_by_level.get(0, [])
                 if level_tasks:
-                    # Limit tasks per level to prevent performance issues
-                    max_tasks_per_level = 50
-                    if len(level_tasks) > max_tasks_per_level:
-                        level_tasks = random.sample(level_tasks, max_tasks_per_level)
-
+                    if len(level_tasks) > 50:
+                        level_tasks = random.sample(level_tasks, 50)
                     all_available_tasks.extend(level_tasks)
-
-                    # Apply level-based weighting
-                    level_weight = (
-                        current_level_weight
-                        if level == self.current_level
-                        else other_level_weight
-                    )
-                    level_weights.extend([level_weight] * len(level_tasks))
+                    level_weights.extend([1.0] * len(level_tasks))
 
         if not all_available_tasks:
             return None

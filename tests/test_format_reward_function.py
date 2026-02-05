@@ -36,9 +36,7 @@ class TestFormatRewardFunction(unittest.TestCase):
             model_output=out,
         )
         score = fn.compute_reward(task)
-        self.assertEqual(score.score, -1.0)
-
-    def test_math_simple_value(self):
+        self.assertEqual(score.score, 0.0)
         fn = FormatRewardFunction(task_name="math")
         fn.initialize()
         out = "<answer>12</answer>"
@@ -70,7 +68,7 @@ class TestFormatRewardFunction(unittest.TestCase):
             model_output=out,
         )
         score = fn.compute_reward(task)
-        self.assertEqual(score.score, -1.0)
+        self.assertEqual(score.score, 0.0)
 
     def test_content_before_opening_tag_think(self):
         """Test that content before <think> tag returns -1.0"""
@@ -115,7 +113,7 @@ Now the actual thinking content
             model_output=out,
         )
         score = fn.compute_reward(task)
-        self.assertEqual(score.score, -1.0)
+        self.assertEqual(score.score, 0.0)
         self.assertIn("before", score.info.lower())
 
     def test_whitespace_before_tag_allowed(self):

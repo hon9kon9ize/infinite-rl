@@ -6,13 +6,10 @@ import json
 from pathlib import Path
 import random
 
-from .reward_functions import RewardFunctionScore
 from .task import Task
 from .prompt_templates import (
     format_math_prompt,
     format_puzzle_prompt,
-    format_reflective_math_prompt,
-    format_reflective_puzzle_prompt,
     format_truthy_judge_system_prompt,
     format_truthy_user_prompt,
 )

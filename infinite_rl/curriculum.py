@@ -16,13 +16,6 @@ import statistics
 from .reward_functions import get_reward_functions, RewardFunctionScore
 from .session import Session
 from .task import Task
-from .utils.param_extractor import extract_puzzle_inputs
-from .prompt_templates import (
-    format_math_prompt,
-    format_puzzle_prompt,
-    format_truthy_judge_system_prompt,
-    format_truthy_user_prompt,
-)
 
 
 class CurriculumLearning:
@@ -1238,31 +1231,14 @@ class CurriculumLearning:
                         if gen_idx < len(judge_scores):
                             judge_score = judge_scores[gen_idx]
 
-                            # Check format validity from rewards (format_think, format_answer)
-                            format_valid = True
-                            if self.use_format:
-                                for reward in gen.rewards:
-                                    if reward.reward_function_name in [
-                                        "format_think",
-                                        "format_answer",
-                                    ]:
-                                        if reward.score < 1.0:
-                                            format_valid = False
-                                            break
-
-                            # Apply format gate: if format invalid, gate judge reward to 0.0
-                            final_judge_score = (
-                                judge_score.score if format_valid else 0.0
-                            )
-
                             for i, reward in enumerate(gen.rewards):
                                 if reward.reward_function_name == "primary":
                                     gen.rewards[i] = RewardFunctionScore(
-                                        score=final_judge_score,
+                                        score=judge_score.score,
                                         reward_function_name="primary",
                                         info=judge_score.info or "",
                                     )
-                                    gen.primary_score = final_judge_score
+                                    gen.primary_score = judge_score.score
                                     # Recompute combined_score after updating judge score
                                     gen.combined_score = self._compute_combined_score(
                                         task, gen
@@ -1308,32 +1284,6 @@ class CurriculumLearning:
         Returns:
             Combined score in [0, 1]
         """
-        # Extract format validity from generation rewards (already computed in generation.rewards)
-        # Both format_think and format_answer must be score >= 1.0
-        format_valid = True
-        if self.use_format:
-            has_format_think = False
-            has_format_answer = False
-
-            for reward in generation.rewards:
-                if reward.reward_function_name == "format_think":
-                    if reward.score < 1.0:
-                        format_valid = False
-                    has_format_think = True
-                elif reward.reward_function_name == "format_answer":
-                    if reward.score < 1.0:
-                        format_valid = False
-                    has_format_answer = True
-
-            # For non-truthy tasks, both format rewards are required
-            if task.task_type != "truthy":
-                if not has_format_think or not has_format_answer:
-                    format_valid = False
-
-        # Apply format gate: if format is invalid, gate entire score to 0.0
-        if not format_valid:
-            return 0.0
-
         primary_score = generation.primary_score
         aux_scores = {}
         judge_score = 0.0
@@ -1342,8 +1292,6 @@ class CurriculumLearning:
                 judge_score = reward.score
             elif reward.reward_function_name not in [
                 "primary",
-                "format_think",
-                "format_answer",
             ]:
                 aux_scores[reward.reward_function_name] = reward.score
 
@@ -1351,7 +1299,7 @@ class CurriculumLearning:
         if aux_scores:
             aux_avg = sum(aux_scores.values()) / len(aux_scores)
         else:
-            aux_avg = 0.5
+            aux_avg = 0
 
         # Weights
         if task.task_type == "truthy":

@@ -207,14 +207,12 @@ def create_curriculum_reward_func(
     """
 
     def reward_func(
-        prompts: List[str],
         completions: List[str],
         **kwargs,
     ) -> List[float]:
         """Compute rewards for completions using Infinite-RL's curriculum.
 
         Args:
-            prompts: List of prompts (can be strings or list-of-dicts from TRL)
             completions: List of model completions
             **kwargs: Additional arguments from trainer, including task_metadata
 

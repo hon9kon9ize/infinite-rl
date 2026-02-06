@@ -12,8 +12,6 @@ import unittest
 from infinite_rl.prompt_templates import (
     format_math_prompt,
     format_puzzle_prompt,
-    format_reflective_math_prompt,
-    format_reflective_puzzle_prompt,
     LANG_MAP,
 )
 
@@ -215,154 +213,6 @@ class TestFormatPuzzlePrompt(unittest.TestCase):
         self.assertNotIn("Sum of Two Numbers", result)
 
 
-class TestFormatReflectiveMathPrompt(unittest.TestCase):
-    """Test cases for format_reflective_math_prompt function."""
-
-    def test_reflective_math_structure(self):
-        """Test that reflective math prompt has required sections."""
-        original = "What is 2 + 2?"
-        previous = "The answer is 4"
-        result = format_reflective_math_prompt(original, previous)
-
-        # Should include sections for review
-        self.assertIn("Review", result)
-        self.assertIn("Original Problem", result)
-        self.assertIn("Previous Attempt", result)
-        self.assertIn("solve the problem again", result)
-
-    def test_reflective_includes_original_prompt(self):
-        """Test that original prompt is included."""
-        original = "Calculate 3 * 5"
-        previous = "15"
-        result = format_reflective_math_prompt(original, previous)
-
-        self.assertIn(original, result)
-
-    def test_reflective_includes_previous_attempt(self):
-        """Test that previous attempt is included."""
-        original = "What is 10 - 3?"
-        previous = "The answer is 7"
-        result = format_reflective_math_prompt(original, previous)
-
-        self.assertIn(previous, result)
-
-    def test_reflective_with_empty_previous_attempt(self):
-        """Test reflective prompt with no previous attempt."""
-        original = "Solve: x + 2 = 5"
-        result = format_reflective_math_prompt(original, "")
-
-        self.assertIn("<no output recorded>", result)
-        self.assertIn(original, result)
-
-    def test_reflective_custom_tags(self):
-        """Test reflective prompt with custom answer/think tags."""
-        original = "Calculate 4 / 2"
-        previous = "Error: cannot divide"
-        result = format_reflective_math_prompt(
-            original, previous, answer_tag="result", think_tag="analysis"
-        )
-
-        # Should still include the original problem and previous attempt
-        self.assertIn(original, result)
-        self.assertIn(previous, result)
-
-    def test_reflective_problem_appears_once(self):
-        """Test that original problem appears once in context."""
-        original = "Unique problem statement #12345"
-        previous = "Attempt"
-        result = format_reflective_math_prompt(original, previous)
-
-        # Should appear exactly once (in context section)
-        count = result.count(original)
-        self.assertEqual(count, 1)
-
-
-class TestFormatReflectivePuzzlePrompt(unittest.TestCase):
-    """Test cases for format_reflective_puzzle_prompt function."""
-
-    def test_reflective_puzzle_structure(self):
-        """Test that reflective puzzle prompt has required sections."""
-        original = "Solve this function"
-        previous = "def sol(): return None"
-        result = format_reflective_puzzle_prompt(original, previous, language="python")
-
-        self.assertIn("Review", result)
-        self.assertIn("Original Task", result)
-        self.assertIn("Previous Attempt", result)
-        self.assertIn("solve this puzzle again", result)
-
-    def test_reflective_puzzle_includes_original(self):
-        """Test that original prompt is included."""
-        original = "Write a function that returns True"
-        previous = "def f(): return 1"
-        result = format_reflective_puzzle_prompt(original, previous)
-
-        self.assertIn(original, result)
-
-    def test_reflective_puzzle_includes_previous(self):
-        """Test that previous attempt is included."""
-        original = "Task"
-        previous = "def solve(): pass"
-        result = format_reflective_puzzle_prompt(original, previous)
-
-        self.assertIn(previous, result)
-
-    def test_reflective_puzzle_python_example(self):
-        """Test Python code example in reflective prompt."""
-        original = "Write a function"
-        previous = "Bad code"
-        result = format_reflective_puzzle_prompt(original, previous, language="python")
-
-        # Should have reflective structure
-        self.assertIn("Review", result)
-        self.assertIn(original, result)
-
-    def test_reflective_puzzle_javascript_example(self):
-        """Test JavaScript code example in reflective prompt."""
-        original = "Write a function"
-        previous = "Bad code"
-        result = format_reflective_puzzle_prompt(
-            original, previous, language="javascript"
-        )
-
-        # Should have reflective structure
-        self.assertIn("Review", result)
-        self.assertIn(original, result)
-
-    def test_reflective_puzzle_empty_previous(self):
-        """Test reflective puzzle with no previous attempt."""
-        original = "Implement quicksort"
-        result = format_reflective_puzzle_prompt(original, "")
-
-        self.assertIn("<no output recorded>", result)
-        self.assertIn(original, result)
-
-    def test_reflective_puzzle_custom_tags(self):
-        """Test custom think and answer tags."""
-        original = "Write fibonacci"
-        previous = "def fib(): return 0"
-        result = format_reflective_puzzle_prompt(
-            original,
-            previous,
-            language="python",
-            answer_tag="code",
-            think_tag="strategy",
-        )
-
-        # Should work with custom tags
-        self.assertIn(original, result)
-        self.assertIn(previous, result)
-
-    def test_reflective_puzzle_problem_appears_once(self):
-        """Test that original problem appears once."""
-        original = "Unique problem #54321"
-        previous = "Attempt"
-        result = format_reflective_puzzle_prompt(original, previous)
-
-        count = result.count(original)
-        self.assertEqual(count, 1)
-
-
 class TestLanguageMapping(unittest.TestCase):
     """Test cases for language code mappings."""
 
@@ -389,47 +239,6 @@ class TestLanguageMapping(unittest.TestCase):
     def test_cantonese_mapping(self):
         """Test Cantonese mapping."""
         self.assertEqual(LANG_MAP["yue"], "Cantonese")
-
-
-class TestPromptIntegration(unittest.TestCase):
-    """Integration tests for prompt formatting."""
-
-    def test_math_reflective_workflow(self):
-        """Test complete math task + reflective workflow."""
-        # Initial task
-        problem = "What is 5 * 6?"
-        initial_prompt = format_math_prompt(problem)
-        self.assertIn(problem, initial_prompt)
-
-        # After failure - reflective prompt
-        failed_attempt = "I don't know"
-        reflective_prompt = format_reflective_math_prompt(problem, failed_attempt)
-
-        self.assertIn(problem, reflective_prompt)
-        self.assertIn(failed_attempt, reflective_prompt)
-        self.assertIn("Review", reflective_prompt)
-
-    def test_puzzle_reflective_workflow(self):
-        """Test complete puzzle task + reflective workflow."""
-        puzzle_data = {
-            "name": "sum_array",
-            "docstring": "Sum all elements in an array",
-            "sat": "function sat(a) { return sum([1,2,3]) === 6; }",
-            "sol": "function sum(a) { return a.reduce((x,y) => x+y, 0); }",
-        }
-
-        # Initial task
-        initial_prompt = format_puzzle_prompt(puzzle_data, "javascript")
-        self.assertIn("sum_array", initial_prompt)
-
-        # After failure - reflective
-        failed_code = "function sum() { return 0; }"
-        reflective_prompt = format_reflective_puzzle_prompt(
-            initial_prompt, failed_code, language="javascript"
-        )
-
-        self.assertIn(failed_code, reflective_prompt)
-        self.assertIn("Review", reflective_prompt)
 
 
 class TestPromptEdgeCases(unittest.TestCase):
@@ -471,14 +280,6 @@ class TestPromptEdgeCases(unittest.TestCase):
 
         self.assertIn("complex", result)
         self.assertIn("multiple lines", result)
-
-    def test_previous_attempt_with_tags(self):
-        """Test reflective prompt when previous attempt contains XML-like tags."""
-        original = "Problem"
-        previous = "<answer>5</answer>"  # User put tags in their attempt
-        result = format_reflective_math_prompt(original, previous)
-
-        self.assertIn(previous, result)  # Should include it as-is
 
 
 if __name__ == "__main__":

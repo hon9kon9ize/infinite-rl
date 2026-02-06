@@ -8,7 +8,7 @@ Supports extracting inputs from sat() function signatures to use when calling so
 import re
 import json
 import inspect
-from typing import Dict, Any, Tuple, Optional, Union
+from typing import Dict, Any
 
 
 def extract_python_params(func) -> Dict[str, Any]:

@@ -1877,11 +1877,11 @@ class TestCurriculumLearning(unittest.TestCase):
                 "truthy_format_test", response_invalid_format
             )
 
-            # Score should be 0.0 because format is invalid (judge reward gated)
+            # Score should be the judge score (format gate removed)
             self.assertEqual(
                 primary_reward,
-                0.0,
-                "Judge reward should be gated to zero when format is invalid",
+                0.9,
+                "Judge reward should NOT be gated when format is invalid (format gate removed)",
             )
 
     def test_batch_llm_judge_validates_request_payload(self):

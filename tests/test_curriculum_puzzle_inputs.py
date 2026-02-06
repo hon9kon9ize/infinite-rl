@@ -9,9 +9,6 @@ set to empty dict {}, causing puzzle solvers to receive no arguments.
 """
 
 import unittest
-import tempfile
-import json
-from pathlib import Path
 from unittest.mock import patch
 from infinite_rl.curriculum import CurriculumLearning, Task
 from infinite_rl.utils.param_extractor import extract_puzzle_inputs
@@ -297,7 +294,7 @@ class TestParamExtractorUsageInCurriculum(unittest.TestCase):
     def test_extract_puzzle_inputs_function_exists_and_is_used(self):
         """Verify curriculum imports and uses extract_puzzle_inputs."""
         # This test verifies the function is importable
-        from infinite_rl.curriculum import extract_puzzle_inputs
+        from infinite_rl.utils.param_extractor import extract_puzzle_inputs
 
         # Verify it's callable
         self.assertTrue(callable(extract_puzzle_inputs))

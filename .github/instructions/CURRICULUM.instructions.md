@@ -61,7 +61,7 @@ Default `aux_weight = 0.2` (80% primary, 20% auxiliary).
 
 **Critical behavior**:
 - Format is a hard gate during evaluation: checked BEFORE primary scoring
-- If primary fails (0.0), positive auxiliary rewards are capped at 0 to prevent bonus rewards when task failed
+- Auxiliary rewards are included as-is regardless of primary task success/failure
 - Negative penalties (repetition, lang_consistency) are always applied if detected
 - Scores are clipped to [-1.0, 1.0] per function, then [-1.0, 1.0] after averaging
 
@@ -110,7 +110,7 @@ python -m pytest tests/test_curriculum.py::TestCurriculumLearning -q
 1. **GRPO batch logging**: Don't log per-generation; accumulate until batch complete. Log only once per prompt-batch.
 2. **Sliding window semantics**: Each level tracks independently. Clearing window on level change is correct; prevents old data drift.
 3. **Format vs correctness**: Format is hard gate during warmup; primary score is used for curriculum. Don't confuse the two.
-4. **Auxiliary reward capping**: When primary=0, cap positive auxiliary at 0 (no bonuses for failure). Always apply negative penalties.
+4. **Auxiliary reward handling**: Auxiliary rewards are included as-is regardless of primary task success/failure. Always apply negative penalties.
 5. **Variance for demotion**: Variance threshold only used for demotion (stable bad performance). Not for advancement (success rate alone).
 
 ## Documentation References

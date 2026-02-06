@@ -573,7 +573,7 @@ class CurriculumLearning:
         - is_correct is True only if BOTH format is valid AND primary score is 1.0
         - Format gates: BOTH think and answer tags must be valid
         - On success (format_valid AND is_correct): reward auxiliary fully
-        - On failure: cap positive auxiliary rewards at 0
+        - On failure: include auxiliary rewards as-is
         - LLM Judge computed as auxiliary (separate from primary correctness)
 
         Args:
@@ -620,22 +620,16 @@ class CurriculumLearning:
             # Failure: primary score incorrect
             other_aux_scores = self.get_aux_reward_scores(task, is_correct=False)
 
-            # Cap positive auxiliary rewards (but not llm_judge)
+            # Include auxiliary rewards as-is (no capping)
             for name, data in other_aux_scores.items():
                 if name != "llm_judge":
-                    capped_score = min(0.0, data["score"])
-                    capped_info = (
-                        data["info"]
-                        if data["score"] < 0
-                        else "Primary task failed, positive auxiliary reward capped at 0"
-                    )
                     aux_reward = RewardFunctionScore(
-                        score=capped_score,
+                        score=data["score"],
                         reward_function_name=name,
-                        info=capped_info or "",
+                        info=data["info"] or "",
                     )
                     task_rewards.append(aux_reward)
-                    aux_score_dict[name] = {"score": capped_score, "info": capped_info}
+                    aux_score_dict[name] = data
 
             score = 0.0
 

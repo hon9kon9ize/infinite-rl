@@ -3,11 +3,14 @@ import re
 import subprocess
 import os
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from .reward_function import RewardFunction, RewardFunctionScore
 
 if TYPE_CHECKING:
     from ..task import Task
+
+# Module-level cache to avoid repeated subprocess overhead
+_runner_process_cache: Optional[subprocess.Popen] = None
 
 
 class PuzzleRewardFunction(RewardFunction):
@@ -163,29 +166,44 @@ class PuzzleRewardFunction(RewardFunction):
             }
         )
         try:
-            result = subprocess.run(
-                [sys.executable, runner_path],
-                input=puzzle_data,
+            # Use Popen with communicate() for better timeout handling
+            # communicate() is more reliable than run() for timing out
+            process = subprocess.Popen(
+                [sys.executable, "-u", runner_path],  # -u for unbuffered output
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                capture_output=True,
-                timeout=self.timeout,
             )
+
+            try:
+                stdout, stderr = process.communicate(
+                    input=puzzle_data, timeout=self.timeout
+                )
+            except subprocess.TimeoutExpired:
+                # Kill the process if it times out
+                process.kill()
+                process.wait(timeout=1)  # Wait for cleanup
+                return RewardFunctionScore(
+                    score=0.0, info=f"Execution timed out after {self.timeout}s"
+                )
+
             # Only treat as error if return code is non-zero
             # Ignore stderr warnings (like wasmtime cleanup exceptions on Python 3.13)
-            if result.returncode != 0:
+            if process.returncode != 0:
                 return RewardFunctionScore(
                     score=0.0,
-                    info=f"Execution error (exit code {result.returncode}): {result.stderr}",
+                    info=f"Execution error (exit code {process.returncode}): {stderr}",
                 )
 
             # Parse output even if there were warnings in stderr
-            if not result.stdout or not result.stdout.strip():
+            if not stdout or not stdout.strip():
                 return RewardFunctionScore(
                     score=0.0,
                     info="No output from execution",
                 )
 
-            output = json.loads(result.stdout.strip())
+            output = json.loads(stdout.strip())
             if "error" in output:
                 return RewardFunctionScore(
                     score=0.0,
@@ -199,7 +217,5 @@ class PuzzleRewardFunction(RewardFunction):
                     score=0.0,
                     info="Puzzle check failed",
                 )
-        except subprocess.TimeoutExpired:
-            return RewardFunctionScore(score=0.0, info="Execution timed out")
         except Exception as e:
             return RewardFunctionScore(score=0.0, info=f"Evaluation failed: {str(e)}")

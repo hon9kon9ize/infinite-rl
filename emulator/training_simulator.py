@@ -44,8 +44,6 @@ class RewardSnapshot:
     format_score: float = 0.0
     reasoning_steps_score: float = 0.0
     lang_consistency_score: float = 0.0
-    repetition_score: float = 0.0
-    length_score: float = 0.0
     llm_judge_score: float = 0.0
 
 
@@ -56,10 +54,8 @@ class TrainingSimulator:
         self,
         num_generations: int = 4,
         use_format: bool = True,
-        use_repetition: bool = False,
         use_reasoning_steps: bool = False,
         use_lang_consistency: bool = False,
-        use_length: bool = False,
         warmup_step: int = 32,
         success_rate_threshold: float = 0.7,
         demote_threshold: float = 0.4,
@@ -75,10 +71,8 @@ class TrainingSimulator:
         Args:
             num_generations: Number of generations per GRPO batch
             use_format: Whether to use format validation
-            use_repetition: Whether to use repetition penalty
             use_reasoning_steps: Whether to use reasoning steps reward
             use_lang_consistency: Whether to use language consistency reward
-            use_length: Whether to use length regularization reward
             warmup_step: Number of warmup steps
             success_rate_threshold: Threshold for level advancement
             demote_threshold: Threshold for level demotion
@@ -91,10 +85,8 @@ class TrainingSimulator:
         """
         self.num_generations = num_generations
         self.use_format = use_format
-        self.use_repetition = use_repetition
         self.use_reasoning_steps = use_reasoning_steps
         self.use_lang_consistency = use_lang_consistency
-        self.use_length = use_length
         self.aux_weight = aux_weight
         self.use_llm_judge = use_llm_judge
         self.llm_judge_weight = llm_judge_weight
@@ -105,10 +97,7 @@ class TrainingSimulator:
         # Build curriculum kwargs
         curriculum_kwargs = {
             "use_format": use_format,
-            "use_repetition": use_repetition,
             "use_reasoning_steps": use_reasoning_steps,
-            "use_lang_consistency": use_lang_consistency,
-            "use_length": use_length,
             "warmup_step": warmup_step,
             "success_rate_threshold": success_rate_threshold,
             "demote_threshold": demote_threshold,
@@ -272,8 +261,6 @@ class TrainingSimulator:
             "format_score": 0.0,
             "reasoning_steps_score": 0.0,
             "lang_consistency_score": 0.0,
-            "repetition_score": 0.0,
-            "length_score": 0.0,
             "llm_judge_score": 0.0,
         }
         if updated_task.generations:
@@ -284,10 +271,6 @@ class TrainingSimulator:
                     reward_scores["reasoning_steps_score"] = reward.score
                 elif reward.reward_function_name == "lang_consistency":
                     reward_scores["lang_consistency_score"] = reward.score
-                elif reward.reward_function_name == "repetition":
-                    reward_scores["repetition_score"] = reward.score
-                elif reward.reward_function_name == "length":
-                    reward_scores["length_score"] = reward.score
                 elif reward.reward_function_name == "llm_judge":
                     reward_scores["llm_judge_score"] = reward.score
 
@@ -309,8 +292,6 @@ class TrainingSimulator:
                     format_score=reward_scores["format_score"],
                     reasoning_steps_score=reward_scores["reasoning_steps_score"],
                     lang_consistency_score=reward_scores["lang_consistency_score"],
-                    repetition_score=reward_scores["repetition_score"],
-                    length_score=reward_scores["length_score"],
                     llm_judge_score=reward_scores["llm_judge_score"],
                 )
             )

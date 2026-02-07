@@ -205,9 +205,7 @@ class TestGRPOBatching(unittest.TestCase):
             num_generations=4,
             warmup_step=0,  # Disable warmup for clearer testing
             use_format=False,
-            use_repetition=False,
             use_reasoning_steps=False,
-            use_length=False,
             use_lang_consistency=False,
         )
 
@@ -279,9 +277,7 @@ class TestGRPOBatching(unittest.TestCase):
             window_size=10,
             success_rate_threshold=0.8,
             use_format=False,
-            use_repetition=False,
             use_reasoning_steps=False,
-            use_length=False,
             use_lang_consistency=False,
         )
 

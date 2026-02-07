@@ -117,7 +117,7 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 - Strict output format: the parser looks for `<answer>` tags; changing parsing requires updating tests.
 - **Prompt generation**: Use `format_puzzle_prompt()` and `format_math_prompt()` from `infinite_rl.prompt_templates` to create prompts.
 - **Puzzle data access**: Use `get_puzzle_data()` and `get_available_puzzles()` from `infinite_rl.puzzles` to access puzzle metadata.
-- **Auxiliary reward functions**: Additional metrics like `FormatRewardFunction`, `LangConsistencyRewardFunction`, `ReasoningStepsRewardFunction`, `RepetitionRewardFunction`, `LengthRewardFunction`, and `LLMJudgeRewardFunction` are initialized via `CurriculumLearning._initialize_aux_reward_functions()` and blended with primary rewards.
+- **Auxiliary reward functions**: Additional metrics like `FormatRewardFunction`, `LangConsistencyRewardFunction`, `ReasoningStepsRewardFunction`, and `LLMJudgeRewardFunction` are initialized via `CurriculumLearning._initialize_aux_reward_functions()` and blended with primary rewards.
 - When adding a new task type:
   - Add a reward function class under `infinite_rl/reward_functions/` and expose it in `get_reward_functions()` for primary tasks.
   - For auxiliary metrics, add to `_initialize_aux_reward_functions()` in curriculum.py and add configuration handling.

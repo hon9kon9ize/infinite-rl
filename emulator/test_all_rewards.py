@@ -31,16 +31,12 @@ def example_reward_test_all_functions():
         use_format=True,
         use_reasoning_steps=True,
         use_lang_consistency=True,
-        use_repetition=True,
-        use_length=True,
     )
 
     print("\nReward Functions Configuration:")
     print(f"  ✓ use_format: {simulator.use_format}")
     print(f"  ✓ use_reasoning_steps: {simulator.use_reasoning_steps}")
     print(f"  ✓ use_lang_consistency: {simulator.use_lang_consistency}")
-    print(f"  ✓ use_repetition: {simulator.use_repetition}")
-    print(f"  ✓ use_length: {simulator.use_length}")
     print(f"  ✓ aux_weight: {simulator.aux_weight}")
     print(f"  ✓ num_generations: {simulator.num_generations}")
 
@@ -186,12 +182,10 @@ def example_reward_test_all_functions():
         "format": curriculum.use_format,
         "reasoning_steps": curriculum.use_reasoning_steps,
         "lang_consistency": curriculum.use_lang_consistency,
-        "repetition": curriculum.use_repetition,
-        "length": curriculum.use_length,
     }
 
     enabled_count = sum(1 for v in enabled.values() if v)
-    print(f"  Total Enabled: {enabled_count}/5")
+    print(f"  Total Enabled: {enabled_count}/3")
     for reward_name, is_enabled in enabled.items():
         status = "✓" if is_enabled else "✗"
         print(f"    {status} {reward_name}")
@@ -204,8 +198,6 @@ def example_reward_test_all_functions():
             "use_format": simulator.use_format,
             "use_reasoning_steps": simulator.use_reasoning_steps,
             "use_lang_consistency": simulator.use_lang_consistency,
-            "use_repetition": simulator.use_repetition,
-            "use_length": simulator.use_length,
             "aux_weight": simulator.aux_weight,
         },
         "phases": {

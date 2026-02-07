@@ -697,9 +697,7 @@ class TestCurriculumLearning(unittest.TestCase):
         """Test get_rewards with wrong answer."""
         cl = CurriculumLearning(
             use_format=False,
-            use_repetition=False,
             use_reasoning_steps=False,
-            use_length=False,
             use_lang_consistency=False,
         )
 
@@ -1044,33 +1042,25 @@ class TestCurriculumLearning(unittest.TestCase):
         cl = CurriculumLearning(
             use_format=True,
             use_lang_consistency=True,
-            use_repetition=True,
             use_reasoning_steps=True,
-            use_length=True,
         )
 
         self.assertTrue(cl.use_format)
         self.assertTrue(cl.use_lang_consistency)
-        self.assertTrue(cl.use_repetition)
         self.assertTrue(cl.use_reasoning_steps)
-        self.assertTrue(cl.use_length)
 
         # Check all auxiliary functions are initialized
         self.assertGreaterEqual(len(cl.aux_reward_functions), 1)
 
     def test_initialization_with_auxiliary_kwargs(self):
         """Test initialization with custom kwargs for auxiliary rewards."""
-        length_kwargs = {"target_len": 200, "max_len": 500}
         reasoning_kwargs = {"bonus_per_step": 0.05}
 
         cl = CurriculumLearning(
-            use_length=True,
-            length_kwargs=length_kwargs,
             use_reasoning_steps=True,
             reasoning_steps_kwargs=reasoning_kwargs,
         )
 
-        self.assertEqual(cl.length_kwargs, length_kwargs)
         self.assertEqual(cl.reasoning_steps_kwargs, reasoning_kwargs)
 
     def test_get_aux_reward_scores(self):
@@ -1097,7 +1087,7 @@ class TestCurriculumLearning(unittest.TestCase):
 
     def test_get_learning_stats_includes_aux_rewards(self):
         """Test that learning stats include auxiliary reward functions."""
-        cl = CurriculumLearning(use_format=True, use_repetition=True, use_length=True)
+        cl = CurriculumLearning(use_format=True)
 
         stats = cl.get_learning_stats()
 
@@ -1179,9 +1169,7 @@ class TestCurriculumLearning(unittest.TestCase):
         cl = CurriculumLearning(
             use_format=False,
             use_lang_consistency=False,
-            use_repetition=False,
             use_reasoning_steps=False,
-            use_length=False,
         )
 
         # Create a task
@@ -1202,18 +1190,14 @@ class TestCurriculumLearning(unittest.TestCase):
 
     def test_auxiliary_reward_kwargs_passed_correctly(self):
         """Test that kwargs are passed correctly to auxiliary reward functions."""
-        length_kwargs = {"target_len": 250, "max_len": 600}
         format_kwargs = {"strict": True}
 
         cl = CurriculumLearning(
-            use_length=True,
-            length_kwargs=length_kwargs,
             use_format=True,
             format_kwargs=format_kwargs,
         )
 
         # Verify kwargs are stored
-        self.assertEqual(cl.length_kwargs, length_kwargs)
         self.assertEqual(cl.format_kwargs, format_kwargs)
 
     def test_all_auxiliary_rewards_together(self):
@@ -1221,19 +1205,14 @@ class TestCurriculumLearning(unittest.TestCase):
         cl = CurriculumLearning(
             use_format=True,
             use_lang_consistency=True,
-            use_repetition=True,
             use_reasoning_steps=True,
-            use_length=True,
-            length_kwargs={"target_len": 200},
             reasoning_steps_kwargs={"bonus_per_step": 0.1},
         )
 
         # Verify all are initialized
         self.assertTrue(cl.use_format)
         self.assertTrue(cl.use_lang_consistency)
-        self.assertTrue(cl.use_repetition)
         self.assertTrue(cl.use_reasoning_steps)
-        self.assertTrue(cl.use_length)
 
         # Get stats to verify they're all tracked
         stats = cl.get_learning_stats()
@@ -1328,11 +1307,8 @@ class TestCurriculumLearning(unittest.TestCase):
         """Test get_aux_reward_scores when no auxiliary rewards are configured."""
         cl = CurriculumLearning(
             use_lang_consistency=False,
-            use_repetition=False,
             use_format=False,
             use_reasoning_steps=False,
-            use_length=False,
-            use_whitespace_collapse=False,
         )
 
         # Create a simple task object for testing
@@ -1459,9 +1435,7 @@ class TestCurriculumLearning(unittest.TestCase):
         """Test that compute_reward properly saves rewards to session."""
         cl = CurriculumLearning(
             use_format=False,
-            use_repetition=False,
             use_reasoning_steps=False,
-            use_length=False,
             use_lang_consistency=False,
         )
 
@@ -1504,9 +1478,7 @@ class TestCurriculumLearning(unittest.TestCase):
         cl = CurriculumLearning(
             log_file=self.log_file,
             use_format=False,
-            use_repetition=False,
             use_reasoning_steps=False,
-            use_length=False,
             use_lang_consistency=False,
             num_generations=1,
         )
@@ -1555,9 +1527,7 @@ class TestCurriculumLearning(unittest.TestCase):
         cl = CurriculumLearning(
             log_file=self.log_file,
             use_format=False,
-            use_repetition=False,
             use_reasoning_steps=False,
-            use_length=False,
             use_lang_consistency=False,
             num_generations=2,
         )
@@ -1788,9 +1758,7 @@ class TestCurriculumLearning(unittest.TestCase):
                 "model_name": "Skywork/Skywork-Reward-V2-Qwen3-4B",
             },
             use_format=False,  # Disable format to avoid auxiliary reward blending
-            use_whitespace_collapse=False,  # Disable whitespace collapse
             use_lang_consistency=False,  # Disable auxiliary rewards to test just LLM Judge
-            use_repetition=False,
         )
 
         # Set up mock tokenizer for LLM Judge
@@ -1840,11 +1808,8 @@ class TestCurriculumLearning(unittest.TestCase):
                 "api_port": 8000,
                 "model_name": "Skywork/Skywork-Reward-V2-Qwen3-4B",
             },
-            use_whitespace_collapse=False,  # Disable whitespace collapse
             use_lang_consistency=False,  # Disable auxiliary rewards to test just LLM Judge + format
-            use_repetition=False,
             use_reasoning_steps=False,
-            use_length=False,
         )
 
         # Set up mock tokenizer for LLM Judge
@@ -1896,9 +1861,7 @@ class TestCurriculumLearning(unittest.TestCase):
                 "model_name": "Skywork/Skywork-Reward-V2-Qwen3-4B",
             },
             use_format=False,  # Disable format to avoid auxiliary reward blending
-            use_whitespace_collapse=False,  # Disable whitespace collapse
             use_lang_consistency=False,  # Disable auxiliary rewards for clean test
-            use_repetition=False,
         )
 
         # Set up mock tokenizer for LLM Judge
@@ -1958,9 +1921,7 @@ class TestCurriculumLearning(unittest.TestCase):
                 "model_name": "Skywork/Skywork-Reward-V2-Qwen3-4B",
             },
             use_format=False,  # Disable auxiliary rewards for clean test
-            use_whitespace_collapse=False,
             use_lang_consistency=False,
-            use_repetition=False,
         )
 
         # Set up mock tokenizer for LLM Judge
@@ -2034,9 +1995,7 @@ class TestCurriculumLearning(unittest.TestCase):
                 "model_name": "Skywork/Skywork-Reward-V2-Qwen3-4B",
             },
             use_format=False,  # Disable auxiliary to avoid extra calls
-            use_whitespace_collapse=False,
             use_lang_consistency=False,
-            use_repetition=False,
         )
 
         # Set up mock tokenizer for LLM Judge
@@ -2390,10 +2349,7 @@ class TestCurriculumLearning(unittest.TestCase):
             num_generations=3,
             aux_weight=0.0,  # Disable auxiliary blending for clean test
             use_format=False,  # Disable format checking
-            use_repetition=False,
             use_lang_consistency=False,
-            use_whitespace_collapse=False,
-            use_length=False,
             use_reasoning_steps=False,
         )
         cl.current_level = 0

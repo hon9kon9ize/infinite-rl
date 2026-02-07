@@ -50,8 +50,6 @@ This project implements a curriculum learning system that progressively increase
 - `FormatRewardFunction`: Validates XML-like tags (`<think>`, `<answer>`); returns 1.0 (valid) or -1.0 (invalid)
 - `ReasoningStepsRewardFunction`: Counts structural indicators ("first", "second", "finally"); returns 1.0 (3+), 0.7 (2), 0.5 (1), -1.0 (0)
 - `LangConsistencyRewardFunction`: Checks reasoning language matches prompt; returns [−1, 1]
-- `RepetitionRewardFunction`: Penalizes repeated phrases; returns [0, 1] (1.0 for no repetition, decreasing with repetition)
-- `LengthRewardFunction`: Level-specific length regularization using reasoning-friendly logic (arXiv:2503.16219v2); plateau at level-dependent targets (380-2000 chars), gentle decay for excessive length; returns [0, 1]
 
 **Combined score formula**:
 ```
@@ -131,9 +129,7 @@ infinite_rl/
 │   ├── puzzle.py             # PuzzleRewardFunction
 │   ├── format.py             # FormatRewardFunction
 │   ├── reasoning_steps.py    # ReasoningStepsRewardFunction
-│   ├── lang_consistency.py   # LangConsistencyRewardFunction
-│   ├── repetition.py         # RepetitionRewardFunction
-│   └── length.py             # LengthRewardFunction
+│   └── lang_consistency.py   # LangConsistencyRewardFunction
 └── session.py                # Session tracking task history
 tests/
 ├── test_curriculum.py        # 61+ tests for curriculum logic, GRPO, logging

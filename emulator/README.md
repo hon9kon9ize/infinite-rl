@@ -201,8 +201,6 @@ Tests all reward functions simultaneously with a realistic up-down-up scenario:
 - ✓ `use_format`: Format validation (XML-like tags)
 - ✓ `use_reasoning_steps`: Chain-of-thought reasoning bonus
 - ✓ `use_lang_consistency`: Language consistency penalty
-- ✓ `use_repetition`: Repetition phrase penalty
-- ✓ `use_length`: Response length regularization
 
 **What it verifies:**
 1. All auxiliary reward functions are initialized and available
@@ -234,8 +232,6 @@ Reward Functions Configuration:
   ✓ use_format: True
   ✓ use_reasoning_steps: True
   ✓ use_lang_consistency: True
-  ✓ use_repetition: True
-  ✓ use_length: True
   ✓ aux_weight: 0.2
   ✓ num_generations: 4
 

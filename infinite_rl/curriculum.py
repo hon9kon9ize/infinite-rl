@@ -29,19 +29,13 @@ class CurriculumLearning:
         aux_weight: float = 0.2,
         llm_judge_weight: float = 0.2,
         use_lang_consistency: bool = True,
-        use_repetition: bool = True,
         use_format: bool = True,
         use_reasoning_steps: bool = True,
-        use_length: bool = True,
-        use_whitespace_collapse: bool = True,
         use_llm_judge: bool = False,
         reasoning_language: str = "en",
         lang_consistency_kwargs: Optional[Dict[str, Any]] = None,
-        repetition_kwargs: Optional[Dict[str, Any]] = None,
         format_kwargs: Optional[Dict[str, Any]] = None,
         reasoning_steps_kwargs: Optional[Dict[str, Any]] = None,
-        length_kwargs: Optional[Dict[str, Any]] = None,
-        whitespace_collapse_kwargs: Optional[Dict[str, Any]] = None,
         llm_judge_kwargs: Optional[Dict[str, Any]] = None,
         log_file: Optional[str] = None,
         window_size: int = 50,
@@ -65,19 +59,13 @@ class CurriculumLearning:
             aux_weight: Weight for auxiliary rewards in combined score (0-1, default: 0.2)
             llm_judge_weight: Weight for LLM Judge reward, computed independently of format/correctness gates (0-1, default: 0.2)
             use_lang_consistency: Enable language consistency auxiliary reward (default: True)
-            use_repetition: Enable repetition penalty auxiliary reward (default: True)
             use_format: Enable format validation auxiliary reward (default: True)
             use_reasoning_steps: Enable chain-of-thought reasoning steps bonus (default: True)
-            use_length: Enable response length regularizer (default: True)
-            use_whitespace_collapse: Enable whitespace collapse detector (default: True)
             use_llm_judge: Enable LLM-based quality evaluation via remote sglang server (default: False)
             reasoning_language: ISO language code for reasoning analysis (default: "en")
             lang_consistency_kwargs: Keyword arguments for LangConsistencyRewardFunction
-            repetition_kwargs: Keyword arguments for RepetitionRewardFunction
             format_kwargs: Keyword arguments for FormatRewardFunction
             reasoning_steps_kwargs: Keyword arguments for ReasoningStepsRewardFunction
-            length_kwargs: Keyword arguments for LengthRewardFunction
-            whitespace_collapse_kwargs: Keyword arguments for WhitespaceCollapseRewardFunction
             llm_judge_kwargs: Keyword arguments for LLMJudgeRewardFunction (api_host, api_port, model_name, etc.)
             log_file: Path to the logging file (JSON Lines format). If None, defaults to 'curriculum_log.jsonl' in the module directory.
             window_size: Size of the sliding window for success rate tracking (default: 50)
@@ -104,18 +92,12 @@ class CurriculumLearning:
 
         # Auxiliary reward functions configuration
         self.use_lang_consistency = use_lang_consistency
-        self.use_repetition = use_repetition
         self.use_format = use_format
         self.use_reasoning_steps = use_reasoning_steps
-        self.use_length = use_length
-        self.use_whitespace_collapse = use_whitespace_collapse
         self.use_llm_judge = use_llm_judge
         self.lang_consistency_kwargs = lang_consistency_kwargs or {}
-        self.repetition_kwargs = repetition_kwargs or {}
         self.format_kwargs = format_kwargs or {}
         self.reasoning_steps_kwargs = reasoning_steps_kwargs or {}
-        self.length_kwargs = length_kwargs or {}
-        self.whitespace_collapse_kwargs = whitespace_collapse_kwargs or {}
         self.llm_judge_kwargs = llm_judge_kwargs or {}
 
         # Validate LLM Judge configuration if enabled
@@ -195,20 +177,6 @@ class CurriculumLearning:
                     f"Warning: Could not initialize LangConsistencyRewardFunction: {e}"
                 )
 
-        if self.use_repetition:
-            try:
-                from .reward_functions import RepetitionRewardFunction
-
-                self.aux_reward_functions["repetition"] = RepetitionRewardFunction(
-                    "repetition",
-                    timeout=self.timeout,
-                    answer_tag=self.answer_tag,
-                    think_tag=self.think_tag,
-                    **self.repetition_kwargs,
-                )
-            except Exception as e:
-                print(f"Warning: Could not initialize RepetitionRewardFunction: {e}")
-
         if self.use_format:
             try:
                 from .reward_functions import FormatRewardFunction
@@ -252,39 +220,6 @@ class CurriculumLearning:
             except Exception as e:
                 print(
                     f"Warning: Could not initialize ReasoningStepsRewardFunction: {e}"
-                )
-
-        if self.use_length:
-            try:
-                from .reward_functions import LengthRewardFunction
-
-                self.aux_reward_functions["length"] = LengthRewardFunction(
-                    "length",
-                    timeout=self.timeout,
-                    answer_tag=self.answer_tag,
-                    think_tag=self.think_tag,
-                    **self.length_kwargs,
-                )
-            except Exception as e:
-                print(f"Warning: Could not initialize LengthRewardFunction: {e}")
-
-        if self.use_whitespace_collapse:
-            try:
-                from .reward_functions import WhitespaceCollapseRewardFunction
-
-                self.aux_reward_functions["whitespace_collapse"] = (
-                    WhitespaceCollapseRewardFunction(
-                        task_name="whitespace_collapse",
-                        timeout=self.timeout,
-                        answer_tag=self.answer_tag,
-                        think_tag=self.think_tag,
-                        reasoning_language=self.reasoning_language,
-                        **self.whitespace_collapse_kwargs,
-                    )
-                )
-            except Exception as e:
-                print(
-                    f"Warning: Could not initialize WhitespaceCollapseRewardFunction: {e}"
                 )
 
         if self.use_llm_judge:

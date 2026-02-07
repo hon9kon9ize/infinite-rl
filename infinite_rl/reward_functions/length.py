@@ -99,8 +99,8 @@ class LengthRewardFunction(RewardFunction):
         length = len(thought_content.strip())
 
         # Get target length based on task level
-        target_lengths = {0: 280, 1: 512, 2: 1024, 3: 2000, 4: 2000, 5: 2000, 6: 2000}
-        target_len = target_lengths.get(task.task_level, 2000)
+        target_lengths = {0: 512, 1: 768, 2: 1024, 3: 2000, 4: 2000, 5: 2000, 6: 2000}
+        target_len = target_lengths.get(task.level, 2000)
 
         len_reward = reasoning_friendly_length_reward(
             length,

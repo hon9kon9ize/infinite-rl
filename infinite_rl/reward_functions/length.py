@@ -1,100 +1,80 @@
 """Length-based reward utilities.
 
-Provides Cosine Length Reward to penalize verbosity or laziness depending on
-whether the model was correct.
+Provides Reasoning Friendly Length Reward to encourage appropriate length
+without penalizing correctness or rewarding rambling (arXiv:2503.16219v2).
 """
 
 import math
-from typing import Optional
-from typing import Union, TYPE_CHECKING
+from typing import Optional, Any, TYPE_CHECKING
 from .reward_function import RewardFunction, RewardFunctionScore
 
 if TYPE_CHECKING:
     from ..task import Task
 
 
-def cosine_length_reward(
-    length: int,
-    min_len: int = 1,
-    max_len: int = 1000,
-    target_len: Optional[int] = None,
-    correct: bool = True,
+def reasoning_friendly_length_reward(
+    length: int, target_len: int, max_len: int = 3584
 ) -> float:
-    """Compute a length-based reward in [0, 1].
-
-    Behavior:
-      - When `correct` is True: short/economical answers are preferred up to
-        `target_len`. For lengths <= target_len the reward is 1.0. Beyond
-        `target_len` it smoothly decays to 0 at `max_len` using a cosine curve.
-      - When `correct` is False: short answers are penalized (lazy); reward
-        increases with length (encourage effort) using a cosine curve that maps
-        short -> 0 and long -> 1.
-
-    Args:
-        length: response length (tokens or words) to score.
-        min_len: minimum length considered (defaults to 1).
-        max_len: maximum length (cap) (defaults to 1000).
-        target_len: for correct=True, the target/"sweet-spot" upper bound.
-                    If None, defaults to min_len (i.e., shorter is always better).
-        correct: whether the answer is correct (affects curve direction).
-
-    Returns:
-        A float in [0.0, 1.0].
     """
-    # Basic sanitization
-    if max_len <= min_len:
-        raise ValueError("max_len must be greater than min_len")
+    Following arXiv:2503.16219v2:
+    Don't punish length for correct answers.
+    Don't reward rambling for wrong answers.
 
-    L = max(min_len, min(length, max_len))
+    The "sweet spot" plateau is from 100 to target_len characters.
+    Beyond target_len, a gentle cosine decay to 0.5 at max_len.
+    """
 
-    if correct:
-        # If no target provided use the most economical policy (shorter is better)
-        target = (
-            min_len if target_len is None else max(min_len, min(target_len, max_len))
-        )
+    # 1. Minimum Effort Floor (Characters)
+    if length < 100:
+        return 0.1  # Very low reward for 'lazy' thinking
 
-        if L <= target:
-            return 1.0
+    # 2. The "Sweet Spot" (The Plateau)
+    # Between 100 and target_len, the reward is 1.0 (Neutral)
+    if length < target_len:
+        return 1.0
 
-        denom = max_len - target
-        if denom <= 0:
-            # Edge: target == max_len
-            return 0.0
+    # 3. The "Rambling" Penalty (Beyond target_len)
+    # Gentle decay from target_len to max_len
+    denom = max_len - target_len
+    if denom <= 0:  # Safety
+        return 0.5
 
-        x = (L - target) / denom  # 0..1
-        # Map cos(pi * x) from [-1,1] to [0,1] with peak at x=0
-        return float((math.cos(math.pi * x) + 1.0) / 2.0)
-    else:
-        # Incorrect: encourage longer attempts
-        denom = max_len - min_len
-        if denom <= 0:
-            return 0.0
-        x = (L - min_len) / denom  # 0..1
-        # Use (1 - cos(pi * x)) / 2 which maps x=0 -> 0, x=1 -> 1, smooth curve
-        return float((1.0 - math.cos(math.pi * x)) / 2.0)
+    x = (length - target_len) / denom
+    x = max(0.0, min(float(x), 1.0))
+
+    # Cosine decay from 1.0 down to 0.5 (never 0.0)
+    decay = (math.cos(math.pi * x) + 1.0) / 4.0 + 0.5
+    return float(decay)
 
 
 class LengthRewardFunction(RewardFunction):
-    """Reward function that scores response length using `cosine_length_reward`.
+    """Reward function that scores response length using `reasoning_friendly_length_reward`.
 
-    expected_output may be an integer indicating the target length (in tokens/words).
+    Uses level-specific target lengths for the plateau:
+    - Level 0: 280
+    - Level 1: 512
+    - Level 2: 1024
+    - Levels 3-6: 2000
 
-    Returns an auxiliary signal in `score` (0..1). This reward is aux-only (it does not check correctness).
+    Returns an auxiliary signal in `score` (0..1).
     """
 
     def __init__(
         self,
         task_name: str = "length",
         timeout: int = 5,
-        min_len: int = 1,
-        max_len: int = 2048,
-        target_len: Optional[int] = None,
+        max_len: int = 3584,
         **kwargs,
     ):
+        # Remove legacy arguments if present in kwargs to avoid issues
+        kwargs.pop("min_len", None)
+        kwargs.pop("target_len", None)
+
         super().__init__(task_name, timeout=timeout, **kwargs)
-        self.min_len = min_len
         self.max_len = max_len
-        self.target_len = target_len
+        # Ensure target_tag is set if not provided but think_tag is
+        if not hasattr(self, "target_tag") or not self.target_tag:
+            self.target_tag = kwargs.get("think_tag", "think")
 
     def initialize(self):
         self.initialized = True
@@ -102,17 +82,9 @@ class LengthRewardFunction(RewardFunction):
     def compute_reward(
         self,
         task: "Task",
-        is_correct: bool = False,
         **kwargs,
     ) -> RewardFunctionScore:
-        """Compute length reward.
-
-        Parameters:
-          - task: Task object containing metadata about the task (including model_output).
-          - is_correct: optional boolean indicating whether the main task was correct. If None,
-            defaults to True. When True, shorter answers are preferred; when False,
-            longer answers are preferred.
-        """
+        """Compute length reward."""
         if not self.initialized:
             self.initialize()
 
@@ -125,11 +97,15 @@ class LengthRewardFunction(RewardFunction):
             )
 
         length = len(thought_content.strip())
-        len_reward = cosine_length_reward(
+
+        # Get target length based on task level
+        target_lengths = {0: 280, 1: 512, 2: 1024, 3: 2000, 4: 2000, 5: 2000, 6: 2000}
+        target_len = target_lengths.get(task.task_level, 2000)
+
+        len_reward = reasoning_friendly_length_reward(
             length,
-            min_len=self.min_len,
+            target_len=target_len,
             max_len=self.max_len,
-            correct=is_correct,
         )
 
         return RewardFunctionScore(score=float(len_reward))

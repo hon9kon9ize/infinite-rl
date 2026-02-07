@@ -87,7 +87,7 @@ class LengthRewardFunction(RewardFunction):
         task_name: str = "length",
         timeout: int = 5,
         min_len: int = 1,
-        max_len: int = 1000,
+        max_len: int = 2048,
         target_len: Optional[int] = None,
         **kwargs,
     ):

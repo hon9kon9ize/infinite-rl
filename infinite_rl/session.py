@@ -291,6 +291,7 @@ class Session:
                 prompt=prompt,
                 expected_answer=expected_output,
                 language=language,
+                reasoning_language="en",  # Math reasoning must be in English
                 dataset_id=base_task_id,
             )
             self.add_task(task_obj)

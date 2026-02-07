@@ -51,10 +51,10 @@ class LengthRewardFunction(RewardFunction):
     """Reward function that scores response length using `reasoning_friendly_length_reward`.
 
     Uses level-specific target lengths for the plateau:
-    - Level 0: 280
-    - Level 1: 512
-    - Level 2: 1024
-    - Levels 3-6: 2000
+    - Level 0: 1500
+    - Level 1: 1500
+    - Level 2: 2000
+    - Levels 3-6: 3000
 
     Returns an auxiliary signal in `score` (0..1).
     """
@@ -99,7 +99,7 @@ class LengthRewardFunction(RewardFunction):
         length = len(thought_content.strip())
 
         # Get target length based on task level
-        target_lengths = {0: 1000, 1: 1000, 2: 2000, 3: 2000, 4: 3000, 5: 3000, 6: 3000}
+        target_lengths = {0: 1500, 1: 1500, 2: 2000, 3: 2000, 4: 3000, 5: 3000, 6: 3000}
         target_len = target_lengths.get(task.level, 2000)
 
         len_reward = reasoning_friendly_length_reward(

@@ -40,44 +40,49 @@ def _tokenize(text: str) -> list:
     return [t for t in tokens if t]
 
 
-def ngram_repetition_reward(text: str, n: int = 3, weight: float = -0.1) -> float:
-    """Compute an n-gram repetition penalty.
+def ngram_repetition_reward(text: str, n: int = 3) -> float:
+    """Compute an n-gram repetition score between 0.0 and 1.0.
 
-    Returns a penalty (<= 0). The penalty is computed as:
-      penalty = (duplicates / total_ngrams) * weight
-    where duplicates = sum(count - 1 for count in counts.values() if count > 1).
+    1.0 means no duplicate n-grams found.
+    Lower scores mean higher repetition.
 
     Args:
         text: model output string.
         n: size of n-gram (default: 3).
-        weight: negative multiplier applied to normalized duplicate ratio (default: -0.1).
 
     Returns:
-        float penalty (<= 0). If there are no n-grams or no duplicates, returns 0.0.
+        float score [0.0, 1.0].
     """
     if n <= 0:
         raise ValueError("n must be > 0")
 
     tokens = _tokenize(text)
     if len(tokens) < n:
-        return 0.0
+        return 1.0  # Too short to have n-gram repetition
 
     ngrams = [tuple(tokens[i : i + n]) for i in range(len(tokens) - n + 1)]
     counts = Counter(ngrams)
+
+    # duplicates = count - 1 for every instance beyond the first unique occurrence
     duplicates = sum(count - 1 for count in counts.values() if count > 1)
 
     if not ngrams:
-        return 0.0
+        return 1.0
 
-    penalty = (duplicates / len(ngrams)) * weight
-    return float(penalty)
+    # Calculate ratio of duplicates (0.0 means perfect variety, 1.0 means total repetition)
+    repetition_ratio = duplicates / len(ngrams)
+
+    # Invert to make it a reward: 1.0 is good, 0.0 is bad
+    score = 1.0 - repetition_ratio
+
+    return float(max(0.0, score))
 
 
 class RepetitionRewardFunction(RewardFunction):
-    """Reward function that applies an n-gram repetition penalty.
+    """Reward function that applies an n-gram repetition score.
 
-    Returns 0.0 for no repetition, negative scores for detected repetitions.
-    The penalty is proportional to the ratio of duplicate n-grams.
+    Returns 1.0 for perfect variety, moving towards 0.0 for detected repetitions.
+    This prevents negative 'Advantage' in GRPO when a model provides a correct answer.
     """
 
     def __init__(
@@ -85,18 +90,15 @@ class RepetitionRewardFunction(RewardFunction):
         task_name: str = "repetition",
         timeout: int = 5,
         n: int = 3,
-        weight: float = -0.1,
         **kwargs,
     ):
-
-        # Use think_tag as default target_tag, since there might have a task that would have repetition in answer
+        # Default to checking the <think> tag
         if "target_tag" not in kwargs:
             think_tag = kwargs.get("think_tag", "think")
             kwargs["target_tag"] = think_tag
 
         super().__init__(task_name, timeout=timeout, **kwargs)
         self.n = n
-        self.weight = weight
 
     def initialize(self):
         self.initialized = True
@@ -115,17 +117,19 @@ class RepetitionRewardFunction(RewardFunction):
         text = self.extract_tag(task.model_output)
 
         if not text:
+            # We treat missing content as a neutral 0.0,
+            # as the format_think function will handle the negative penalty.
             return RewardFunctionScore(
                 score=0.0,
                 info=f"No content found in the <{self.target_tag}> tag.",
             )
 
-        penalty = ngram_repetition_reward(text, n=self.n, weight=self.weight)
+        score = ngram_repetition_reward(text, n=self.n)
 
-        # Return the penalty directly as a negative score
-        # 0.0 = no repetition, negative values = increasing repetition penalty
         info_msg = ""
-        if penalty < 0:
-            info_msg = f"Repetition detected: {penalty:.3f} penalty"
+        if score < 0.8:
+            info_msg = f"Repetition detected: {score:.3f} variety score"
+        elif score == 1.0:
+            info_msg = "Perfect variety"
 
-        return RewardFunctionScore(score=float(penalty), info=info_msg)
+        return RewardFunctionScore(score=float(score), info=info_msg)

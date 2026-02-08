@@ -5,6 +5,7 @@ from .lang_consistency import LangConsistencyRewardFunction
 from .reasoning_steps import ReasoningStepsRewardFunction
 from .format import FormatRewardFunction
 from .llm_judge import LLMJudgeRewardFunction
+from .length import LengthRewardFunction
 
 
 def get_reward_functions(

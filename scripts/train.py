@@ -106,6 +106,7 @@ class InfiniteRLConfig:
     use_format: bool = True
     use_reasoning_steps: bool = True
     use_lang_consistency: bool = True
+    use_length: bool = True
     aux_weight: float = 0.2
 
     # LLM Judge configuration
@@ -145,6 +146,7 @@ def create_curriculum(config: InfiniteRLConfig) -> CurriculumLearning:
         use_reasoning_steps=config.use_reasoning_steps,
         use_lang_consistency=config.use_lang_consistency,
         use_llm_judge=config.use_llm_judge,
+        use_length=config.use_length,
         llm_judge_kwargs=llm_judge_kwargs,
         window_size=config.window_size,
         success_rate_threshold=config.success_rate_threshold,
@@ -467,7 +469,7 @@ def setup_training_args(
         num_completions_to_print=0,
         model_init_kwargs={
             "torch_dtype": torch.bfloat16,
-            "attn_implementation": "kernels-community/flash-attn2",
+            "attn_implementation": "flash_attention2",
         },
         **kwargs,
     )
@@ -801,6 +803,7 @@ def main():
         args.model_name,
         torch_dtype=torch.bfloat16,
         device_map=None,
+        attn_implementation="flash_attention_2"
     )
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
     if tokenizer.pad_token is None:

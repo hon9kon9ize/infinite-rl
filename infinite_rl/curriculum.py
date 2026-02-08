@@ -1018,12 +1018,21 @@ class CurriculumLearning:
         else:
             # Normal curriculum: sample from level 0 through current level for diversity
             # This allows the model to see a mix of difficulties while progressing
+            level_task_counts = {}
             for level in range(0, self.current_level + 1):
                 level_tasks = self.session.tasks_by_level.get(level, [])
                 if level_tasks:
-                    all_available_tasks.extend(level_tasks)
-                    # Weight current level tasks higher (2x) to focus training
-                    weight = 2.0 if level == self.current_level else 1.0
+                    level_task_counts[level] = len(level_tasks)
+
+            # Calculate weights inversely proportional to task count at each level
+            # Levels with fewer tasks get higher weights
+            for level in range(0, self.current_level + 1):
+                level_tasks = self.session.tasks_by_level.get(level, [])
+                if level_tasks:
+                    # Weight = 1.0 / num_tasks_at_level (normalized by random.choices)
+                    # This gives higher weight to levels with fewer tasks
+                    task_count = level_task_counts[level]
+                    weight = 1.0 / task_count if task_count > 0 else 1.0
                     level_weights.extend([weight] * len(level_tasks))
 
         if not all_available_tasks:

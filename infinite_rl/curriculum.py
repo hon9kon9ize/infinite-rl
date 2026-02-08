@@ -45,7 +45,7 @@ class CurriculumLearning:
         variance_threshold: float = 0.15,
         demote_threshold: float = 0.4,
         warmup_step: int = 32,
-        truthy_learning_rate: float = 0.2,
+        truthy_learning_rate: float = 0.1,
         level_change_cooldown: int = 5,
         num_generations: int = 4,
         puzzle_one_shot: bool = False,
@@ -1026,6 +1026,7 @@ class CurriculumLearning:
 
             # Calculate weights inversely proportional to task count at each level
             # Levels with fewer tasks get higher weights
+            # Current level gets extra weight (2x) to focus training there
             for level in range(0, self.current_level + 1):
                 level_tasks = self.session.tasks_by_level.get(level, [])
                 if level_tasks:
@@ -1033,6 +1034,9 @@ class CurriculumLearning:
                     # This gives higher weight to levels with fewer tasks
                     task_count = level_task_counts[level]
                     weight = 1.0 / task_count if task_count > 0 else 1.0
+                    # Give current level extra weight to focus training
+                    if level == self.current_level:
+                        weight *= 2.0
                     level_weights.extend([weight] * len(level_tasks))
 
         if not all_available_tasks:

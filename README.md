@@ -263,7 +263,7 @@ The `CurriculumLearning` class provides adaptive task difficulty progression bas
 - **Level Change Cooldown**: Prevents rapid level fluctuations by enforcing a minimum of 5 steps (configurable via `level_change_cooldown`) between changes
 - **Per-Task-Type Windows**: Maintains independent sliding windows for math and puzzle tasks
 - **Simplified Task Management**: Clean separation between GRPO batches with automatic diversity weighting
-- **Weighted Selection**: Avoids recently trained tasks to promote variety
+- **Inverse Task Weighting**: Uses inverse weighting based on task distribution (weight = 1.0 / num_tasks_at_level) to ensure balanced sampling across difficulty levels, giving higher priority to underrepresented levels. The current level receives an additional 2x weight multiplier to focus training on the active difficulty level.
 - **Multi-Task Support**: Works with math problems and programming puzzles
 - **Automatic Judge Score Computation**: `get_judge_scores()` computes missing LLM Judge scores on-demand for accurate statistics during training
 
@@ -376,6 +376,7 @@ cl = CurriculumLearning(
     aux_weight=0.1,              # Auxiliary metrics contribute 10% of final score
     llm_judge_weight=0.2,        # LLM Judge score contributes 20% (when available)
     use_format=True,             # Enable format validation (default)
+    use_length=True,             # Enable response length regularization (default: False)
     use_llm_judge=True,          # Enable LLM Judge for auxiliary evaluation
 )
 ```

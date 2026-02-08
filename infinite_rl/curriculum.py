@@ -1042,57 +1042,95 @@ class CurriculumLearning:
         if not all_available_tasks:
             return None
 
-        # Weight against recent tasks to ensure diversity (using dataset IDs)
-        recent_task_ids = self.session._get_recent_task_ids()
-        recent_task_set = set(recent_task_ids)  # For O(1) lookup
+        # Try to select and create a task with retries
+        # This ensures we don't return None when tasks are available
+        max_attempts = min(10, len(all_available_tasks))
+        attempt = 0
 
-        final_weights = []
-        for i, task in enumerate(all_available_tasks):
-            weight = level_weights[i]
+        while attempt < max_attempts:
+            attempt += 1
 
-            # Reduce weight for recent tasks: linear decay based on recency
-            # If task is in recent list, apply penalty proportional to its frequency
-            # But cap the penalty to ensure all tasks remain selectable
-            if task["id"] in recent_task_set:
-                # Count how many times this task appears in recent history
-                # Normalize by total recent tasks to get a penalty factor [0, 1)
-                recency_count = recent_task_ids.count(task["id"])
-                # Penalty caps at 0.8, so weight is never below 0.2x original
-                recency_penalty = min(0.8, recency_count / max(len(recent_task_ids), 1))
-                weight = weight * (1.0 - recency_penalty)
+            # Weight against recent tasks to ensure diversity (using dataset IDs)
+            recent_task_ids = self.session._get_recent_task_ids()
+            recent_task_set = set(recent_task_ids)  # For O(1) lookup
 
-            final_weights.append(weight)
+            final_weights = []
+            for i, task in enumerate(all_available_tasks):
+                weight = level_weights[i]
 
-        # Validate weights: all must be positive and sum must be > 0
-        weight_sum = sum(final_weights)
-        if not final_weights or weight_sum <= 0:
-            # Fallback: use uniform weights if calculation failed
-            print(
-                f"Warning: Weight calculation produced invalid weights (sum={weight_sum}), "
-                f"falling back to uniform weights"
-            )
-            final_weights = [1.0] * len(all_available_tasks)
+                # Reduce weight for recent tasks: linear decay based on recency
+                # If task is in recent list, apply penalty proportional to its frequency
+                # But cap the penalty to ensure all tasks remain selectable
+                if task["id"] in recent_task_set:
+                    # Count how many times this task appears in recent history
+                    # Normalize by total recent tasks to get a penalty factor [0, 1)
+                    recency_count = recent_task_ids.count(task["id"])
+                    # Penalty caps at 0.8, so weight is never below 0.2x original
+                    recency_penalty = min(
+                        0.8, recency_count / max(len(recent_task_ids), 1)
+                    )
+                    weight = weight * (1.0 - recency_penalty)
 
-        # Select task with combined weighting
-        try:
-            selected_task = random.choices(
-                all_available_tasks, weights=final_weights, k=1
-            )[0]
-        except ValueError as e:
-            # If weights are invalid, fallback to uniform selection
-            print(
-                f"Warning: Task selection with weighted sampling failed ({e}), "
-                f"falling back to random.choice(). "
-                f"All tasks: {len(all_available_tasks)}, weights sum: {sum(final_weights)}"
-            )
-            selected_task = random.choice(all_available_tasks)
-        if selected_task["type"] == "math":
-            task = self.session.create_math_task(selected_task)
-            return task
-        elif selected_task["type"] == "puzzle":
-            task = self.session.create_puzzle_task(selected_task)
-            return task
+                final_weights.append(weight)
 
+            # Validate weights: all must be positive and sum must be > 0
+            weight_sum = sum(final_weights)
+            if not final_weights or weight_sum <= 0:
+                # Fallback: use uniform weights if calculation failed
+                print(
+                    f"Warning: Weight calculation produced invalid weights (sum={weight_sum}), "
+                    f"falling back to uniform weights"
+                )
+                final_weights = [1.0] * len(all_available_tasks)
+
+            # Select task with combined weighting
+            try:
+                selected_task = random.choices(
+                    all_available_tasks, weights=final_weights, k=1
+                )[0]
+            except ValueError as e:
+                # If weights are invalid, fallback to uniform selection
+                print(
+                    f"Warning: Task selection with weighted sampling failed ({e}), "
+                    f"falling back to random.choice(). "
+                    f"All tasks: {len(all_available_tasks)}, weights sum: {sum(final_weights)}"
+                )
+                selected_task = random.choice(all_available_tasks)
+
+            # Create task based on type
+            if selected_task["type"] == "math":
+                try:
+                    task = self.session.create_math_task(selected_task)
+                    if task is not None:
+                        return task
+                    # If creation returned None, try next task
+                except Exception as e:
+                    print(
+                        f"Warning: Failed to create math task {selected_task.get('id', '?')}: {e}. "
+                        f"Retrying with different task (attempt {attempt}/{max_attempts})"
+                    )
+            elif selected_task["type"] == "puzzle":
+                try:
+                    task = self.session.create_puzzle_task(selected_task)
+                    if task is not None:
+                        return task
+                    # If creation returned None, try next task
+                except Exception as e:
+                    print(
+                        f"Warning: Failed to create puzzle task {selected_task.get('id', '?')}: {e}. "
+                        f"Retrying with different task (attempt {attempt}/{max_attempts})"
+                    )
+            else:
+                print(
+                    f"Warning: Selected task has unknown type '{selected_task.get('type')}'. "
+                    f"Retrying with different task (attempt {attempt}/{max_attempts})"
+                )
+
+        # If all attempts failed, return None (should not happen with valid tasks)
+        print(
+            f"ERROR: Failed to create task after {max_attempts} attempts. "
+            f"Available tasks: {len(all_available_tasks)}, level_weights sum: {sum(level_weights)}"
+        )
         return None
 
     def get_learning_stats(self) -> Dict[str, Any]:

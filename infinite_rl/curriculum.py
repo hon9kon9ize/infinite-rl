@@ -45,7 +45,7 @@ class CurriculumLearning:
         variance_threshold: float = 0.15,
         demote_threshold: float = 0.4,
         warmup_step: int = 16,
-        truthy_learning_rate: float = 0.2,
+        truthy_learning_rate: float = 0.1,
         level_change_cooldown: int = 5,
         num_generations: int = 4,
         puzzle_one_shot: bool = False,

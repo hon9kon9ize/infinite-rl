@@ -1022,8 +1022,8 @@ class CurriculumLearning:
                 level_tasks = self.session.tasks_by_level.get(level, [])
                 if level_tasks:
                     all_available_tasks.extend(level_tasks)
-                    # Weight current level tasks higher (3x) to focus training
-                    weight = 3.0 if level == self.current_level else 1.0
+                    # Weight current level tasks higher (10x) to focus training
+                    weight = 10.0 if level == self.current_level else 1.0
                     level_weights.extend([weight] * len(level_tasks))
 
         if not all_available_tasks:

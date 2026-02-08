@@ -76,7 +76,15 @@ class DynamicCurriculumDataset(_BaseDataset):
         if batch_idx not in self.task_cache:
             task = self.curriculum.get_prompt()
             if task is None:
-                raise RuntimeError(f"Failed to generate task at batch {batch_idx}")
+                # Provide detailed debugging info
+                stats = self.curriculum.get_learning_stats()
+                raise RuntimeError(
+                    f"Failed to generate task at batch {batch_idx}. "
+                    f"Current level: {stats.get('current_level')}, "
+                    f"Available tasks by level: {stats.get('available_tasks_by_level')}, "
+                    f"Recent tasks: {stats.get('recent_tasks_count')}, "
+                    f"This usually indicates all tasks are marked as recent or all_available_tasks is empty."
+                )
             self.task_cache[batch_idx] = task
 
             # Clean up old caches to prevent memory leak
@@ -94,7 +102,13 @@ class DynamicCurriculumDataset(_BaseDataset):
         if batch_idx not in self.task_cache:
             task = self.curriculum.get_prompt()
             if task is None:
-                raise RuntimeError(f"Failed to generate task at batch {batch_idx}")
+                stats = self.curriculum.get_learning_stats()
+                raise RuntimeError(
+                    f"Failed to generate task at batch {batch_idx} (after cleanup). "
+                    f"Current level: {stats.get('current_level')}, "
+                    f"Available tasks by level: {stats.get('available_tasks_by_level')}, "
+                    f"Recent tasks: {stats.get('recent_tasks_count')}"
+                )
             self.task_cache[batch_idx] = task
 
         task = self.task_cache[batch_idx]

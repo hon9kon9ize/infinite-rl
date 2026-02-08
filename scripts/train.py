@@ -449,10 +449,12 @@ def setup_training_args(
         per_device_train_batch_size=per_device_train_batch_size,
         num_generations=num_generations,
         max_completion_length=max_completion_length,
+        max_prompt_length=max_prompt_length,
         gradient_accumulation_steps=gradient_accumulation_steps,
         warmup_steps=warmup_steps,
-        temperature=0.7,
+        temperature=1.0,
         top_p=0.9,
+        importance_sampling_level="sequence",  # GSPO
         repetition_penalty=1.0,  # CRITICAL: Must be 1.0 to match base policy logprobs
         # vLLM COLOCATE mode is always enabled
         use_vllm=True,
@@ -803,7 +805,7 @@ def main():
         args.model_name,
         torch_dtype=torch.bfloat16,
         device_map=None,
-        attn_implementation="flash_attention_2"
+        attn_implementation="flash_attention_2",
     )
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
     if tokenizer.pad_token is None:

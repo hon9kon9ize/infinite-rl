@@ -1044,23 +1044,48 @@ class CurriculumLearning:
 
         # Weight against recent tasks to ensure diversity (using dataset IDs)
         recent_task_ids = self.session._get_recent_task_ids()
+        recent_task_set = set(recent_task_ids)  # For O(1) lookup
 
         final_weights = []
         for i, task in enumerate(all_available_tasks):
             weight = level_weights[i]
 
-            # Reduce weight for recent tasks (even if not excluded)
-            if task["id"] in recent_task_ids:
-                recency_penalty = recent_task_ids.count(task["id"]) / max(
-                    len(recent_task_ids), 1
-                )
-                weight = max(0.1, weight * (1.0 - recency_penalty))
+            # Reduce weight for recent tasks: linear decay based on recency
+            # If task is in recent list, apply penalty proportional to its frequency
+            # But cap the penalty to ensure all tasks remain selectable
+            if task["id"] in recent_task_set:
+                # Count how many times this task appears in recent history
+                # Normalize by total recent tasks to get a penalty factor [0, 1)
+                recency_count = recent_task_ids.count(task["id"])
+                # Penalty caps at 0.8, so weight is never below 0.2x original
+                recency_penalty = min(0.8, recency_count / max(len(recent_task_ids), 1))
+                weight = weight * (1.0 - recency_penalty)
+
             final_weights.append(weight)
 
+        # Validate weights: all must be positive and sum must be > 0
+        weight_sum = sum(final_weights)
+        if not final_weights or weight_sum <= 0:
+            # Fallback: use uniform weights if calculation failed
+            print(
+                f"Warning: Weight calculation produced invalid weights (sum={weight_sum}), "
+                f"falling back to uniform weights"
+            )
+            final_weights = [1.0] * len(all_available_tasks)
+
         # Select task with combined weighting
-        selected_task = random.choices(all_available_tasks, weights=final_weights, k=1)[
-            0
-        ]
+        try:
+            selected_task = random.choices(
+                all_available_tasks, weights=final_weights, k=1
+            )[0]
+        except ValueError as e:
+            # If weights are invalid, fallback to uniform selection
+            print(
+                f"Warning: Task selection with weighted sampling failed ({e}), "
+                f"falling back to random.choice(). "
+                f"All tasks: {len(all_available_tasks)}, weights sum: {sum(final_weights)}"
+            )
+            selected_task = random.choice(all_available_tasks)
         if selected_task["type"] == "math":
             task = self.session.create_math_task(selected_task)
             return task

@@ -266,7 +266,7 @@ class TestLLMJudgeRewardFunction(unittest.TestCase):
         rf.initialize()
 
         task = self.create_task(prompt="Q: 2+2?", model_output="A: 4")
-        reward = rf.compute_reward(task)
+        reward = rf.compute_reward(task, is_correct=True)
 
         # compute_reward returns raw score (normalization done in batch method)
         self.assertEqual(reward.score, 15.0)
@@ -290,7 +290,7 @@ class TestLLMJudgeRewardFunction(unittest.TestCase):
         rf.initialize()
 
         task = self.create_task(prompt="Q: test?", model_output="A: bad")
-        reward = rf.compute_reward(task)
+        reward = rf.compute_reward(task, is_correct=True)
 
         self.assertEqual(reward.score, 0.0)
         self.assertIn("threshold", reward.info.lower())
@@ -310,7 +310,7 @@ class TestLLMJudgeRewardFunction(unittest.TestCase):
         rf.initialize()
 
         task = self.create_task(prompt="Q: test?", model_output="A: response")
-        reward = rf.compute_reward(task)
+        reward = rf.compute_reward(task, is_correct=True)
 
         self.assertEqual(reward.score, 0.0)
         self.assertIn("failed", reward.info.lower())
@@ -367,7 +367,7 @@ class TestLLMJudgeRewardFunction(unittest.TestCase):
         response1 = "1. Jane starts with 12 apples..."
 
         task = self.create_task(prompt=prompt, model_output=response1)
-        reward = rf.compute_reward(task)
+        reward = rf.compute_reward(task, is_correct=True)
 
         # Raw score should be close to 23.125 (or normalized version)
         self.assertGreater(reward.score, 0.0)
@@ -413,8 +413,8 @@ class TestLLMJudgeIntegration(unittest.TestCase):
         )
         task2.model_output = "Response 2"
 
-        reward1 = rf.compute_reward(task1)
-        reward2 = rf.compute_reward(task2)
+        reward1 = rf.compute_reward(task1, is_correct=True)
+        reward2 = rf.compute_reward(task2, is_correct=True)
 
         # Both should have valid scores
         self.assertGreater(reward1.score, 0.0)

@@ -227,6 +227,14 @@ class LLMJudgeRewardFunction(RewardFunction):
                 info="Model output is empty.",
             )
 
+        # Apply correctness gating for math and puzzle tasks
+        is_correct = kwargs.get("is_correct", False)
+        if task.task_type in ["math", "puzzle"] and not is_correct:
+            return RewardFunctionScore(
+                score=0.0,
+                info="LLM Judge reward gated: task is incorrect.",
+            )
+
         try:
             # Format conversation
             # Use judge_system_prompt if available (for truthy tasks), otherwise None
@@ -322,19 +330,30 @@ class LLMJudgeRewardFunction(RewardFunction):
             # Group scores by task
             task_scores = [[] for _ in tasks]
             for (task_idx, gen_idx), score in zip(task_gen_data, scores):
-                # Check if score is below threshold
-                if score < self.score_threshold:
+                task = tasks[task_idx]
+
+                # Apply correctness gating for math and puzzle tasks
+                if task.task_type in ["math", "puzzle"] and not getattr(
+                    task, "is_correct", False
+                ):
                     reward_score = RewardFunctionScore(
                         score=0.0,
-                        info=f"Judge score {score:.4f} is below threshold {self.score_threshold}.",
+                        info="LLM Judge reward gated: task is incorrect.",
                     )
                 else:
-                    # Normalize and create result
-                    normalized_score = self._normalize_score(score)
-                    reward_score = RewardFunctionScore(
-                        score=normalized_score,
-                        info=f"Judge score: {score:.4f} → normalized: {normalized_score:.4f}",
-                    )
+                    # Check if score is below threshold
+                    if score < self.score_threshold:
+                        reward_score = RewardFunctionScore(
+                            score=0.0,
+                            info=f"Judge score {score:.4f} is below threshold {self.score_threshold}.",
+                        )
+                    else:
+                        # Normalize and create result
+                        normalized_score = self._normalize_score(score)
+                        reward_score = RewardFunctionScore(
+                            score=normalized_score,
+                            info=f"Judge score: {score:.4f} → normalized: {normalized_score:.4f}",
+                        )
                 task_scores[task_idx].append((gen_idx, reward_score))
 
             # Sort by generation index and return just the scores

@@ -423,9 +423,11 @@ def setup_training_args(
     max_prompt_length: int = 2048,
     gradient_accumulation_steps: int = 1,
     warmup_steps: int = 0,
+    vllm_mode: str = "colocate",
+    vllm_server_base_url: Optional[str] = None,
     **kwargs,
 ) -> GRPOConfig:
-    """Setup GRPO training configuration for vLLM colocate mode.
+    """Setup GRPO training configuration for vLLM.
 
     Args:
         output_dir: Output directory for checkpoints
@@ -437,6 +439,8 @@ def setup_training_args(
         max_prompt_length: Maximum prompt length (for vLLM context size)
         gradient_accumulation_steps: Number of steps to accumulate gradients
         warmup_steps: Number of warmup steps for learning rate scheduling
+        vllm_mode: vLLM mode ('server' or 'colocate')
+        vllm_server_base_url: Base URL for vLLM server mode
         **kwargs: Additional arguments to pass to GRPOConfig
 
     Returns:
@@ -456,11 +460,11 @@ def setup_training_args(
         top_p=0.9,
         importance_sampling_level="sequence",  # GSPO
         repetition_penalty=1.0,  # CRITICAL: Must be 1.0 to match base policy logprobs
-        # vLLM COLOCATE mode is always enabled
+        # vLLM configuration
         use_vllm=True,
         vllm_gpu_memory_utilization=0.5,
         vllm_model_impl="transformers",
-        vllm_mode="colocate",
+        vllm_mode=vllm_mode,
         optim="paged_adamw_8bit",
         gradient_checkpointing=True,
         logging_steps=10,
@@ -475,6 +479,11 @@ def setup_training_args(
         },
         **kwargs,
     )
+
+    # Set vLLM server URL if in server mode
+    if vllm_mode == "server" and vllm_server_base_url:
+        config.vllm_server_base_url = vllm_server_base_url
+
     return config
 
 
@@ -588,6 +597,21 @@ def main():
         type=int,
         default=1,
         help="Number of steps to accumulate gradients before updating weights",
+    )
+
+    # vLLM mode arguments
+    parser.add_argument(
+        "--vllm-mode",
+        type=str,
+        choices=["server", "colocate"],
+        default="colocate",
+        help="vLLM mode: 'server' for external vLLM server, 'colocate' for in-process vLLM",
+    )
+    parser.add_argument(
+        "--vllm_server_base_url",
+        type=str,
+        default=None,
+        help="Base URL for vLLM server mode (required when --vllm-mode=server)",
     )
 
     # Curriculum arguments
@@ -720,6 +744,10 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Validate vLLM mode arguments
+    if args.vllm_mode == "server" and args.vllm_server_base_url is None:
+        parser.error("--vllm_server_base_url is required when --vllm-mode=server")
 
     # Calculate dataset size based on training configuration
     # This ensures we generate exactly the number of samples needed
@@ -870,6 +898,8 @@ def main():
         max_prompt_length=args.max_prompt_length,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         warmup_steps=args.warmup_step,
+        vllm_mode=args.vllm_mode,
+        vllm_server_base_url=args.vllm_server_base_url,
         **grpo_kwargs,
     )
     print(f"   ✓ Training configuration ready")
@@ -883,7 +913,9 @@ def main():
     print(f"   - vLLM GPU memory utilization: 50%")
     print(f"   - Learning rate: {training_args.learning_rate}")
     print(f"   - Warmup steps: {training_args.warmup_steps}")
-    print(f"   - vLLM mode: colocate (in-process)")
+    print(f"   - vLLM mode: {args.vllm_mode}")
+    if args.vllm_mode == "server":
+        print(f"   - vLLM server URL: {args.vllm_server_base_url}")
     if args.max_steps:
         print(f"   - Max steps: {args.max_steps}")
     else:
@@ -918,7 +950,10 @@ def main():
     # Save configuration
     config_dict = {
         "model_name": args.model_name,
-        "vllm_mode": "colocate",
+        "vllm_mode": args.vllm_mode,
+        "vllm_server_base_url": (
+            args.vllm_server_base_url if args.vllm_mode == "server" else None
+        ),
         "curriculum_config": asdict(curriculum_config),
         "training_config": training_args.to_dict(),
         "dataset_size": len(train_dataset),

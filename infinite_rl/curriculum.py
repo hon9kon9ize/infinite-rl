@@ -1249,8 +1249,8 @@ class CurriculumLearning:
 
         Format gate applies: if format is invalid, combined score is gated to 0.0.
         For math/puzzle tasks, correctness gating applies: if generation is incorrect,
-        length and llm_judge scores are set to 0.0, and their info fields are updated
-        to indicate gating.
+        length and llm_judge scores are set to 0.0, and their RewardFunctionScore
+        objects are updated to reflect the gating.
         Format validity is extracted from generation rewards (format_think, format_answer).
 
         Args:
@@ -1275,20 +1275,22 @@ class CurriculumLearning:
         if task.task_type in ["math", "puzzle"] and not generation.is_correct:
             if "length" in aux_scores:
                 aux_scores["length"] = 0.0
-                # Update info for length reward
+                # Update info and score for length reward
                 for reward in generation.rewards:
                     if reward.reward_function_name == "length":
                         reward.info = (
                             f"Gated due to incorrect generation: {reward.info or ''}"
                         )
+                        reward.score = 0.0
                         break
             judge_score = 0.0
-            # Update info for llm_judge reward
+            # Update info and score for llm_judge reward
             for reward in generation.rewards:
                 if reward.reward_function_name == "llm_judge":
                     reward.info = (
                         f"Gated due to incorrect generation: {reward.info or ''}"
                     )
+                    reward.score = 0.0
                     break
 
         # Normalize aux (assuming aux scores are now in [0, 1])

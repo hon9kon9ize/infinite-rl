@@ -178,6 +178,19 @@ class CurriculumLearning:
                         **self.lang_consistency_kwargs,
                     )
                 )
+                # Additional lang_consistency for truthy tasks: check language outside <think> tags
+                self.aux_reward_functions["lang_consistency_outside"] = (
+                    LangConsistencyRewardFunction(
+                        "lang_consistency_outside",
+                        timeout=self.timeout,
+                        answer_tag=self.answer_tag,
+                        think_tag=self.think_tag,
+                        tag_excluded=True,
+                        target_tag=self.think_tag,
+                        target_language="en",  # placeholder, will be overridden per task
+                        **self.lang_consistency_kwargs,
+                    )
+                )
             except Exception as e:
                 print(
                     f"Warning: Could not initialize LangConsistencyRewardFunction: {e}"
@@ -1099,9 +1112,20 @@ class CurriculumLearning:
             if aux_name == "llm_judge":
                 # Skip llm_judge as it's computed in batch via get_rewards()
                 continue
+            if is_truthy_task and aux_name == "lang_consistency":
+                # For truthy tasks, skip the default lang_consistency (inside think tags)
+                continue
+            if not is_truthy_task and aux_name == "lang_consistency_outside":
+                # For non-truthy tasks, skip lang_consistency_outside
+                continue
             try:
-                # All auxiliary functions now accept task as first parameter
-                aux_result = aux_fn.compute_reward(task, is_correct=is_correct)
+                # For truthy tasks, use lang_consistency_outside with task.language
+                if is_truthy_task and aux_name == "lang_consistency_outside":
+                    aux_result = aux_fn.compute_reward(
+                        task, is_correct=is_correct, target_language=task.language
+                    )
+                else:
+                    aux_result = aux_fn.compute_reward(task, is_correct=is_correct)
                 aux_scores[aux_name] = {
                     "score": aux_result.score,
                     "info": aux_result.info,
@@ -1254,13 +1278,17 @@ class CurriculumLearning:
                 # Update info for length reward
                 for reward in generation.rewards:
                     if reward.reward_function_name == "length":
-                        reward.info = f"Gated due to incorrect generation: {reward.info or ''}"
+                        reward.info = (
+                            f"Gated due to incorrect generation: {reward.info or ''}"
+                        )
                         break
             judge_score = 0.0
             # Update info for llm_judge reward
             for reward in generation.rewards:
                 if reward.reward_function_name == "llm_judge":
-                    reward.info = f"Gated due to incorrect generation: {reward.info or ''}"
+                    reward.info = (
+                        f"Gated due to incorrect generation: {reward.info or ''}"
+                    )
                     break
 
         # Normalize aux (assuming aux scores are now in [0, 1])

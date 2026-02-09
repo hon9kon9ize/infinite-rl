@@ -33,7 +33,6 @@ class LangConsistencyRewardFunction(RewardFunction):
     def _is_cantonese(self, text: str) -> bool:
         """Return True if the text is Cantonese, False otherwise."""
         judgement = self.yue_detector(text)
-        print(judgement)
         return judgement in ["cantonese", "mixed", "neutral"]
 
     def compute_reward(
@@ -49,7 +48,8 @@ class LangConsistencyRewardFunction(RewardFunction):
             self.initialize()
 
         # Get expected language from curriculum config (not task.language which may be programming language)
-        expected_output = self.target_language
+        # Allow overriding via kwargs for dynamic language checking
+        expected_output = kwargs.get("target_language", self.target_language)
 
         # Extract content using tag_excluded parameter
         content = extract_tag_util(

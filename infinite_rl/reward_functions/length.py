@@ -108,9 +108,4 @@ class LengthRewardFunction(RewardFunction):
             max_len=self.max_len,
         )
 
-        # Apply correctness gating: if primary score is 0 (incorrect), length reward is 0
-        is_correct = kwargs.get("is_correct", False)
-        if not is_correct:
-            len_reward = 0.0
-
         return RewardFunctionScore(score=float(len_reward))

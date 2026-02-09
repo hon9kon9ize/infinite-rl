@@ -374,7 +374,7 @@ class TestLLMJudgeRewardFunction(unittest.TestCase):
         self.assertIn("23.125", reward.info)
 
 
-class TestLLMJudgeIntegration(unittest.TestCase):
+class TestLLMJudgeIntegration(TestLLMJudgeRewardFunction):
     """Integration tests for LLMJudgeRewardFunction."""
 
     @patch("transformers.AutoTokenizer.from_pretrained")
@@ -419,6 +419,67 @@ class TestLLMJudgeIntegration(unittest.TestCase):
         # Both should have valid scores
         self.assertGreater(reward1.score, 0.0)
         self.assertGreater(reward2.score, 0.0)
+
+    @patch("requests.post")
+    def test_correctness_gating_math_puzzle(self, mock_post):
+        """Test that LLM Judge is gated by correctness for math/puzzle tasks."""
+        mock_tok = MagicMock()
+        mock_tok.apply_chat_template.return_value = "formatted"
+        mock_tok.bos_token = None
+
+        # Mock API response
+        mock_response = MagicMock()
+        mock_response.json.return_value = [{"embedding": [15.0]}]
+        mock_post.return_value = mock_response
+
+        rf = self.create_reward_function(normalize=True)
+        rf.initialize()
+        rf.tokenizer = mock_tok
+
+        task = self.create_task(prompt="Q: 2+2?", model_output="A: 4")
+
+        # When correct, should get judge score
+        reward_correct = rf.compute_reward(task, is_correct=True)
+        self.assertEqual(reward_correct.score, 15.0)
+
+        # When incorrect, should get 0.0 for math/puzzle tasks
+        reward_incorrect = rf.compute_reward(task, is_correct=False)
+        self.assertEqual(reward_incorrect.score, 0.0)
+        self.assertIn("generation is incorrect", reward_incorrect.info)
+
+    @patch("requests.post")
+    def test_no_gating_for_truthy(self, mock_post):
+        """Test that LLM Judge is not gated for truthy tasks."""
+        mock_tok = MagicMock()
+        mock_tok.apply_chat_template.return_value = "formatted"
+        mock_tok.bos_token = None
+
+        # Mock API response
+        mock_response = MagicMock()
+        mock_response.json.return_value = [{"embedding": [15.0]}]
+        mock_post.return_value = mock_response
+
+        rf = self.create_reward_function(normalize=True)
+        rf.initialize()
+        rf.tokenizer = mock_tok
+
+        # Create truthy task
+        task = Task(
+            task_id="truthy_task",
+            task_name="Truthy Task",
+            task_type="truthy",
+            level=0,
+            prompt="Test prompt",
+            expected_answer="",
+        )
+        task.model_output = "Test response"
+
+        # For truthy tasks, should always get judge score regardless of is_correct
+        reward_correct = rf.compute_reward(task, is_correct=True)
+        self.assertEqual(reward_correct.score, 15.0)
+
+        reward_incorrect = rf.compute_reward(task, is_correct=False)
+        self.assertEqual(reward_incorrect.score, 15.0)
 
 
 if __name__ == "__main__":

@@ -232,7 +232,7 @@ class LLMJudgeRewardFunction(RewardFunction):
         if task.task_type in ["math", "puzzle"] and not is_correct:
             return RewardFunctionScore(
                 score=0.0,
-                info="LLM Judge reward gated: task is incorrect.",
+                info="LLM Judge reward gated: generation is incorrect.",
             )
 
         try:
@@ -331,14 +331,13 @@ class LLMJudgeRewardFunction(RewardFunction):
             task_scores = [[] for _ in tasks]
             for (task_idx, gen_idx), score in zip(task_gen_data, scores):
                 task = tasks[task_idx]
+                gen = task.generations[gen_idx]
 
-                # Apply correctness gating for math and puzzle tasks
-                if task.task_type in ["math", "puzzle"] and not getattr(
-                    task, "is_correct", False
-                ):
+                # Apply correctness gating for math and puzzle tasks at generation level
+                if task.task_type in ["math", "puzzle"] and not gen.is_correct:
                     reward_score = RewardFunctionScore(
                         score=0.0,
-                        info="LLM Judge reward gated: task is incorrect.",
+                        info="LLM Judge reward gated: generation is incorrect.",
                     )
                 else:
                     # Check if score is below threshold

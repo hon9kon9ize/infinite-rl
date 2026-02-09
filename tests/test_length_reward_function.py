@@ -62,7 +62,7 @@ class TestLengthRewardFunction(unittest.TestCase):
             expected_answer="",
         )
         task0.model_output = "<think>" + "x" * 2000 + "</think><answer>42</answer>"
-        score = self.fn.compute_reward(task0, is_correct=True)
+        score = self.fn.compute_reward(task0)
         # Should be ~0.89 since length is in decay region for level 0 (2000 > 1300)
         self.assertAlmostEqual(score.score, 0.89, delta=0.01)
 
@@ -76,7 +76,7 @@ class TestLengthRewardFunction(unittest.TestCase):
             expected_answer="",
         )
         task1.model_output = "<think>" + "x" * 2000 + "</think><answer>42</answer>"
-        score = self.fn.compute_reward(task1, is_correct=True)
+        score = self.fn.compute_reward(task1)
         self.assertAlmostEqual(score.score, 0.95, delta=0.01)  # 2000 > 1600
 
         # Level 2: 2000
@@ -89,7 +89,7 @@ class TestLengthRewardFunction(unittest.TestCase):
             expected_answer="",
         )
         task2.model_output = "<think>" + "x" * 2000 + "</think><answer>42</answer>"
-        score = self.fn.compute_reward(task2, is_correct=True)
+        score = self.fn.compute_reward(task2)
         self.assertEqual(score.score, 1.0)  # 2000 = 2000
 
         # Level 3+: 3000
@@ -102,7 +102,7 @@ class TestLengthRewardFunction(unittest.TestCase):
             expected_answer="",
         )
         task3.model_output = "<think>" + "x" * 2000 + "</think><answer>42</answer>"
-        score = self.fn.compute_reward(task3, is_correct=True)
+        score = self.fn.compute_reward(task3)
         self.assertEqual(score.score, 1.0)  # 2000 < 3000
 
     def test_missing_think_tag(self):
@@ -161,7 +161,7 @@ class TestLengthRewardFunction(unittest.TestCase):
             expected_answer="",
             model_output="<think>Hi</think><answer>42</answer>",
         )
-        score = self.fn.compute_reward(task, is_correct=True)
+        score = self.fn.compute_reward(task)
         self.assertEqual(score.score, 0.1)  # Too short
 
     def test_too_long_response(self):
@@ -177,7 +177,7 @@ class TestLengthRewardFunction(unittest.TestCase):
             + "x" * 2000
             + "</think><answer>42</answer>",  # Much longer than level 0 target
         )
-        score = self.fn.compute_reward(task, is_correct=True)
+        score = self.fn.compute_reward(task)
         self.assertLess(score.score, 1.0)
         self.assertGreater(score.score, 0.5)
 
@@ -198,7 +198,7 @@ class TestLengthRewardFunction(unittest.TestCase):
             * 10
             + "</reasoning><answer>42</answer>",
         )
-        score = fn.compute_reward(task, is_correct=True)
+        score = fn.compute_reward(task)
         self.assertEqual(score.score, 1.0)
 
     def test_custom_max_len(self):
@@ -215,7 +215,7 @@ class TestLengthRewardFunction(unittest.TestCase):
             expected_answer="",
             model_output="<think>" + "x" * 1800 + "</think><answer>42</answer>",
         )
-        score = fn.compute_reward(task, is_correct=True)
+        score = fn.compute_reward(task)
         # With max_len=2000 and target=1300, this should be in decay region
         self.assertLess(score.score, 1.0)
         self.assertGreater(score.score, 0.5)
@@ -231,31 +231,9 @@ class TestLengthRewardFunction(unittest.TestCase):
             expected_answer="",
             model_output="<think>" + "x" * 1800 + "</think><answer>42</answer>",
         )
-        score = self.fn.compute_reward(task, is_correct=True)
+        score = self.fn.compute_reward(task)
         # Should use default target_len=2000, so this is in sweet spot
         self.assertEqual(score.score, 1.0)
-
-    def test_correctness_gating(self):
-        """Test that length reward is gated by correctness."""
-        task = Task(
-            task_id="test_10",
-            task_name="test",
-            task_type="math",
-            level=0,
-            prompt="Test",
-            expected_answer="",
-            model_output="<think>"
-            + "x" * 1500
-            + "</think><answer>42</answer>",  # Good length
-        )
-
-        # When correct, should get normal length reward
-        score_correct = self.fn.compute_reward(task, is_correct=True)
-        self.assertGreater(score_correct.score, 0.8)  # Should be in sweet spot
-
-        # When incorrect, should get 0.0 regardless of length
-        score_incorrect = self.fn.compute_reward(task, is_correct=False)
-        self.assertEqual(score_incorrect.score, 0.0)
 
 
 if __name__ == "__main__":

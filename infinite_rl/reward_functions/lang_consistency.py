@@ -85,13 +85,18 @@ class LangConsistencyRewardFunction(RewardFunction):
             )
 
         # Check if Cantonese is expected and detected
-        if norm_expected == "yue":
+        if norm_expected == "yue" and norm_detected in ["zh", "yue", "zh-hant"]:
             is_cantonese = self._is_cantonese(content)
-            if is_cantonese:
-                norm_detected = "yue"
 
-        # Simple binary scoring: 1.0 if match, -1.0 if mismatch
-        if norm_expected == norm_detected:
+            if is_cantonese:
+                final_score = 1.0
+                info_msg = ""
+            else:
+                final_score = 0.0
+                info_msg = f"Expected Cantonese but detected '{norm_detected}' which is not Cantonese."
+
+        elif norm_expected == norm_detected:
+            # Simple binary scoring: 1.0 if match, -1.0 if mismatch
             final_score = 1.0
             info_msg = ""
         else:

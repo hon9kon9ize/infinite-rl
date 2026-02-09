@@ -28,12 +28,10 @@ def test_curriculum_integration():
         success_rate_threshold=0.5,
         demote_threshold=0.2,
         num_generations=4,
-        warmup_step=5,
     )
 
     print(f"✓ Curriculum initialized")
     print(f"  - Current level: {curriculum.current_level}")
-    print(f"  - Warmup steps: {curriculum.warmup_step}")
     print(f"  - Num generations: {curriculum.num_generations}")
 
     # Get a task

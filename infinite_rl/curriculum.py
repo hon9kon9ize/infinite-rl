@@ -44,7 +44,6 @@ class CurriculumLearning:
         success_rate_threshold: float = 0.7,
         variance_threshold: float = 0.15,
         demote_threshold: float = 0.4,
-        warmup_step: int = 16,
         truthy_learning_rate: float = 0.1,
         level_change_cooldown: int = 5,
         num_generations: int = 4,
@@ -76,8 +75,6 @@ class CurriculumLearning:
             success_rate_threshold: Required success rate for difficulty increase (default: 0.7 = 70%)
             variance_threshold: Maximum variance for success rate stability (default: 0.15)
             demote_threshold: Success rate threshold for difficulty decrease (default: 0.4 = 40%)
-            warmup_step: Number of initial steps to only use level 0 tasks (default: 32)
-
             truthy_learning_rate: Probability of including truthy tasks in the curriculum (default: 0.2). Set to 0 to disable.
             level_change_cooldown: Minimum steps between level changes to prevent rapid fluctuations (default: 5)
             num_generations: Number of generations per prompt for GRPO batching (default: 4)
@@ -129,8 +126,6 @@ class CurriculumLearning:
         self.current_level = 0  # Start at level 0 (math tasks only)
         self.task_instance_counter: int = 0  # Counter for unique task IDs
 
-        # Warmup stage configuration
-        self.warmup_step = warmup_step
         self.global_step: int = 0  # Counter for total steps
 
         # Truthy learning configuration
@@ -995,9 +990,6 @@ class CurriculumLearning:
         With probability truthy_learning_rate (default 0.2), returns a truthy task for conversation quality evaluation.
         Otherwise, returns a new task based on current difficulty level.
 
-        During warmup stage (first warmup_step iterations), only level 0 tasks are used
-        (unless truthy is triggered).
-
         For GRPO batching: Each call creates a new task instance. The dataset ensures
         that within a batch, the same task is reused for multiple generations.
 
@@ -1014,30 +1006,23 @@ class CurriculumLearning:
         all_available_tasks = []
         level_weights = []
 
-        # During warmup, only use level 0
-        if self.is_warmup():
-            available_tasks = self.session.tasks_by_level.get(0, [])
-            if available_tasks:
-                all_available_tasks.extend(available_tasks)
-                level_weights.extend([1.0] * len(available_tasks))
-            else:
-                # Fallback to any available tasks during warmup if level 0 is empty
-                for level in range(0, 7):
-                    if self.session.tasks_by_level[level]:
-                        available_tasks = self.session.tasks_by_level[level]
-                        all_available_tasks.extend(available_tasks)
-                        level_weights.extend([1.0] * len(available_tasks))
-                        break
-        else:
-            # Normal curriculum: sample from level 0 through current level for diversity
-            # This allows the model to see a mix of difficulties while progressing
-            for level in range(0, self.current_level + 1):
+        # Normal curriculum: sample from level 0 through current level for diversity
+        # This allows the model to see a mix of difficulties while progressing
+        for level in range(0, self.current_level + 1):
+            level_tasks = self.session.tasks_by_level.get(level, [])
+            if level_tasks:
+                all_available_tasks.extend(level_tasks)
+                # Weight current level tasks higher (10x) to focus training
+                weight = 10.0 if level == self.current_level else 1.0
+                level_weights.extend([weight] * len(level_tasks))
+
+        # Fallback: if no tasks in allowed levels, use any available tasks
+        if not all_available_tasks:
+            for level in range(7):  # Check all levels
                 level_tasks = self.session.tasks_by_level.get(level, [])
                 if level_tasks:
                     all_available_tasks.extend(level_tasks)
-                    # Weight current level tasks higher (10x) to focus training
-                    weight = 10.0 if level == self.current_level else 1.0
-                    level_weights.extend([weight] * len(level_tasks))
+                    level_weights.extend([1.0] * len(level_tasks))
 
         if not all_available_tasks:
             return None
@@ -1056,6 +1041,9 @@ class CurriculumLearning:
                 )
                 weight = max(0.1, weight * (1.0 - recency_penalty))
             final_weights.append(weight)
+
+        if not all_available_tasks:
+            return None
 
         # Select task with combined weighting
         selected_task = random.choices(all_available_tasks, weights=final_weights, k=1)[
@@ -1147,6 +1135,8 @@ class CurriculumLearning:
         LLM Judge score (for truthy) or added as auxiliary (for math/puzzle).
 
         Format gate applies to judge: if format is invalid, final reward is zero.
+        For truthy tasks, language consistency gate applies: if lang_consistency_outside < 1.0,
+        the LLM Judge score is set to 0.0.
 
         Modifies task.latest_generation.rewards in place to include LLM Judge results.
 
@@ -1199,10 +1189,27 @@ class CurriculumLearning:
 
                 if task.task_type == "truthy":
                     # For truthy: replace primary score with LLM Judge score
-                    # Apply format gate: if format invalid, gate judge reward to 0.0
+                    # Apply language consistency gate: if lang_consistency_outside < 1.0, gate judge reward to 0.0
                     for gen_idx, gen in enumerate(task.generations):
                         if gen_idx < len(judge_scores):
                             judge_score = judge_scores[gen_idx]
+
+                            # Check language consistency gate for truthy tasks
+                            lang_consistent = True
+                            for reward in gen.rewards:
+                                if (
+                                    reward.reward_function_name
+                                    == "lang_consistency_outside"
+                                ):
+                                    if reward.score < 1.0:
+                                        lang_consistent = False
+                                    break
+                            if not lang_consistent:
+                                judge_score = RewardFunctionScore(
+                                    score=0.0,
+                                    reward_function_name="llm_judge",
+                                    info="Gated due to language inconsistency",
+                                )
 
                             for i, reward in enumerate(gen.rewards):
                                 if reward.reward_function_name == "primary":
@@ -1323,7 +1330,3 @@ class CurriculumLearning:
             ),
         )
         return combined_score
-
-    def is_warmup(self) -> bool:
-        """Check if currently in warmup stage."""
-        return self.global_step < self.warmup_step

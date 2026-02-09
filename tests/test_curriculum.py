@@ -2036,6 +2036,68 @@ class TestCurriculumLearning(unittest.TestCase):
             self.assertAlmostEqual(rewards[0], 0.0, places=5)
             self.assertAlmostEqual(rewards[1], 1.0, places=5)
 
+    def test_truthy_language_consistency_gating(self):
+        """Test that LLM Judge scores are gated to 0.0 when language consistency outside <think> tags fails."""
+        cl = CurriculumLearning(
+            use_llm_judge=True,
+            use_lang_consistency=True,  # Enable language consistency checking
+            aux_weight=0.0,  # Disable auxiliary weight blending for clean test
+            num_generations=1,  # Single generation mode for immediate processing
+            llm_judge_kwargs={
+                "api_host": "localhost",
+                "api_port": 8000,
+                "model_name": "Skywork/Skywork-Reward-V2-Qwen3-4B",
+            },
+            use_format=False,  # Disable format to avoid auxiliary reward blending
+        )
+
+        # Skip test if lang_consistency_outside is not available (missing cantofilter dependency)
+        if "lang_consistency_outside" not in cl.aux_reward_functions:
+            self.skipTest("lang_consistency_outside not available (missing cantofilter dependency)")
+
+        # Set up mock tokenizer for LLM Judge
+        setup_llm_judge_with_mock_tokenizer(cl)
+
+        # Create a truthy task
+        task = Task(
+            task_id="truthy_lang_test",
+            task_name="Language Consistency Test",
+            task_type="truthy",
+            level=0,
+            prompt="Which response is better?",
+            expected_answer={"type": "truthy", "conversation": []},
+        )
+        cl.session.add_task(task)
+
+        # Mock lang_consistency_outside to return 0.0 (language inconsistency)
+        with patch.object(
+            cl.aux_reward_functions["lang_consistency_outside"], "compute_reward"
+        ) as mock_lang_consistency:
+            mock_lang_result = MagicMock()
+            mock_lang_result.score = 0.0  # Language inconsistent outside <think> tags
+            mock_lang_result.info = "Language mismatch outside think tags"
+            mock_lang_consistency.return_value = mock_lang_result
+
+            # Mock llm_judge batch function to return high score
+            with patch.object(
+                cl.aux_reward_functions["llm_judge"], "compute_rewards_batch"
+            ) as mock_batch:
+                mock_judge_result = MagicMock()
+                mock_judge_result.score = 0.9  # High judge score
+                mock_judge_result.info = "Excellent response quality"
+                # Return list of lists (one per task, one per generation)
+                mock_batch.return_value = [[mock_judge_result]]
+
+                # compute_reward should gate LLM Judge score to 0.0 due to language inconsistency
+                primary_reward = cl.compute_reward("truthy_lang_test", "Test response")
+
+                # Score should be 0.0 due to language consistency gating
+                self.assertEqual(
+                    primary_reward,
+                    0.0,
+                    "LLM Judge score should be gated to 0.0 when language consistency fails",
+                )
+
     def test_truthy_task_does_not_affect_curriculum(self):
         """Test that truthy tasks never affect curriculum success windows."""
         cl = CurriculumLearning(

@@ -56,11 +56,12 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
             task_type="math",
             level=1,
             prompt="Test",
-            expected_answer="",
+            expected_answer="en",
             language="yue",
             model_output="Some English text outside. <answer>我愛你。</answer>",
         )
         score = reward_fn.compute_reward(task)
+        print("++++++ score", score)
         # Should detect Cantonese from inside the <answer> tag
         self.assertAlmostEqual(score.score, 1.0, places=3)
 
@@ -130,3 +131,52 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
         # Should detect Mandarin/SWC from outside, not Cantonese inside
         # Since expected is Cantonese but detected is Mandarin, score should be 0.0
         self.assertEqual(score.score, 0.0)
+
+        # Simulate the user's reported case: task expects Cantonese but output is English
+        task = Task(
+            task_id="truthy_yue_test",
+            task_name="Truthy Yue Test",
+            task_type="truthy",
+            level=0,
+            prompt="Which response is better?",
+            expected_answer={"type": "truthy", "conversation": []},
+            language="yue",  # Expected Cantonese
+            model_output="<think>\nOkay, let me analyze this question. The user is asking whether Napoleon Bonaparte was really as short as popular culture often depicts him to be.\n</think>\n\nNapoleon Bonaparte was not as tall as popular culture often depicts him to be. Historical records indicate he was about 5 feet 2 inches (157 cm) tall. The exaggeration in popular culture may stem from a tendency to romanticize historical figures or prioritize imposing stature in visual representations.\n",
+        )
+
+        score = reward_fn.compute_reward(task, target_language="yue")
+
+        # English text outside <think> should score 0.0, not 1.0
+        self.assertEqual(score.score, 0.0)
+        self.assertIn("does not match expected", score.info)
+
+    def test_cantonese_outside_think_tags_yue_expected(self):
+        """Test that Cantonese text outside <think> tags scores 1.0 when expected language is 'yue'.
+
+        This test verifies that the fix doesn't break the positive case.
+        """
+        reward_fn = LangConsistencyRewardFunction(
+            task_name="lang_consistency_outside",
+            tag_excluded=True,  # Check content outside <think> tags
+            target_tag="think",
+            target_language="yue",
+        )
+        reward_fn.initialize()
+
+        # Task expects Cantonese and output has Cantonese outside <think>
+        task = Task(
+            task_id="truthy_yue_positive_test",
+            task_name="Truthy Yue Positive Test",
+            task_type="truthy",
+            level=0,
+            prompt="Which response is better?",
+            expected_answer={"type": "truthy", "conversation": []},
+            language="yue",  # Expected Cantonese
+            model_output="<think>\n思考緊\n</think>\n\n我愛你，多謝你。\n",
+        )
+
+        score = reward_fn.compute_reward(task, target_language="yue")
+
+        # Cantonese text outside <think> should score 1.0
+        self.assertEqual(score.score, 1.0)
+        self.assertEqual(score.info, "")

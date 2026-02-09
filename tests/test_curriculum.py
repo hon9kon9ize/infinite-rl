@@ -1005,7 +1005,7 @@ class TestCurriculumLearning(unittest.TestCase):
 
     def test_no_tasks_available(self):
         """Test behavior when no tasks are available at current level."""
-        cl = CurriculumLearning()
+        cl = CurriculumLearning(warmup_step=0)
         # Clear tasks at current level (level 0) to simulate no tasks available at that level
         cl.session.tasks_by_level[0] = []
         cl.session.truthy_tasks = []
@@ -1271,7 +1271,7 @@ class TestCurriculumLearning(unittest.TestCase):
 
     def test_get_prompt_with_no_tasks(self):
         """Test get_prompt when no tasks are available at current level."""
-        cl = CurriculumLearning()
+        cl = CurriculumLearning(warmup_step=0)
         # Clear tasks at current level (level 0)
         original_level_0 = cl.session.tasks_by_level[0][:]
         cl.session.tasks_by_level[0] = []
@@ -2053,7 +2053,9 @@ class TestCurriculumLearning(unittest.TestCase):
 
         # Skip test if lang_consistency_outside is not available (missing cantofilter dependency)
         if "lang_consistency_outside" not in cl.aux_reward_functions:
-            self.skipTest("lang_consistency_outside not available (missing cantofilter dependency)")
+            self.skipTest(
+                "lang_consistency_outside not available (missing cantofilter dependency)"
+            )
 
         # Set up mock tokenizer for LLM Judge
         setup_llm_judge_with_mock_tokenizer(cl)
@@ -2258,7 +2260,7 @@ class TestCurriculumLearning(unittest.TestCase):
 
     def test_compute_reward_standard_failure_incorrect_answer(self):
         """Test _compute_reward_standard with incorrect answer."""
-        cl = CurriculumLearning(use_format=True)
+        cl = CurriculumLearning(use_format=True, warmup_step=0)
 
         task = Task(
             task_id="math_test",

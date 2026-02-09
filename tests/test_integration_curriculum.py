@@ -28,6 +28,7 @@ def test_curriculum_integration():
         success_rate_threshold=0.5,
         demote_threshold=0.2,
         num_generations=4,
+        warmup_step=0,  # Disable warmup for testing
     )
 
     print(f"✓ Curriculum initialized")

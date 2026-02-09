@@ -48,6 +48,7 @@ class CurriculumLearning:
         level_change_cooldown: int = 5,
         num_generations: int = 4,
         puzzle_one_shot: bool = False,
+        warmup_step: int = 32,
     ):
         """
         Initialize curriculum learning.
@@ -79,6 +80,7 @@ class CurriculumLearning:
             level_change_cooldown: Minimum steps between level changes to prevent rapid fluctuations (default: 5)
             num_generations: Number of generations per prompt for GRPO batching (default: 4)
             puzzle_one_shot: Whether to include one-shot examples in puzzle prompts (default: False)
+            warmup_step: Number of initial steps using only level 0 tasks with leaky gate scoring (default: 32)
         """
         self.timeout = timeout
         self.answer_tag = answer_tag
@@ -154,6 +156,7 @@ class CurriculumLearning:
         self.num_generations: int = (
             num_generations  # Number of generations per prompt (configurable)
         )
+        self.warmup_step: int = warmup_step
 
     def _initialize_aux_reward_functions(self):
         """Initialize auxiliary reward functions based on configuration."""
@@ -566,6 +569,7 @@ class CurriculumLearning:
         )
         task_rewards = [primary_reward]
 
+        # Compute auxiliary scores
         if primary_score == 1.0:
             # Success: primary score is correct
             other_aux_scores = self.get_aux_reward_scores(task, is_correct=True)
@@ -578,7 +582,6 @@ class CurriculumLearning:
                     )
                     task_rewards.append(aux_reward)
                     aux_score_dict[name] = data
-            score = primary_score
         else:
             # Failure: primary score incorrect
             other_aux_scores = self.get_aux_reward_scores(task, is_correct=False)
@@ -593,8 +596,6 @@ class CurriculumLearning:
                     )
                     task_rewards.append(aux_reward)
                     aux_score_dict[name] = data
-
-            score = 0.0
 
         # Check format validity from rewards (already computed in get_aux_reward_scores)
         # Both format_think and format_answer must be valid (score >= 1.0)
@@ -621,17 +622,50 @@ class CurriculumLearning:
                     # This shouldn't happen if use_format=True
                     format_valid = False
 
-        # Apply format gate: if format invalid, set score to 0.0
-        if not format_valid and score > 0.0:
-            score = 0.0
-
-        # Determine is_correct: True only if format valid AND primary score is 1.0
-        if primary_score == 1.0 and format_valid:
-            is_correct = True
+        # Apply scoring logic
+        if self.global_step < self.warmup_step:
+            # During warmup, use leaky gate: partial credit for format even if wrong
+            score = self._apply_leaky_gate(primary_score, format_valid)
+            is_correct = (
+                score == 1.0
+            )  # Only fully correct if both format and answer correct
         else:
-            is_correct = False
+            # Normal scoring: strict correctness with format gate
+            if primary_score == 1.0:
+                score = primary_score
+            else:
+                score = 0.0
+
+            # Apply format gate: if format invalid, set score to 0.0
+            if not format_valid and score > 0.0:
+                score = 0.0
+
+            # Determine is_correct: True only if format valid AND primary score is 1.0
+            is_correct = primary_score == 1.0 and format_valid
 
         return score, is_correct, task_rewards, aux_score_dict
+
+    def _apply_leaky_gate(self, primary_score: float, format_valid: bool) -> float:
+        """
+        Apply leaky gate scoring during warmup phase.
+
+        Returns:
+        - 1.0: Both format valid AND answer correct
+        - 0.1: Format valid but answer incorrect (partial credit for format)
+        - 0.0: Format invalid
+
+        Args:
+            primary_score: Task correctness score (1.0 or 0.0)
+            format_valid: Whether both think and answer tags are properly formatted
+
+        Returns:
+            Leaky gate score
+        """
+        if not format_valid:
+            return 0.0
+        if primary_score == 1.0:
+            return 1.0
+        return 0.1
 
     def _check_format_validity(self, task: Task, generation: "Generation") -> tuple:
         """
@@ -1001,6 +1035,19 @@ class CurriculumLearning:
             selected_task = random.choice(self.session.truthy_tasks)
             return self.session.create_truthy_task(selected_task)
 
+        # During warmup, only use level 0 tasks
+        if self.global_step < self.warmup_step:
+            level_tasks = self.session.tasks_by_level.get(0, [])
+            if level_tasks:
+                selected_task = random.choice(level_tasks)
+                if selected_task["type"] == "math":
+                    task = self.session.create_math_task(selected_task)
+                    return task
+                elif selected_task["type"] == "puzzle":
+                    task = self.session.create_puzzle_task(selected_task)
+                    return task
+            return None
+
         # Normal task selection logic
         # Collect tasks from all levels with level-based weighting for diversity
         all_available_tasks = []
@@ -1279,7 +1326,11 @@ class CurriculumLearning:
                 aux_scores[reward.reward_function_name] = reward.score
 
         # Apply correctness gating for math and puzzle tasks
-        if task.task_type in ["math", "puzzle"] and not generation.is_correct:
+        if (
+            self.global_step >= self.warmup_step
+            and task.task_type in ["math", "puzzle"]
+            and not generation.is_correct
+        ):
             if "length" in aux_scores:
                 aux_scores["length"] = 0.0
                 # Update info and score for length reward

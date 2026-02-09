@@ -19,7 +19,7 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
 
     def test_get_prompt_puzzle_task_has_extracted_inputs(self):
         """Puzzle tasks must include extracted inputs, not empty dict."""
-        cl = CurriculumLearning()
+        cl = CurriculumLearning(warmup_step=0)
 
         # Clear all levels except 1 to ensure we get only our mock puzzle task
         # Note: Puzzles start at level 1; level 0 is reserved for math tasks
@@ -71,7 +71,7 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
 
     def test_python_puzzle_task_has_extracted_inputs(self):
         """Python puzzle tasks must also have extracted inputs."""
-        cl = CurriculumLearning()
+        cl = CurriculumLearning(warmup_step=0)
 
         # Clear all levels except 1 to ensure we get only our mock task
         for level in range(0, 7):
@@ -107,7 +107,7 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
 
     def test_puzzle_with_no_parameters_has_empty_inputs(self):
         """Puzzle with no default parameters should have empty inputs dict."""
-        cl = CurriculumLearning()
+        cl = CurriculumLearning(warmup_step=0)
 
         # Clear all levels except 1 to ensure we get only our mock task
         for level in range(0, 7):
@@ -170,7 +170,7 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
 
         for tc in test_cases:
             with self.subTest(puzzle=tc["name"]):
-                cl = CurriculumLearning()
+                cl = CurriculumLearning(warmup_step=0)
 
                 # Clear all levels except 1 to ensure we get only our mock task
                 for level in range(0, 7):
@@ -208,7 +208,7 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
 
     def test_puzzle_complex_default_values(self):
         """Test extraction of complex default values (objects, arrays)."""
-        cl = CurriculumLearning()
+        cl = CurriculumLearning(warmup_step=0)
 
         # Clear all levels except 1 to ensure we get only our mock task
         for level in range(0, 7):
@@ -246,7 +246,7 @@ class TestCurriculumPuzzleInputExtraction(unittest.TestCase):
 
     def test_puzzle_inputs_in_expected_answer_structure(self):
         """Verify expected_answer has correct structure with inputs."""
-        cl = CurriculumLearning()
+        cl = CurriculumLearning(warmup_step=0)
 
         # Clear all levels except 1 to ensure we get only our mock task
         for level in range(0, 7):

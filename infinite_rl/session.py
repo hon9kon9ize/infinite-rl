@@ -249,7 +249,7 @@ class Session:
                 judge_system_prompt=judge_system_prompt,
                 expected_answer=expected_answer,
                 reasoning_language=truthy_data.get("reasoning_language", "en"),
-                language=truthy_data.get("language", "en"),
+                language=truthy_data.get("lang", "en"),
                 dataset_id=base_task_id,
             )
             self.add_task(task_obj)

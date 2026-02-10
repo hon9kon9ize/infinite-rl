@@ -219,6 +219,7 @@ class Session:
             user_prompt = truthy_data.get("prompt", "")
             chosen = truthy_data.get("chosen", "")
             rejected = truthy_data.get("rejected", "")
+            language = truthy_data.get("lang", "en")
 
             # Validate critical fields are present and non-empty
             # prompt, chosen, and rejected are required for truthy tasks
@@ -226,12 +227,12 @@ class Session:
                 raise ValueError("Missing required fields: prompt, chosen, or rejected")
 
             user_prompt = format_truthy_user_prompt(
-                system_prompt, user_prompt, self.think_tag
+                system_prompt, user_prompt, self.think_tag, language
             )
 
             # Format the prompt with chosen and rejected options
             judge_system_prompt = format_truthy_judge_system_prompt(
-                user_prompt, chosen, rejected
+                user_prompt, chosen, rejected, language
             )
 
             # Store chosen and rejected in expected_answer for reproducibility

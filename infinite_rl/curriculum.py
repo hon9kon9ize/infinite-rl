@@ -164,22 +164,10 @@ class CurriculumLearning:
             try:
                 from .reward_functions import LangConsistencyRewardFunction
 
+                # Additional lang_consistency for truthy tasks: check language outside <think> tags
                 self.aux_reward_functions["lang_consistency"] = (
                     LangConsistencyRewardFunction(
                         "lang_consistency",
-                        timeout=self.timeout,
-                        answer_tag=self.answer_tag,
-                        think_tag=self.think_tag,
-                        tag_excluded=False,
-                        target_tag=self.think_tag,
-                        target_language=self.reasoning_language,
-                        **self.lang_consistency_kwargs,
-                    )
-                )
-                # Additional lang_consistency for truthy tasks: check language outside <think> tags
-                self.aux_reward_functions["lang_consistency_outside"] = (
-                    LangConsistencyRewardFunction(
-                        "lang_consistency_outside",
                         timeout=self.timeout,
                         answer_tag=self.answer_tag,
                         think_tag=self.think_tag,
@@ -1150,12 +1138,9 @@ class CurriculumLearning:
             if is_truthy_task and aux_name == "lang_consistency":
                 # For truthy tasks, skip the default lang_consistency (inside think tags)
                 continue
-            if not is_truthy_task and aux_name == "lang_consistency_outside":
-                # For non-truthy tasks, skip lang_consistency_outside
-                continue
             try:
-                # For truthy tasks, use lang_consistency_outside with task.language
-                if is_truthy_task and aux_name == "lang_consistency_outside":
+                # For truthy tasks, use lang_consistency with task.language
+                if is_truthy_task and aux_name == "lang_consistency":
                     aux_result = aux_fn.compute_reward(
                         task, is_correct=is_correct, target_language=task.language
                     )
@@ -1244,10 +1229,7 @@ class CurriculumLearning:
                             # Check language consistency gate for truthy tasks
                             lang_consistent = True
                             for reward in gen.rewards:
-                                if (
-                                    reward.reward_function_name
-                                    == "lang_consistency_outside"
-                                ):
+                                if reward.reward_function_name == "lang_consistency":
                                     if reward.score < 1.0:
                                         lang_consistent = False
                                     break

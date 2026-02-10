@@ -17,7 +17,7 @@ Integrates:
 import json
 import argparse
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Callable
+from typing import Optional, List, Callable
 from dataclasses import dataclass, asdict
 
 import torch
@@ -601,7 +601,7 @@ def main():
 
     # vLLM mode arguments
     parser.add_argument(
-        "--vllm-mode",
+        "--vllm_mode",
         type=str,
         choices=["server", "colocate"],
         default="colocate",
@@ -702,6 +702,37 @@ def main():
         help="Dropout probability for LoRA layers",
     )
 
+    # Quantization arguments
+    parser.add_argument(
+        "--load_in_4bit",
+        action="store_true",
+        help="Load model in 4-bit quantization using bitsandbytes",
+    )
+    parser.add_argument(
+        "--load_in_8bit",
+        action="store_true",
+        help="Load model in 8-bit quantization using bitsandbytes",
+    )
+    parser.add_argument(
+        "--bnb_4bit_compute_dtype",
+        type=str,
+        default="bf16",
+        choices=["fp16", "bf16", "fp32"],
+        help="Compute dtype for 4-bit quantization (default: bf16)",
+    )
+    parser.add_argument(
+        "--bnb_4bit_quant_type",
+        type=str,
+        default="nf4",
+        choices=["fp4", "nf4"],
+        help="Quantization type for 4-bit (default: nf4)",
+    )
+    parser.add_argument(
+        "--bnb_4bit_use_double_quant",
+        action="store_true",
+        help="Use double quantization for 4-bit (reduces memory further)",
+    )
+
     # GRPO loss type arguments
     parser.add_argument(
         "--dapo",
@@ -745,6 +776,12 @@ def main():
 
     args = parser.parse_args()
 
+    # Validate quantization arguments
+    if args.load_in_4bit and args.load_in_8bit:
+        parser.error(
+            "Cannot use both --load_in_4bit and --load_in_8bit. Choose one quantization method."
+        )
+
     # Validate vLLM mode arguments
     if args.vllm_mode == "server" and args.vllm_server_base_url is None:
         parser.error("--vllm_server_base_url is required when --vllm-mode=server")
@@ -785,6 +822,8 @@ def main():
             "use_dapo": args.dapo,
             "use_lora": args.use_lora,
             "use_vllm": True,  # Always enabled for train2.py
+            "load_in_4bit": args.load_in_4bit,
+            "load_in_8bit": args.load_in_8bit,
             "window_size": args.window_size,
             "success_rate_threshold": args.success_rate_threshold,
         }
@@ -828,11 +867,39 @@ def main():
     # Load model and tokenizer
     print(f"\n2. Loading model & tokenizer: {args.model_name}...")
 
+    # Prepare quantization config if requested
+    quantization_config = None
+    if args.load_in_4bit or args.load_in_8bit:
+        from transformers import BitsAndBytesConfig
+
+        compute_dtype = torch.bfloat16
+        if args.bnb_4bit_compute_dtype == "fp16":
+            compute_dtype = torch.float16
+        elif args.bnb_4bit_compute_dtype == "fp32":
+            compute_dtype = torch.float32
+
+        quantization_config = BitsAndBytesConfig(
+            load_in_4bit=args.load_in_4bit,
+            load_in_8bit=args.load_in_8bit,
+            bnb_4bit_compute_dtype=compute_dtype,
+            bnb_4bit_quant_type=args.bnb_4bit_quant_type,
+            bnb_4bit_use_double_quant=args.bnb_4bit_use_double_quant,
+        )
+        print(f"   - Using quantization: {'4-bit' if args.load_in_4bit else '8-bit'}")
+        print(f"   - Compute dtype: {args.bnb_4bit_compute_dtype}")
+        if args.load_in_4bit:
+            print(f"   - 4-bit quant type: {args.bnb_4bit_quant_type}")
+            print(f"   - Double quant: {args.bnb_4bit_use_double_quant}")
+
     # In colocate mode, set device_map to None to avoid memory conflicts
+    # For quantization, use "auto" device_map for proper GPU placement
+    device_map = None if not (args.load_in_4bit or args.load_in_8bit) else "auto"
+
     model = Gemma3ForCausalLM.from_pretrained(
         args.model_name,
         torch_dtype=torch.bfloat16,
-        device_map=None,
+        device_map=device_map,
+        quantization_config=quantization_config,
         attn_implementation="flash_attention_2",
     )
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
@@ -841,6 +908,8 @@ def main():
 
     print(f"   ✓ Model loaded: {model.config.model_type}")
     print(f"   - Parameters: {sum(p.numel() for p in model.parameters()):,}")
+    if args.load_in_4bit or args.load_in_8bit:
+        print(f"   - Quantization: {'4-bit' if args.load_in_4bit else '8-bit'}")
     print(f"   ✓ Tokenizer loaded with vocab size: {len(tokenizer)}")
     print(f"   - Model config vocab_size: {model.config.vocab_size}")
 
@@ -953,6 +1022,17 @@ def main():
         "vllm_mode": args.vllm_mode,
         "vllm_server_base_url": (
             args.vllm_server_base_url if args.vllm_mode == "server" else None
+        ),
+        "load_in_4bit": args.load_in_4bit,
+        "load_in_8bit": args.load_in_8bit,
+        "quantization_config": (
+            {
+                "bnb_4bit_compute_dtype": args.bnb_4bit_compute_dtype,
+                "bnb_4bit_quant_type": args.bnb_4bit_quant_type,
+                "bnb_4bit_use_double_quant": args.bnb_4bit_use_double_quant,
+            }
+            if args.load_in_4bit
+            else None
         ),
         "curriculum_config": asdict(curriculum_config),
         "training_config": training_args.to_dict(),

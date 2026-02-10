@@ -195,30 +195,50 @@ function sol(...) {{
 
 
 def format_truthy_judge_system_prompt(
-    user_input: str,
+    question: str,
     chosen: str,
     rejected: str,
+    language: str,
 ) -> str:
     """Format the system prompt for truthy tasks.
 
     Args:
-        user_input: The original user input prompt
+        question: The original user input prompt
         chosen: The chosen (better) response
         rejected: The rejected (worse) response
+        language: The language of the user input (e.g., 'en', 'zh', 'yue')
     Returns:
         Formatted system prompt string for LLM as judge
     """
-    system_prompt = f"## User Input:\n{user_input}\n\n## Chosen:\n{chosen}\n\n## Rejected:\n{rejected}"
+    system_prompt = f"""You are a helpful and precise assistant for checking the quality of the response. Your task is determining whether the user input is more similar to the "Chosen" response or the "Rejected" response.
+    
+## Evaluation Criteria
+1. **Relevance**: How well does the response address the question?
+2. **Language**: Is the response in the same language as the question?
+3. **Preference**: Is the response more similar to the "Chosen" example than the "Rejected" example?
+
+## Question:
+{question}
+
+## Question Language:
+{LANG_MAP.get(language, 'Unknown')}
+
+## Chosen:
+{chosen}
+
+## Rejected:
+{rejected}
+"""
     return system_prompt
 
 
 def format_truthy_user_prompt(
-    system_prompt: str, user_input: str, think_tag: str
+    system_prompt: str, question: str, think_tag: str, language: str
 ) -> str:
     """Format the prompt for truth tasks.
 
     Args:
-        user_input: The original user input prompt
+        question: The original user input prompt
     Returns:
         Formatted prompt string for truth tasks
     """
@@ -230,7 +250,10 @@ def format_truthy_user_prompt(
 * **Final Answer:** The final response should be in the **same language** as the user input and must directly address the user's request.
 
 ## Context
+
 **System Prompt:** {system_prompt}
 
-**User Input:** {user_input}
+**User Input Language:** {LANG_MAP.get(language, 'Unknown')}
+
+**User Input:** {question}
 """

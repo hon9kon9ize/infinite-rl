@@ -585,60 +585,9 @@ class CurriculumLearning:
                     task_rewards.append(aux_reward)
                     aux_score_dict[name] = data
 
-        # Check format validity from rewards (already computed in get_aux_reward_scores)
-        # Both format_think and format_answer must be valid (score >= 1.0)
-        format_valid = True
-        if self.use_format:
-            # Check if format rewards exist and are valid
-            has_format_think = False
-            has_format_answer = False
+        is_correct = primary_score == 1.0
 
-            for reward in task_rewards:
-                if reward.reward_function_name == "format_think":
-                    if reward.score < 1.0:
-                        format_valid = False
-                    has_format_think = True
-                elif reward.reward_function_name == "format_answer":
-                    if reward.score < 1.0:
-                        format_valid = False
-                    has_format_answer = True
-
-            # For non-truthy tasks, both format rewards are required
-            if task.task_type != "truthy":
-                if not has_format_think or not has_format_answer:
-                    # If format rewards not computed, fall back to checking
-                    # This shouldn't happen if use_format=True
-                    format_valid = False
-
-        # Apply scoring logic
-        score = self._apply_leaky_gate(primary_score, format_valid)
-        is_correct = (
-            score == 1.0
-        )  # Only fully correct if both format and answer correct
-
-        return score, is_correct, task_rewards, aux_score_dict
-
-    def _apply_leaky_gate(self, primary_score: float, format_valid: bool) -> float:
-        """
-        Apply leaky gate scoring during warmup phase.
-
-        Returns:
-        - 1.0: Both format valid AND answer correct
-        - 0.1: Format valid but answer incorrect (partial credit for format)
-        - 0.0: Format invalid
-
-        Args:
-            primary_score: Task correctness score (1.0 or 0.0)
-            format_valid: Whether both think and answer tags are properly formatted
-
-        Returns:
-            Leaky gate score
-        """
-        if not format_valid:
-            return 0.0
-        if primary_score == 1.0:
-            return 1.0
-        return 0.1
+        return primary_score, is_correct, task_rewards, aux_score_dict
 
     def _check_format_validity(self, task: Task, generation: "Generation") -> tuple:
         """

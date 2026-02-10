@@ -2225,39 +2225,6 @@ class TestCurriculumLearning(unittest.TestCase):
                 task_rewards[0].score, 1.0, "Primary reward is task correctness"
             )
 
-    def test_compute_reward_standard_failure_format_invalid(self):
-        """Test _compute_reward_standard with invalid format."""
-        cl = CurriculumLearning(use_format=True)
-
-        task = Task(
-            task_id="math_test",
-            task_name="Math Test",
-            task_type="math",
-            level=1,
-            prompt="What is 2+2?",
-            expected_answer="4",
-        )
-        cl.session.add_task(task)
-        task.model_output = "<answer>4</answer>"  # Missing <think> tag
-
-        # Mock the task reward function (returns 1.0 even though format invalid)
-        with patch.object(
-            cl.reward_functions["math"], "compute_reward"
-        ) as mock_task_fn:
-            mock_result = MagicMock()
-            mock_result.score = 1.0
-            mock_result.info = "Correct"
-            mock_task_fn.return_value = mock_result
-
-            # Call the refactored method
-            score, is_correct, task_rewards, aux_score_dict = (
-                cl._compute_reward_standard(task)
-            )
-
-            # Verify failure path
-            self.assertEqual(score, 0.0, "Score should be 0.0 on format failure")
-            self.assertFalse(is_correct, "is_correct should be False")
-
     def test_compute_reward_standard_failure_incorrect_answer(self):
         """Test _compute_reward_standard with incorrect answer."""
         cl = CurriculumLearning(use_format=True, warmup_step=0)

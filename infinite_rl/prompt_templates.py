@@ -167,7 +167,7 @@ function sol(a, b) {{
         solution_template = f"""<{answer_tag}>
 ```python
 def sol(...):
-    pass
+    # your code here
 ```
 </{answer_tag}>"""
     else:  # javascript

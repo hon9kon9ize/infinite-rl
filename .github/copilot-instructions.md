@@ -29,7 +29,7 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 - Reward functions are designed to integrate with fine-tuning frameworks (e.g., Tunix).
 - **Math tasks**: `MathRewardFunction` expects the answer tag to contain a numeric value or symbolic expression that can be parsed and compared symbolically.
 - **Puzzle tasks**: `PuzzleRewardFunction` expects the answer tag to contain a code block (triple-backtick) with valid Python or JavaScript code. The code is executed against the puzzle's SAT (satisfaction) function to determine correctness.
-- **Truthy tasks**: Conversation-based quality evaluation where the **primary score IS the LLM Judge score** (not binary). System prompt + prompt + chosen/rejected are provided in conversation format. Requires `use_llm_judge=True` with `api_host`, `api_port`, and `model_name`.
+- **Truthy tasks**: Conversation-based quality evaluation where the **primary score IS the LLM Judge score** (not binary). System prompt + prompt + chosen/rejected are provided in conversation format. Requires `use_llm_judge=True` with `api_host`, `api_port`, and `model_name`. **lang_consistency** is only computed for truthy tasks (checks language consistency outside `<think>` tags).
 - **LLM Judge** serves two roles:
   1. **Primary evaluator for truthy tasks**: Rates quality on continuous scale (0.0-1.0)
   2. **Auxiliary evaluator for math/puzzle tasks**: Provides quality feedback independent of correctness gates
@@ -117,7 +117,7 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 - Strict output format: the parser looks for `<answer>` tags; changing parsing requires updating tests.
 - **Prompt generation**: Use `format_puzzle_prompt()` and `format_math_prompt()` from `infinite_rl.prompt_templates` to create prompts.
 - **Puzzle data access**: Use `get_puzzle_data()` and `get_available_puzzles()` from `infinite_rl.puzzles` to access puzzle metadata.
-- **Auxiliary reward functions**: Additional metrics like `FormatRewardFunction`, `LangConsistencyRewardFunction`, `ReasoningStepsRewardFunction`, and `LLMJudgeRewardFunction` are initialized via `CurriculumLearning._initialize_aux_reward_functions()` and blended with primary rewards.
+- **Auxiliary reward functions**: Additional metrics like `FormatRewardFunction`, `LangConsistencyRewardFunction` (only for truthy tasks), `ReasoningStepsRewardFunction`, and `LLMJudgeRewardFunction` are initialized via `CurriculumLearning._initialize_aux_reward_functions()` and blended with primary rewards.
 - When adding a new task type:
   - Add a reward function class under `infinite_rl/reward_functions/` and expose it in `get_reward_functions()` for primary tasks.
   - For auxiliary metrics, add to `_initialize_aux_reward_functions()` in curriculum.py and add configuration handling.

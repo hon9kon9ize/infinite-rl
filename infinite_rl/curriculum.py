@@ -76,7 +76,7 @@ class CurriculumLearning:
             success_rate_threshold: Required success rate for difficulty increase (default: 0.7 = 70%)
             variance_threshold: Maximum variance for success rate stability (default: 0.15)
             demote_threshold: Success rate threshold for difficulty decrease (default: 0.4 = 40%)
-            truthy_learning_rate: Probability of including truthy tasks in the curriculum (default: 0.2). Set to 0 to disable.
+            truthy_learning_rate: Probability of including truthy tasks in the curriculum (default: 0.1). Set to 0 to disable.
             level_change_cooldown: Minimum steps between level changes to prevent rapid fluctuations (default: 5)
             num_generations: Number of generations per prompt for GRPO batching (default: 4)
             puzzle_one_shot: Whether to include one-shot examples in puzzle prompts (default: False)
@@ -943,7 +943,7 @@ class CurriculumLearning:
         """
         Get a task prompt appropriate for current difficulty level.
 
-        With probability truthy_learning_rate (default 0.2), returns a truthy task for conversation quality evaluation.
+        With probability truthy_learning_rate (default 0.1), returns a truthy task for conversation quality evaluation.
         Otherwise, returns a new task based on current difficulty level.
 
         For GRPO batching: Each call creates a new task instance. The dataset ensures

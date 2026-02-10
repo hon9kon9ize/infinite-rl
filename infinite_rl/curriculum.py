@@ -611,25 +611,10 @@ class CurriculumLearning:
                     format_valid = False
 
         # Apply scoring logic
-        if self.global_step < self.warmup_step:
-            # During warmup, use leaky gate: partial credit for format even if wrong
-            score = self._apply_leaky_gate(primary_score, format_valid)
-            is_correct = (
-                score == 1.0
-            )  # Only fully correct if both format and answer correct
-        else:
-            # Normal scoring: strict correctness with format gate
-            if primary_score == 1.0:
-                score = primary_score
-            else:
-                score = 0.0
-
-            # Apply format gate: if format invalid, set score to 0.0
-            if not format_valid and score > 0.0:
-                score = 0.0
-
-            # Determine is_correct: True only if format valid AND primary score is 1.0
-            is_correct = primary_score == 1.0 and format_valid
+        score = self._apply_leaky_gate(primary_score, format_valid)
+        is_correct = (
+            score == 1.0
+        )  # Only fully correct if both format and answer correct
 
         return score, is_correct, task_rewards, aux_score_dict
 

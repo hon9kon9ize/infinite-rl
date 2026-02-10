@@ -170,7 +170,7 @@ Conversation-based quality evaluation using LLM Judge as the primary evaluator. 
 - LLM Judge (Skywork Reward Model) provides continuous quality score (0.0-1.0)
 - Conversation format: system prompt + user prompt + model response
 - Distributed across all difficulty levels (not rating-limited)
-- 20% weight in task selection during training
+- Configurable weight in task selection during training (default: 10%)
 - Multilingual support (yue, zh, en)
 - **Format gate on judge**: If response format is invalid (missing `<answer>` tag), judge reward is gated to zero
 
@@ -286,6 +286,7 @@ cl = CurriculumLearning(
     demote_threshold=0.4,        # Demote if success rate falls below 40%
     variance_threshold=0.05,     # Require low variance for consistency
     level_change_cooldown=5,     # Minimum steps between level changes
+    truthy_learning_rate=0.1,    # 10% chance of truthy tasks
 )
 ```
 
@@ -360,7 +361,7 @@ combined_score = primary_weight * primary_score + aux_weight * avg(auxiliary_sco
 
 Where:
 - `primary_score`: Task-specific correctness (binary for math/puzzle, continuous for truthy)
-- `auxiliary_scores`: Optional metrics like format validity, repetition penalty, reasoning steps bonus
+- `auxiliary_scores`: Optional metrics like format validity, repetition penalty, reasoning steps bonus, language consistency (truthy tasks only)
 - `judge_contribution`: Normalized LLM Judge score (0.0 when `llm_judge_weight=0.0`)
 
 **Configuration:**

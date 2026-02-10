@@ -14,6 +14,7 @@ Integrates:
 - Custom reward functions from Infinite-RL for task evaluation
 """
 
+# import unsloth
 import json
 import argparse
 from pathlib import Path
@@ -36,10 +37,11 @@ from infinite_rl.curriculum import CurriculumLearning
 from infinite_rl.dynamic_dataset import DynamicCurriculumDataset
 
 import functools
-from vllm import LLM
 
 
 # --- THE FIX ---
+from vllm import LLM
+
 original_init = LLM.__init__
 
 
@@ -114,6 +116,10 @@ class InfiniteRLConfig:
     llm_judge_host: str = "localhost"
     llm_judge_port: int = 8000
     llm_judge_model: str = "Skywork/Skywork-Reward-V2-Qwen3-4B"
+    llm_judge_weight: float = 0.1
+
+    # Puzzle configuration
+    puzzle_one_shot: bool = False
 
     # Output
     log_file: Optional[str] = "curriculum_learning_log.jsonl"
@@ -149,6 +155,7 @@ def create_curriculum(config: InfiniteRLConfig) -> CurriculumLearning:
         use_length=config.use_length,
         llm_judge_kwargs=llm_judge_kwargs,
         window_size=config.window_size,
+        llm_judge_weight=config.llm_judge_weight,
         success_rate_threshold=config.success_rate_threshold,
         variance_threshold=config.variance_threshold,
         demote_threshold=config.demote_threshold,
@@ -156,6 +163,7 @@ def create_curriculum(config: InfiniteRLConfig) -> CurriculumLearning:
         level_change_cooldown=config.level_change_cooldown,
         num_generations=config.num_generations,
         log_file=config.log_file,
+        puzzle_one_shot=config.puzzle_one_shot,
     )
     return curriculum
 
@@ -475,7 +483,7 @@ def setup_training_args(
         num_completions_to_print=0,
         model_init_kwargs={
             "torch_dtype": torch.bfloat16,
-            "attn_implementation": "flash_attention2",
+            "attn_implementation": "flash_attention_2",
         },
         **kwargs,
     )
@@ -644,6 +652,11 @@ def main():
         type=float,
         default=0.4,
         help="Success rate threshold for demoting difficulty (demote if success_rate < demote_threshold)",
+    )
+    parser.add_argument(
+        "--puzzle_one_shot",
+        action="store_true",
+        help="Include one-shot examples in puzzle prompts",
     )
     parser.add_argument(
         "--log_curriculum_steps",
@@ -859,6 +872,7 @@ def main():
         llm_judge_port=args.llm_judge_port,
         llm_judge_model=args.llm_judge_model,
         log_file=str(output_dir / "curriculum_learning_log.jsonl"),
+        puzzle_one_shot=args.puzzle_one_shot,
     )
     curriculum = create_curriculum(curriculum_config)
     print(f"   ✓ Curriculum initialized")
@@ -910,10 +924,10 @@ def main():
     print(f"   - Parameters: {sum(p.numel() for p in model.parameters()):,}")
     if args.load_in_4bit or args.load_in_8bit:
         print(f"   - Quantization: {'4-bit' if args.load_in_4bit else '8-bit'}")
-    print(f"   ✓ Tokenizer loaded with vocab size: {len(tokenizer)}")
+    # print(f"   ✓ Tokenizer loaded with vocab size: {len(tokenizer)}")
     print(f"   - Model config vocab_size: {model.config.vocab_size}")
 
-    # Verify vocab consistency
+    # # Verify vocab consistency
     if len(tokenizer) != model.config.vocab_size:
         print(f"\n   ⚠️  WARNING: Vocab size mismatch!")
         print(

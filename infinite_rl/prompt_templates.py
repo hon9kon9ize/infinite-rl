@@ -83,77 +83,103 @@ def format_puzzle_prompt(
     one_shot_example = ""
     if one_shot:
         if language == "python":
-            one_shot_example = """
-**Example Puzzle and Solution:**
+            one_shot_example = f"""
+Solve this programming puzzle:
 
 # Sum of Two Numbers
 
 Write a function that returns the sum of two integers.
 
-Condition:
+Write a function that satisfies the following condition:
+
 ```python
 def sat(result: int, a=5, b=3):
     return result == a + b
 ```
 
-Your solution should be:
+Your solution should be a python function with this signature:
+
 ```python
 def sol(a, b):
     pass
 ```
 
+First, show your reasoning and approach in <{think_tag}> tags (write naturally with proper spaces and punctuation):
+
 <think>
 To solve this puzzle, I need to write a function that takes two parameters a and b and returns their sum. The sat function checks if the result equals a + b, so my solution should simply return a + b.
 </think>
 
+Then provide your solution in <{answer_tag}> tags. IMPORTANT: Put ONLY the raw code (no markdown backticks) inside the answer tags:
+
 <answer>
-```python
 def sol(a, b):
     return a + b
-```
 </answer>
 
 ---
+
 """
         else:  # javascript
-            one_shot_example = """
-**Example Puzzle and Solution:**
+            one_shot_example = f"""
+Solve this programming puzzle:
 
 # Sum of Two Numbers
 
 Write a function that returns the sum of two integers.
 
-Condition:
+Write a function that satisfies the following condition:
+
 ```javascript
-function sat(result, a=5, b=3) {
+function sat(result, a=5, b=3) {{
     return result === a + b;
-}
+}}
 ```
 
-Your solution should be:
+Your solution should be a javascript function with this signature:
+
 ```javascript
-function sol(a, b) {
+function sol(a, b) {{
     // your code here
-}
+}}
 ```
+
+First, show your reasoning and approach in <{think_tag}> tags (write naturally with proper spaces and punctuation):
 
 <think>
 To solve this puzzle, I need to write a function that takes two parameters a and b and returns their sum. The sat function checks if the result equals a + b, so my solution should simply return a + b.
 </think>
 
+Then provide your solution in <{answer_tag}> tags. IMPORTANT: Put ONLY the raw code (no markdown backticks) inside the answer tags:
+
 <answer>
-```javascript
-function sol(a, b) {
+function sol(a, b) {{
     return a + b;
-}
-```
+}}
 </answer>
 
 ---
+
 """
 
-    prompt = f"""Solve this programming puzzle:
-{one_shot_example}
+    # Language-specific solution template
+    if language == "python":
+        solution_template = f"""<{answer_tag}>
+```python
+def sol(...):
+    pass
+```
+</{answer_tag}>"""
+    else:  # javascript
+        solution_template = f"""<{answer_tag}>
+```javascript
+function sol(...) {{
+  // your code here
+}}
+```
+</{answer_tag}>"""
+
+    prompt = f"""{one_shot_example}
 
 # {name}
 
@@ -183,13 +209,7 @@ Then provide your solution in <{answer_tag}> tags. IMPORTANT: Put ONLY the raw c
 [Your {language} function code here - no triple backticks]
 </{answer_tag}>
 
-<{answer_tag}>
-```{language}
-function sol(...) {{
-  // your code here
-}}
-```
-</{answer_tag}>"""
+{solution_template}"""
 
     return prompt
 

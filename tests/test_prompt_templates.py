@@ -88,8 +88,7 @@ class TestFormatPuzzlePrompt(unittest.TestCase):
         result = format_puzzle_prompt(self.puzzle_data, "python")
 
         # Check for required components
-        self.assertIn("Solve this programming puzzle", result)
-        self.assertIn("fibonacci", result)
+        self.assertIn("# fibonacci", result)
         self.assertIn("Return the nth Fibonacci number", result)
         self.assertIn("<think>", result)
         self.assertIn("<answer>", result)
@@ -177,7 +176,7 @@ class TestFormatPuzzlePrompt(unittest.TestCase):
         result = format_puzzle_prompt(self.puzzle_data, "python", one_shot=False)
 
         # Should NOT contain example section
-        self.assertNotIn("Example Puzzle and Solution", result)
+        self.assertNotIn("Solve this programming puzzle", result)
         self.assertNotIn("Sum of Two Numbers", result)
 
     def test_puzzle_one_shot_python(self):
@@ -185,24 +184,24 @@ class TestFormatPuzzlePrompt(unittest.TestCase):
         result = format_puzzle_prompt(self.puzzle_data, "python", one_shot=True)
 
         # Should contain example section
-        self.assertIn("Example Puzzle and Solution", result)
-        self.assertIn("Sum of Two Numbers", result)
+        self.assertIn("Solve this programming puzzle", result)
+        self.assertIn("# Sum of Two Numbers", result)
         self.assertIn("def sol(a, b):", result)
         self.assertIn("return a + b", result)
         # Should still contain the actual puzzle
-        self.assertIn("fibonacci", result)
+        self.assertIn("# fibonacci", result)
 
     def test_puzzle_one_shot_javascript(self):
         """Test puzzle prompt with JavaScript one-shot example."""
         result = format_puzzle_prompt(self.puzzle_data, "javascript", one_shot=True)
 
         # Should contain example section
-        self.assertIn("Example Puzzle and Solution", result)
-        self.assertIn("Sum of Two Numbers", result)
+        self.assertIn("Solve this programming puzzle", result)
+        self.assertIn("# Sum of Two Numbers", result)
         self.assertIn("function sol(a, b)", result)
         self.assertIn("return a + b", result)
         # Should still contain the actual puzzle
-        self.assertIn("fibonacci", result)
+        self.assertIn("# fibonacci", result)
 
     def test_puzzle_one_shot_default_false(self):
         """Test that one_shot parameter defaults to False."""

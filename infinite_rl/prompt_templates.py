@@ -110,11 +110,13 @@ First, show your reasoning and approach in <{think_tag}> tags (write naturally w
 To solve this puzzle, I need to write a function that takes two parameters a and b and returns their sum. The sat function checks if the result equals a + b, so my solution should simply return a + b.
 </think>
 
-Then provide your solution in <{answer_tag}> tags. IMPORTANT: Put ONLY the raw code (no markdown backticks) inside the answer tags:
+Then provide your solution in <{answer_tag}> tags:
 
 <answer>
+```python
 def sol(a, b):
     return a + b
+```
 </answer>
 
 ---
@@ -150,12 +152,14 @@ First, show your reasoning and approach in <{think_tag}> tags (write naturally w
 To solve this puzzle, I need to write a function that takes two parameters a and b and returns their sum. The sat function checks if the result equals a + b, so my solution should simply return a + b.
 </think>
 
-Then provide your solution in <{answer_tag}> tags. IMPORTANT: Put ONLY the raw code (no markdown backticks) inside the answer tags:
+Then provide your solution in <{answer_tag}> tags:
 
 <answer>
+```javascript
 function sol(a, b) {{
     return a + b;
 }}
+```
 </answer>
 
 ---
@@ -203,7 +207,7 @@ First, show your reasoning and approach in <{think_tag}> tags (write naturally w
 [Reasoning steps here, must be in English, with proper spacing]
 </{think_tag}>
 
-Then provide your solution in <{answer_tag}> tags. IMPORTANT: Put ONLY the raw code (no markdown backticks) inside the answer tags:
+Then provide your solution in <{answer_tag}> tags:
 
 {solution_template}"""
 

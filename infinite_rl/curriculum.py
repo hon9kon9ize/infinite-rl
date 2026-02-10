@@ -1132,6 +1132,9 @@ class CurriculumLearning:
             if is_truthy_task and aux_name == "format_answer":
                 # Skip format_answer for truthy tasks
                 continue
+            if not is_truthy_task and aux_name == "lang_consistency":
+                # Skip lang_consistency for non-truthy tasks (puzzle and math)
+                continue
             if aux_name == "llm_judge":
                 # Skip llm_judge as it's computed in batch via get_rewards()
                 continue

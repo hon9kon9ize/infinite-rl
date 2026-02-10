@@ -205,10 +205,6 @@ First, show your reasoning and approach in <{think_tag}> tags (write naturally w
 
 Then provide your solution in <{answer_tag}> tags. IMPORTANT: Put ONLY the raw code (no markdown backticks) inside the answer tags:
 
-<{answer_tag}>
-[Your {language} function code here - no triple backticks]
-</{answer_tag}>
-
 {solution_template}"""
 
     return prompt

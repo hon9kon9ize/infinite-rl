@@ -156,7 +156,7 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
         This test verifies that the fix doesn't break the positive case.
         """
         reward_fn = LangConsistencyRewardFunction(
-            task_name="lang_consistency_outside",
+            task_name="lang_consistency",
             tag_excluded=True,  # Check content outside <think> tags
             target_tag="think",
             target_language="yue",

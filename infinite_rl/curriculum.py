@@ -1135,17 +1135,15 @@ class CurriculumLearning:
             if aux_name == "llm_judge":
                 # Skip llm_judge as it's computed in batch via get_rewards()
                 continue
-            if is_truthy_task and aux_name == "lang_consistency":
-                # For truthy tasks, skip the default lang_consistency (inside think tags)
-                continue
             try:
-                # For truthy tasks, use lang_consistency with task.language
                 if is_truthy_task and aux_name == "lang_consistency":
+                    # For truthy tasks, use lang_consistency with task.language
                     aux_result = aux_fn.compute_reward(
                         task, is_correct=is_correct, target_language=task.language
                     )
                 else:
                     aux_result = aux_fn.compute_reward(task, is_correct=is_correct)
+                
                 aux_scores[aux_name] = {
                     "score": aux_result.score,
                     "info": aux_result.info,
@@ -1167,7 +1165,7 @@ class CurriculumLearning:
         LLM Judge score (for truthy) or added as auxiliary (for math/puzzle).
 
         Format gate applies to judge: if format is invalid, final reward is zero.
-        For truthy tasks, language consistency gate applies: if lang_consistency_outside < 1.0,
+        For truthy tasks, language consistency gate applies: if lang_consistency < 1.0,
         the LLM Judge score is set to 0.0.
 
         Modifies task.latest_generation.rewards in place to include LLM Judge results.
@@ -1221,7 +1219,7 @@ class CurriculumLearning:
 
                 if task.task_type == "truthy":
                     # For truthy: replace primary score with LLM Judge score
-                    # Apply language consistency gate: if lang_consistency_outside < 1.0, gate judge reward to 0.0
+                    # Apply language consistency gate: if lang_consistency < 1.0, gate judge reward to 0.0
                     for gen_idx, gen in enumerate(task.generations):
                         if gen_idx < len(judge_scores):
                             judge_score = judge_scores[gen_idx]

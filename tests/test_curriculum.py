@@ -2051,10 +2051,10 @@ class TestCurriculumLearning(unittest.TestCase):
             use_format=False,  # Disable format to avoid auxiliary reward blending
         )
 
-        # Skip test if lang_consistency_outside is not available (missing cantofilter dependency)
-        if "lang_consistency_outside" not in cl.aux_reward_functions:
+        # Skip test if lang_consistency is not available (missing cantofilter dependency)
+        if "lang_consistency" not in cl.aux_reward_functions:
             self.skipTest(
-                "lang_consistency_outside not available (missing cantofilter dependency)"
+                "lang_consistency not available (missing cantofilter dependency)"
             )
 
         # Set up mock tokenizer for LLM Judge
@@ -2071,9 +2071,9 @@ class TestCurriculumLearning(unittest.TestCase):
         )
         cl.session.add_task(task)
 
-        # Mock lang_consistency_outside to return 0.0 (language inconsistency)
+        # Mock lang_consistency to return 0.0 (language inconsistency)
         with patch.object(
-            cl.aux_reward_functions["lang_consistency_outside"], "compute_reward"
+            cl.aux_reward_functions["lang_consistency"], "compute_reward"
         ) as mock_lang_consistency:
             mock_lang_result = MagicMock()
             mock_lang_result.score = 0.0  # Language inconsistent outside <think> tags

@@ -238,8 +238,8 @@ def extract_python_puzzle_info(file_path, puzzle_name):
         ans_type = gen.ans_type
 
         # Generate sol header from arg_names
-        if gen.arg_names and len(gen.arg_names) > 1:
-            sol_args = ", ".join(gen.arg_names[1:])
+        if gen.arg_names:
+            sol_args = ", ".join(gen.arg_names)
             sol = f"def sol({sol_args}):"
         else:
             sol = "def sol():"

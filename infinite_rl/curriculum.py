@@ -1143,7 +1143,7 @@ class CurriculumLearning:
                     )
                 else:
                     aux_result = aux_fn.compute_reward(task, is_correct=is_correct)
-                
+
                 aux_scores[aux_name] = {
                     "score": aux_result.score,
                     "info": aux_result.info,

@@ -47,6 +47,13 @@ class LangConsistencyRewardFunction(RewardFunction):
         if not self.initialized:
             self.initialize()
 
+        # Skip language consistency check for non-truthy tasks (puzzle and math)
+        if task.task_type != "truthy":
+            return RewardFunctionScore(
+                score=0.0,
+                info=f"Language consistency not applicable for {task.task_type} tasks",
+            )
+
         # Get expected language from curriculum config (not task.language which may be programming language)
         # Allow overriding via kwargs for dynamic language checking
         expected_output = kwargs.get("target_language", self.target_language)

@@ -17,7 +17,7 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
         task = Task(
             task_id="test_1",
             task_name="test",
-            task_type="math",
+            task_type="truthy",
             level=1,
             prompt="Test",
             expected_answer="",
@@ -31,7 +31,7 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
         task = Task(
             task_id="test_2",
             task_name="test",
-            task_type="math",
+            task_type="truthy",
             level=1,
             prompt="Test",
             expected_answer="",
@@ -53,7 +53,7 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
         task = Task(
             task_id="test_3",
             task_name="test",
-            task_type="math",
+            task_type="truthy",
             level=1,
             prompt="Test",
             expected_answer="en",
@@ -77,7 +77,7 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
         task = Task(
             task_id="test_4",
             task_name="test",
-            task_type="math",
+            task_type="truthy",
             level=1,
             prompt="Test",
             expected_answer="",
@@ -98,7 +98,7 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
         task = Task(
             task_id="test_5",
             task_name="test",
-            task_type="math",
+            task_type="truthy",
             level=1,
             prompt="Test",
             expected_answer="",
@@ -119,7 +119,7 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
         task = Task(
             task_id="test_6",
             task_name="test",
-            task_type="math",
+            task_type="truthy",
             level=1,
             prompt="Test",
             expected_answer="",
@@ -180,3 +180,40 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
         # Cantonese text outside <think> should score 1.0
         self.assertEqual(score.score, 1.0)
         self.assertEqual(score.info, "")
+
+    def test_non_truthy_task_returns_zero(self):
+        """Test that lang_consistency returns 0.0 for non-truthy tasks (math, puzzle)."""
+        reward_fn = LangConsistencyRewardFunction(
+            task_name="lang_consistency", tag_excluded=True, target_language="yue"
+        )
+        reward_fn.initialize()
+
+        # Test with math task
+        task = Task(
+            task_id="math_test",
+            task_name="Math Test",
+            task_type="math",
+            level=0,
+            prompt="What is 2+2?",
+            expected_answer="4",
+            model_output="<think>Reasoning</think><answer>4</answer>",
+        )
+
+        score = reward_fn.compute_reward(task)
+        self.assertEqual(score.score, 0.0)
+        self.assertIn("not applicable for math tasks", score.info)
+
+        # Test with puzzle task
+        task_puzzle = Task(
+            task_id="puzzle_test",
+            task_name="Puzzle Test",
+            task_type="puzzle",
+            level=0,
+            prompt="Solve this puzzle",
+            expected_answer="solution",
+            model_output="<think>Thinking</think><answer>solution</answer>",
+        )
+
+        score_puzzle = reward_fn.compute_reward(task_puzzle)
+        self.assertEqual(score_puzzle.score, 0.0)
+        self.assertIn("not applicable for puzzle tasks", score_puzzle.info)

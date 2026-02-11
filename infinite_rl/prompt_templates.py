@@ -78,13 +78,20 @@ def format_puzzle_prompt(
     docstring = puzzle_data.get("docstring", "")
     sat_func = puzzle_data.get("sat", "")
     sol_func = puzzle_data.get("sol", "")
+    docstring = docstring.strip()  # Remove leading/trailing whitespace
+
+    # Remove leading/trailing triple quotes from docstring if present
+    if docstring.startswith('"""') and docstring.endswith('"""'):
+        docstring = docstring[3:-3].strip()
+
+    # Remove leading indents in docstring
+    docstring = "\n".join(line.lstrip() for line in docstring.splitlines())
 
     # One-shot example section
     one_shot_example = ""
     if one_shot:
         if language == "python":
-            one_shot_example = f"""
-Solve this programming puzzle:
+            one_shot_example = f"""Solve this programming puzzle:
 
 # Sum of Two Numbers
 
@@ -170,15 +177,15 @@ function sol(a, b) {{
     if language == "python":
         solution_template = f"""<{answer_tag}>
 ```python
-def sol(...):
-    # your code here
+{sol_func}
+    [Your code here]
 ```
 </{answer_tag}>"""
     else:  # javascript
         solution_template = f"""<{answer_tag}>
 ```javascript
-function sol(...) {{
-  // your code here
+{sol_func} {{
+    [Your code here]
 }}
 ```
 </{answer_tag}>"""
@@ -195,19 +202,13 @@ Write a function that satisfies the following condition:
 {sat_func}
 ```
 
-Your solution should be a {language} function with this signature:
-
-```{language}
-{sol_func}
-```
-
 First, show your reasoning and approach in <{think_tag}> tags (write naturally with proper spaces and punctuation):
 
 <{think_tag}>
 [Reasoning steps here, must be in English, with proper spacing]
 </{think_tag}>
 
-Then provide your solution in <{answer_tag}> tags:
+Then provide your solution in <{answer_tag}> tags, Your solution should be a {language} function with this signature:
 
 {solution_template}"""
 

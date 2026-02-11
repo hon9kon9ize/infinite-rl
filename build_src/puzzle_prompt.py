@@ -86,6 +86,54 @@ def _extract_balanced_value(text):
     return None
 
 
+def _extract_balanced_function(text, func_name):
+    """
+    Extract a balanced JavaScript function from text.
+
+    Finds 'static func_name' and extracts until the matching closing brace.
+    """
+    text = text.lstrip()
+    # Find the start
+    start_pattern = rf"static {re.escape(func_name)} \("
+    start_match = re.search(start_pattern, text)
+    if not start_match:
+        return None
+
+    start_idx = start_match.start()
+    # Now find the opening brace after the params
+    params_end = text.find("{", start_idx)
+    if params_end == -1:
+        return None
+
+    # Now balance from params_end
+    depth = 0
+    in_string = False
+    string_char = None
+    i = params_end
+
+    while i < len(text):
+        char = text[i]
+        # Handle string literals
+        if char in ('"', "'") and (i == 0 or text[i - 1] != "\\"):
+            if in_string and string_char == char:
+                in_string = False
+                string_char = None
+            elif not in_string:
+                in_string = True
+                string_char = char
+        elif in_string:
+            pass
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start_idx : i + 1].strip()
+        i += 1
+
+    return None
+
+
 def extract_js_puzzle_info(file_path, puzzle_name):
     """Extract puzzle information from a JavaScript generator file."""
     try:
@@ -128,10 +176,13 @@ def extract_js_puzzle_info(file_path, puzzle_name):
     docstring = docstring.replace(r"\n", "\n").replace(r"\t", "\t")
 
     # Extract sat function
-    sat_match = re.search(
-        r"static sat \([^}]*(?:\{[^}]*\}[^}]*)*\}", class_content, re.DOTALL
-    )
-    sat = sat_match.group(0).replace("static sat", "function sat") if sat_match else ""
+    sat = _extract_balanced_function(class_content, "sat")
+    sat = sat.replace("static sat", "function sat") if sat else ""
+    # Normalize tabs to 4 spaces
+    sat = sat.replace("\t", "    ")
+    # Remove one level of indentation (from being inside a class)
+    sat_lines = sat.split("\n")
+    sat = "\n".join(line[4:] if line.startswith("    ") else line for line in sat_lines)
 
     # Extract sol function header
     sol_match = re.search(r"static sol \([^)]*\)", class_content)
@@ -409,5 +460,18 @@ def generate_puzzle_assets(output_dir="assets"):
 
 
 if __name__ == "__main__":
-    # Generate puzzle assets
-    generate_puzzle_assets()
+    import sys
+
+    if len(sys.argv) > 1:
+        puzzle_name = sys.argv[1]
+        # Find and print the prompt for the puzzle
+        for file_path in js_generators_dir.glob("*.js"):
+            info = extract_js_puzzle_info(file_path, puzzle_name)
+            if info:
+                print("Docstring:", info["docstring"])
+                print("SAT:", info["sat"])
+                print("SOL:", info["sol"])
+                break
+    else:
+        # Generate puzzle assets
+        generate_puzzle_assets()

@@ -10,7 +10,7 @@ RUNTIME_FILES = ["puzzle_js.wasm"]
 PUZZLE_FILES = ["puzzles.json", "math.json", "truthy.json"]
 GITHUB_REPO = os.environ.get("RUNTIME_GITHUB_REPO", "hon9kon9ize/infinite-rl")
 # Use a known-good tag if the version-specific one fails
-FALLBACK_TAG = "runtimes-v0.1.24"
+FALLBACK_TAG = "runtimes-v0.1.25"
 
 
 def get_version():
@@ -18,7 +18,7 @@ def get_version():
         with open("VERSION.txt", "r") as f:
             return f.read().strip()
     except:
-        return "0.1.24"
+        return "0.1.25"
 
 
 PACKAGE_VERSION = get_version()

@@ -285,12 +285,35 @@ def extract_python_puzzle_info(file_path, puzzle_name):
         gen = cls()
 
         docstring = gen.docstring
+        if docstring:
+            docstring = docstring.strip(' "').strip("\n")
+            # Unindent if multiple lines
+            lines = docstring.split("\n")
+            if len(lines) > 1:
+                first_line_indent = len(lines[1]) - len(lines[1].lstrip())
+                docstring = "\n".join(
+                    (
+                        line[first_line_indent:]
+                        if line.startswith(" " * first_line_indent)
+                        else line
+                    )
+                    for line in lines
+                )
+
         sat_code = gen.sat_src
         ans_type = gen.ans_type
+        example = gen.get_example()
 
         # Generate sol header from arg_names
         if gen.arg_names:
-            sol_args = ", ".join(gen.arg_names)
+            # Update sol header with defaults from example if available
+            sol_parts = []
+            for name in gen.arg_names:
+                if name in example:
+                    sol_parts.append(f"{name}={repr(example[name])}")
+                else:
+                    sol_parts.append(name)
+            sol_args = ", ".join(sol_parts)
             sol = f"def sol({sol_args}):"
         else:
             sol = "def sol():"
@@ -300,6 +323,7 @@ def extract_python_puzzle_info(file_path, puzzle_name):
             "sat": sat_code,
             "sol": sol,
             "ans_type": ans_type,
+            "example": example,
         }
     except AttributeError:
         # Expected when puzzle doesn't exist in this module
@@ -449,6 +473,7 @@ def generate_puzzle_assets(output_dir="assets"):
                                 "sol": info["sol"],
                                 "ans_type": info["ans_type"],
                                 "rating": rating,
+                                "example": info.get("example", {}),
                             }
                             break
 
@@ -465,13 +490,30 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         puzzle_name = sys.argv[1]
         # Find and print the prompt for the puzzle
+        found = False
         for file_path in js_generators_dir.glob("*.js"):
             info = extract_js_puzzle_info(file_path, puzzle_name)
             if info:
+                print(f"--- JavaScript: {puzzle_name} ---")
                 print("Docstring:", info["docstring"])
                 print("SAT:", info["sat"])
                 print("SOL:", info["sol"])
+                print("Example:", info.get("example", {}))
+                found = True
                 break
+
+        if not found:
+            for file_path in python_generators_dir.glob("*.py"):
+                if file_path.name != "__init__.py":
+                    info = extract_python_puzzle_info(file_path, puzzle_name)
+                    if info:
+                        print(f"--- Python: {puzzle_name} ---")
+                        print("Docstring:", info["docstring"])
+                        print("SAT:", info["sat"])
+                        print("SOL:", info["sol"])
+                        print("Example:", info.get("example", {}))
+                        found = True
+                        break
     else:
         # Generate puzzle assets
         generate_puzzle_assets()

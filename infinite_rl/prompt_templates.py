@@ -58,7 +58,6 @@ def format_puzzle_prompt(
     language: str,
     answer_tag: str = "answer",
     think_tag: str = "think",
-    one_shot: bool = False,
 ) -> str:
     """Format a puzzle prompt for the model.
 
@@ -69,7 +68,6 @@ def format_puzzle_prompt(
         language: Programming language for the puzzle (javascript or python)
         answer_tag: XML tag name for wrapping the answer (default: "answer")
         think_tag: XML tag name for wrapping reasoning (default: "think")
-        one_shot: Whether to include a one-shot example (default: False)
 
     Returns:
         Formatted prompt string with puzzle specification and solution template
@@ -79,6 +77,7 @@ def format_puzzle_prompt(
     sat_func = puzzle_data.get("sat", "")
     sol_func = puzzle_data.get("sol", "")
     docstring = docstring.strip()  # Remove leading/trailing whitespace
+    example = puzzle_data.get("example", {})
 
     # Remove leading/trailing triple quotes from docstring if present
     if docstring.startswith('"""') and docstring.endswith('"""'):
@@ -86,92 +85,6 @@ def format_puzzle_prompt(
 
     # Remove leading indents in docstring
     docstring = "\n".join(line.lstrip() for line in docstring.splitlines())
-
-    # One-shot example section
-    one_shot_example = ""
-    if one_shot:
-        if language == "python":
-            one_shot_example = f"""Solve this programming puzzle:
-
-# Sum of Two Numbers
-
-Write a function that returns the sum of two integers.
-
-Write a function that satisfies the following condition:
-
-```python
-def sat(result: int, a=5, b=3):
-    return result == a + b
-```
-
-Your solution should be a python function with this signature:
-
-```python
-def sol(a, b):
-    pass
-```
-
-First, show your reasoning and approach in <{think_tag}> tags (write naturally with proper spaces and punctuation):
-
-<think>
-To solve this puzzle, I need to write a function that takes two parameters a and b and returns their sum. The sat function checks if the result equals a + b, so my solution should simply return a + b.
-</think>
-
-Then provide your solution in <{answer_tag}> tags:
-
-<answer>
-```python
-def sol(a, b):
-    return a + b
-```
-</answer>
-
----
-
-"""
-        else:  # javascript
-            one_shot_example = f"""
-Solve this programming puzzle:
-
-# Sum of Two Numbers
-
-Write a function that returns the sum of two integers.
-
-Write a function that satisfies the following condition:
-
-```javascript
-function sat(result, a=5, b=3) {{
-    return result === a + b;
-}}
-```
-
-Your solution should be a javascript function with this signature:
-
-```javascript
-function sol(a, b) {{
-    // your code here
-}}
-```
-
-First, show your reasoning and approach in <{think_tag}> tags (write naturally with proper spaces and punctuation):
-
-<think>
-To solve this puzzle, I need to write a function that takes two parameters a and b and returns their sum. The sat function checks if the result equals a + b, so my solution should simply return a + b.
-</think>
-
-Then provide your solution in <{answer_tag}> tags:
-
-<answer>
-```javascript
-function sol(a, b) {{
-    return a + b;
-}}
-```
-</answer>
-
----
-
-"""
 
     # Language-specific solution template
     if language == "python":
@@ -190,9 +103,7 @@ function sol(a, b) {{
 ```
 </{answer_tag}>"""
 
-    prompt = f"""{one_shot_example}
-
-# {name}
+    prompt = f"""# {name}
 
 {docstring}
 

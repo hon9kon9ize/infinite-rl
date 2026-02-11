@@ -23,11 +23,9 @@ class Session:
         self,
         answer_tag: str = "answer",
         think_tag: str = "think",
-        puzzle_one_shot: bool = False,
     ):
         self.answer_tag = answer_tag
         self.think_tag = think_tag
-        self.puzzle_one_shot = puzzle_one_shot
         self.task_instance_counter: int = 0
         self.tasks: Dict[str, Task] = {}
         self.task_history: List[str] = []  # task_ids in order of addition
@@ -325,7 +323,6 @@ class Session:
                 language,
                 self.answer_tag,
                 self.think_tag,
-                self.puzzle_one_shot,
             )
             puzzle_inputs = extract_puzzle_inputs(puzzle_data, language)
             expected_output = {

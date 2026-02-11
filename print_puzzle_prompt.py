@@ -37,22 +37,6 @@ def main():
     print(f"Description: {puzzle_data['docstring']}")
     print()
 
-    # Generate prompt with one-shot example
-    prompt = format_puzzle_prompt(puzzle_data, "javascript", one_shot=True)
-
-    print("Generated Prompt with One-Shot Example:")
-    print("=" * 50)
-    print(prompt)
-    print("=" * 50)
-
-    # Print statistics
-    word_count = len(prompt.split())
-    char_count = len(prompt)
-    print("\nPrompt Statistics:")
-    print(f"Characters: {char_count:,}")
-    print(f"Words: {word_count:,}")
-    print(".1f")
-
 
 if __name__ == "__main__":
     main()

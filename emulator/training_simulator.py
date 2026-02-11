@@ -109,7 +109,6 @@ class TrainingSimulator:
             "window_size": window_size,
             "aux_weight": aux_weight,
             "num_generations": num_generations,
-            "puzzle_one_shot": False,
             "use_llm_judge": use_llm_judge,
             "llm_judge_weight": llm_judge_weight,
             "log_file": log_file,

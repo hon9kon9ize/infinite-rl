@@ -118,9 +118,6 @@ class InfiniteRLConfig:
     llm_judge_model: str = "Skywork/Skywork-Reward-V2-Qwen3-4B"
     llm_judge_weight: float = 0.1
 
-    # Puzzle configuration
-    puzzle_one_shot: bool = False
-
     # Output
     log_file: Optional[str] = "curriculum_learning_log.jsonl"
 
@@ -163,7 +160,6 @@ def create_curriculum(config: InfiniteRLConfig) -> CurriculumLearning:
         level_change_cooldown=config.level_change_cooldown,
         num_generations=config.num_generations,
         log_file=config.log_file,
-        puzzle_one_shot=config.puzzle_one_shot,
     )
     return curriculum
 
@@ -654,11 +650,6 @@ def main():
         help="Success rate threshold for demoting difficulty (demote if success_rate < demote_threshold)",
     )
     parser.add_argument(
-        "--puzzle_one_shot",
-        action="store_true",
-        help="Include one-shot examples in puzzle prompts",
-    )
-    parser.add_argument(
         "--log_curriculum_steps",
         type=int,
         default=10,
@@ -872,7 +863,6 @@ def main():
         llm_judge_port=args.llm_judge_port,
         llm_judge_model=args.llm_judge_model,
         log_file=str(output_dir / "curriculum_learning_log.jsonl"),
-        puzzle_one_shot=args.puzzle_one_shot,
     )
     curriculum = create_curriculum(curriculum_config)
     print(f"   ✓ Curriculum initialized")

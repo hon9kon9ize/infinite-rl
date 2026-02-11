@@ -47,7 +47,6 @@ class CurriculumLearning:
         truthy_learning_rate: float = 0.1,
         level_change_cooldown: int = 5,
         num_generations: int = 4,
-        puzzle_one_shot: bool = False,
         warmup_step: int = 32,
     ):
         """
@@ -79,13 +78,11 @@ class CurriculumLearning:
             truthy_learning_rate: Probability of including truthy tasks in the curriculum (default: 0.1). Set to 0 to disable.
             level_change_cooldown: Minimum steps between level changes to prevent rapid fluctuations (default: 5)
             num_generations: Number of generations per prompt for GRPO batching (default: 4)
-            puzzle_one_shot: Whether to include one-shot examples in puzzle prompts (default: False)
             warmup_step: Number of initial steps using only level 0 tasks with leaky gate scoring (default: 32)
         """
         self.timeout = timeout
         self.answer_tag = answer_tag
         self.think_tag = think_tag
-        self.puzzle_one_shot = puzzle_one_shot
         self.aux_weight = aux_weight
         self.llm_judge_weight = llm_judge_weight
         self.reasoning_language = reasoning_language

@@ -100,7 +100,7 @@ class InfiniteRLConfig:
     num_generations: int = 4
 
     # Reward function parameters
-    timeout: int = 10
+    timeout: int = 40
     answer_tag: str = "answer"
     think_tag: str = "think"
 
@@ -160,6 +160,7 @@ def create_curriculum(config: InfiniteRLConfig) -> CurriculumLearning:
         level_change_cooldown=config.level_change_cooldown,
         num_generations=config.num_generations,
         log_file=config.log_file,
+        truthy_learning_rate=0,
     )
     return curriculum
 
@@ -460,9 +461,9 @@ def setup_training_args(
         max_prompt_length=max_prompt_length,
         gradient_accumulation_steps=gradient_accumulation_steps,
         warmup_steps=warmup_steps,
-        temperature=1.0,
+        temperature=0.9,
         top_p=0.9,
-        importance_sampling_level="sequence",  # GSPO
+        beta=0.04,
         repetition_penalty=1.0,  # CRITICAL: Must be 1.0 to match base policy logprobs
         # vLLM configuration
         use_vllm=True,
@@ -481,6 +482,11 @@ def setup_training_args(
             "torch_dtype": torch.bfloat16,
             "attn_implementation": "flash_attention_2",
         },
+        max_grad_norm=0.5,
+        # Below enables GSPO:
+        importance_sampling_level="sequence",
+        mask_truncated_completions=False,
+        vllm_importance_sampling_correction=True,
         **kwargs,
     )
 

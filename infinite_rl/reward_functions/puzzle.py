@@ -205,9 +205,12 @@ class PuzzleRewardFunction(RewardFunction):
 
             output = json.loads(stdout.strip())
             if "error" in output:
+                error_msg = output["error"]
+                if "stack" in output and output["stack"]:
+                    error_msg += f"\nStack trace:\n{output['stack']}"
                 return RewardFunctionScore(
                     score=0.0,
-                    info=f"Evaluation error: {output['error']}",
+                    info=f"Evaluation error: {error_msg}",
                 )
             is_correct = output.get("isCorrect", False)
             if is_correct:

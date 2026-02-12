@@ -149,7 +149,7 @@ class PuzzleRewardFunction(RewardFunction):
         code_content = match.group(1).strip()
 
         # Check if sol function is defined
-        sol_pattern = r"def sol\(|function sol\("
+        sol_pattern = r"def sol\s*\(|function sol\s*\("
         if not re.search(sol_pattern, code_content):
             return RewardFunctionScore(
                 score=0.0, info="Code must define a sol function"

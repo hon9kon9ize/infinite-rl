@@ -25,7 +25,7 @@ import torch
 import numpy as np
 import wandb
 from transformers import (
-    Gemma3ForCausalLM,
+    AutoModelForCausalLM,
     AutoTokenizer,
     TrainerCallback,
 )
@@ -403,7 +403,7 @@ class CurriculumLoggingCallback(TrainerCallback):
 
 
 def setup_training_args(
-    output_dir: str = "./grpo-gemma3-4b",
+    output_dir: str = "./grpo-qwen3-4b",
     learning_rate: float = 1e-5,
     num_train_epochs: int = 3,
     per_device_train_batch_size: int = 4,
@@ -499,7 +499,7 @@ def create_lora_config(
         LoraConfig instance
     """
     if target_modules is None:
-        # Default target modules for Gemma (all attention and MLP projections)
+        # Default target modules (all attention and MLP projections)
         target_modules = [
             "q_proj",
             "k_proj",
@@ -524,7 +524,7 @@ def create_lora_config(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Train Gemma-3-4B with GRPO + vLLM colocate mode + Infinite-RL curriculum. "
+        description="Train Qwen-3-4B with GRPO + vLLM colocate mode + Infinite-RL curriculum. "
         "NOTE: Requires vocabulary pre-expansion using train/model_expand.py"
     )
 
@@ -532,13 +532,13 @@ def main():
     parser.add_argument(
         "--model_name",
         type=str,
-        default="jed351/Gemma3-4B-ChatVector_SFT-from-IT_and_IT",
+        default="jed351/Qwen3-4B-ChatVector_SFT-from-IT_and_IT",
         help="Model name or path (should be pre-expanded with special tokens)",
     )
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="./grpo-gemma3-4b",
+        default="./grpo-qwen3-4b",
         help="Output directory for checkpoints",
     )
 
@@ -904,7 +904,7 @@ def main():
     # For quantization, use "auto" device_map for proper GPU placement
     device_map = None if not (args.load_in_4bit or args.load_in_8bit) else "auto"
 
-    model = Gemma3ForCausalLM.from_pretrained(
+    model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
         torch_dtype=torch.bfloat16,
         device_map=device_map,

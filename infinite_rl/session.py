@@ -24,10 +24,12 @@ class Session:
         answer_tag: str = "answer",
         think_tag: str = "think",
         reasoning_language: str = "en",
+        reasoning_template: bool = False,
     ):
         self.answer_tag = answer_tag
         self.think_tag = think_tag
         self.reasoning_language = reasoning_language
+        self.reasoning_template = reasoning_template
         self.task_instance_counter: int = 0
         self.tasks: Dict[str, Task] = {}
         self.task_history: List[str] = []  # task_ids in order of addition
@@ -282,6 +284,7 @@ class Session:
             prompt = format_math_prompt(
                 problem_statement, self.answer_tag, language, self.think_tag,
                 reasoning_language=self.reasoning_language,
+                reasoning_template=self.reasoning_template,
             )
             task_name = f"math_{hash(prompt)}"
             expected_output = math_data.get("response", "")
@@ -328,6 +331,7 @@ class Session:
                 self.answer_tag,
                 self.think_tag,
                 reasoning_language=self.reasoning_language,
+                reasoning_template=self.reasoning_template,
             )
             puzzle_inputs = extract_puzzle_inputs(puzzle_data, language)
             expected_output = {

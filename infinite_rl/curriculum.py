@@ -133,7 +133,10 @@ class CurriculumLearning:
         self.truthy_learning_rate = truthy_learning_rate
 
         # Session management
-        self.session = session or Session(reasoning_language=reasoning_language)
+        self.session = session or Session(
+            reasoning_language=reasoning_language,
+            reasoning_template=reasoning_template,
+        )
         self.log_file = Path(log_file) if log_file is not None else None
 
         # Track which tasks have been logged to prevent duplicate logging

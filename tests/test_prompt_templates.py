@@ -241,5 +241,87 @@ class TestPromptEdgeCases(unittest.TestCase):
         self.assertIn("multiple lines", result)
 
 
+class TestReasoningTemplateMathPrompt(unittest.TestCase):
+    """Test format_math_prompt with reasoning_template flag."""
+
+    def test_reasoning_template_omits_think_tag_instructions(self):
+        """When reasoning_template=True, prompt should not mention think tags."""
+        problem = "What is 2 + 2?"
+        result = format_math_prompt(problem, reasoning_template=True)
+
+        # Should NOT have think tag instructions
+        self.assertNotIn("<think>", result)
+        self.assertNotIn("</think>", result)
+        self.assertNotIn("Reasoning", result)
+
+        # Should still have answer tag
+        self.assertIn("<answer>", result)
+        self.assertIn("</answer>", result)
+        self.assertIn(problem, result)
+
+    def test_reasoning_template_default_includes_think_tag(self):
+        """Default (reasoning_template=False) should include think tag instructions."""
+        problem = "What is 2 + 2?"
+        result = format_math_prompt(problem)
+
+        self.assertIn("<think>", result)
+        self.assertIn("</think>", result)
+        self.assertIn("Reasoning", result)
+        self.assertIn("<answer>", result)
+
+    def test_reasoning_template_explicit_false(self):
+        """Explicit reasoning_template=False should include think tag instructions."""
+        problem = "What is 2 + 2?"
+        result = format_math_prompt(problem, reasoning_template=False)
+
+        self.assertIn("<think>", result)
+        self.assertIn("<answer>", result)
+
+
+class TestReasoningTemplatePuzzlePrompt(unittest.TestCase):
+    """Test format_puzzle_prompt with reasoning_template flag."""
+
+    def setUp(self):
+        self.puzzle_data = {
+            "name": "fibonacci",
+            "docstring": "Return the nth Fibonacci number.",
+            "sat": "def sat(n): pass",
+            "sol": "def fib(n): pass",
+        }
+
+    def test_reasoning_template_omits_think_tag_instructions(self):
+        """When reasoning_template=True, prompt should not mention think tags."""
+        result = format_puzzle_prompt(
+            self.puzzle_data, "python", reasoning_template=True
+        )
+
+        # Should NOT have think tag instructions
+        self.assertNotIn("<think>", result)
+        self.assertNotIn("</think>", result)
+        self.assertNotIn("reasoning and approach", result)
+
+        # Should still have answer tag and code block
+        self.assertIn("<answer>", result)
+        self.assertIn("```python", result)
+        self.assertIn("fibonacci", result)
+
+    def test_reasoning_template_default_includes_think_tag(self):
+        """Default (reasoning_template=False) should include think tag instructions."""
+        result = format_puzzle_prompt(self.puzzle_data, "python")
+
+        self.assertIn("<think>", result)
+        self.assertIn("<answer>", result)
+
+    def test_reasoning_template_with_javascript(self):
+        """reasoning_template=True should work with JavaScript too."""
+        result = format_puzzle_prompt(
+            self.puzzle_data, "javascript", reasoning_template=True
+        )
+
+        self.assertNotIn("<think>", result)
+        self.assertIn("<answer>", result)
+        self.assertIn("```javascript", result)
+
+
 if __name__ == "__main__":
     unittest.main()

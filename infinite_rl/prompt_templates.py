@@ -21,6 +21,7 @@ def format_math_prompt(
     language: Optional[str] = None,
     think_tag: str = "think",
     reasoning_language: Optional[str] = None,
+    reasoning_template: bool = False,
 ) -> str:
     """Format a math problem prompt with explicit answer tag format.
 
@@ -32,12 +33,29 @@ def format_math_prompt(
         language: Target language for the response (e.g., 'en', 'zh', 'es')
         think_tag: XML tag name for wrapping reasoning (default: "think")
         reasoning_language: Language for reasoning (e.g., 'en', 'yue', 'zh'). Defaults to 'en'.
+        reasoning_template: If True, omit think_tag reasoning instructions
+            (model already knows the reasoning format, e.g. Qwen3).
 
     Returns:
         Formatted prompt string with instructions for the model
     """
-    reasoning_lang_name = LANG_MAP.get(reasoning_language or "en", "English")
-    prompt = f"""Solve this math problem.
+    if reasoning_template:
+        # Reasoning models (e.g. Qwen3) already know to use think tags.
+        # Only ask for the answer in answer_tag.
+        prompt = f"""Solve this math problem.
+
+**Problem:**
+{problem_statement}
+
+**Instructions:**
+Wrap the final numeric value inside <{answer_tag}> tags.
+
+**Response Structure:**
+<{answer_tag}>[Final numeric result]</{answer_tag}>
+"""
+    else:
+        reasoning_lang_name = LANG_MAP.get(reasoning_language or "en", "English")
+        prompt = f"""Solve this math problem.
 
 **Problem:**
 {problem_statement}
@@ -62,6 +80,7 @@ def format_puzzle_prompt(
     answer_tag: str = "answer",
     think_tag: str = "think",
     reasoning_language: Optional[str] = None,
+    reasoning_template: bool = False,
 ) -> str:
     """Format a puzzle prompt for the model.
 
@@ -73,6 +92,8 @@ def format_puzzle_prompt(
         answer_tag: XML tag name for wrapping the answer (default: "answer")
         think_tag: XML tag name for wrapping reasoning (default: "think")
         reasoning_language: Language for reasoning (e.g., 'en', 'yue', 'zh'). Defaults to 'en'.
+        reasoning_template: If True, omit think_tag reasoning instructions
+            (model already knows the reasoning format, e.g. Qwen3).
 
     Returns:
         Formatted prompt string with puzzle specification and solution template
@@ -108,8 +129,25 @@ def format_puzzle_prompt(
 ```
 </{answer_tag}>"""
 
-    reasoning_lang_name = LANG_MAP.get(reasoning_language or "en", "English")
-    prompt = f"""# {name}
+    if reasoning_template:
+        # Reasoning models (e.g. Qwen3) already know to use think tags.
+        # Only ask for the answer in answer_tag.
+        prompt = f"""# {name}
+
+{docstring}
+
+Write a function that satisfies the following condition:
+
+```{language}
+{sat_func}
+```
+
+Provide your solution in <{answer_tag}> tags. Your solution should be a {language} function with this signature:
+
+{solution_template}"""
+    else:
+        reasoning_lang_name = LANG_MAP.get(reasoning_language or "en", "English")
+        prompt = f"""# {name}
 
 {docstring}
 

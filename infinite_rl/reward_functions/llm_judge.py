@@ -1,6 +1,7 @@
 """LLM-as-a-Judge reward function using remote scoring model."""
 
 import requests
+import time
 from typing import Optional, TYPE_CHECKING
 from .reward_function import RewardFunction, RewardFunctionScore
 
@@ -144,35 +145,72 @@ class LLMJudgeRewardFunction(RewardFunction):
     def _call_judge_api(self, formatted_texts: list) -> Optional[list]:
         """Call the judge API to get scores.
 
+        FIX #9: Added retry logic with exponential backoff and timeout
+        to handle transient network issues.
+
         Args:
             formatted_texts: List of formatted conversation strings
 
         Returns:
-            List of scores or None if API call fails
+            List of scores or None if API call fails after retries
         """
-        try:
-            payload = {
-                "model": self.model_name,
-                "text": formatted_texts,
-            }
-            response = requests.post(self.base_url, json=payload, timeout=self.timeout)
-            response.raise_for_status()
-            responses = response.json()
-            scores = []
+        # FIX #9: Retry logic with exponential backoff
+        max_retries = 3
+        base_delay = 2  # seconds
 
-            for resp in responses:
-                scores.append(resp["embedding"][0])
+        for attempt in range(max_retries):
+            try:
+                payload = {
+                    "model": self.model_name,
+                    "text": formatted_texts,
+                }
+                # Use a longer timeout for batch API calls (60 seconds)
+                response = requests.post(
+                    self.base_url, json=payload, timeout=60
+                )
+                response.raise_for_status()
+                responses = response.json()
+                scores = []
 
-            assert len(scores) == len(
-                formatted_texts
-            ), "Mismatch in number of scores returned"
+                for resp in responses:
+                    scores.append(resp["embedding"][0])
 
-            return scores
+                assert len(scores) == len(
+                    formatted_texts
+                ), "Mismatch in number of scores returned"
 
-        except requests.exceptions.RequestException as e:
-            return None
-        except (KeyError, IndexError, TypeError) as e:
-            return None
+                return scores
+
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                if attempt < max_retries - 1:
+                    # Exponential backoff: wait longer on each retry
+                    delay = base_delay * (2 ** attempt)
+                    print(
+                        f"Warning: LLM Judge API call failed (attempt {attempt + 1}/{max_retries}), "
+                        f"retrying in {delay}s... Error: {e}"
+                    )
+                    time.sleep(delay)
+                else:
+                    # Last attempt failed
+                    return None
+
+            except (KeyError, IndexError, TypeError) as e:
+                # Parse errors - don't retry
+                return None
+
+            except requests.exceptions.RequestException as e:
+                # Other network errors - try again
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    print(
+                        f"Warning: LLM Judge API call failed (attempt {attempt + 1}/{max_retries}), "
+                        f"retrying in {delay}s... Error: {e}"
+                    )
+                    time.sleep(delay)
+                else:
+                    return None
+
+        return None
 
     def _normalize_score(self, raw_score: float) -> float:
         """Normalize raw score to [0, 1] range.

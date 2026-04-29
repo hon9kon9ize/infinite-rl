@@ -63,6 +63,7 @@ class LengthRewardFunction(RewardFunction):
         task_name: str = "length",
         timeout: int = 5,
         max_len: int = 3584,
+        reasoning_template: bool = False,
         **kwargs,
     ):
         # Remove legacy arguments if present in kwargs to avoid issues
@@ -73,7 +74,7 @@ class LengthRewardFunction(RewardFunction):
         if "target_tag" not in kwargs:
             kwargs["target_tag"] = "think"
 
-        super().__init__(task_name, timeout=timeout, **kwargs)
+        super().__init__(task_name, timeout=timeout, reasoning_template=reasoning_template, **kwargs)
         self.max_len = max_len
 
     def initialize(self):
@@ -88,7 +89,7 @@ class LengthRewardFunction(RewardFunction):
         if not self.initialized:
             self.initialize()
 
-        thought_content = self.extract_tag(task.model_output or "")
+        thought_content = self.extract_think_content(task.model_output or "", tag=self.target_tag)
 
         if not thought_content:
             return RewardFunctionScore(

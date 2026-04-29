@@ -30,6 +30,7 @@ class RewardFunction:
         answer_tag: str = "answer",
         think_tag: str = "think",
         target_tag: str = None,
+        reasoning_template: bool = False,
     ):
         self.task_name = task_name
         self.timeout = timeout
@@ -38,6 +39,9 @@ class RewardFunction:
         self.answer_tag = answer_tag
         self.think_tag = think_tag
         self.target_tag = target_tag if target_tag is not None else answer_tag
+        # When True, model's chat template already injects <think>.
+        # Output omits the opening <think> tag (closing </think> is still present).
+        self.reasoning_template = reasoning_template
 
     def initialize(self):
         raise NotImplementedError("This method should be overridden by subclasses.")
@@ -63,6 +67,39 @@ class RewardFunction:
             tag=self.target_tag,
         ).strip()
         return content
+
+    def extract_think_content(self, model_output: str, tag: str = None) -> str:
+        """Extract reasoning (think) content from model output.
+
+        When `reasoning_template` is True, the opening <think> tag is omitted
+        by the chat template, so we extract everything before </think> instead.
+
+        Parameters
+        ----------
+        model_output:
+            Raw model response string.
+        tag:
+            Tag to use for extraction. Defaults to `self.think_tag`.
+
+        Returns
+        -------
+        Extracted think content as string (empty if not found).
+        """
+        target = tag if tag is not None else self.think_tag
+        if self.reasoning_template:
+            # Chat template injected </think> — content is everything before </think>
+            think_close = f"</{target}>"
+            close_index = model_output.find(think_close)
+            if close_index > 0:
+                return model_output[:close_index].strip()
+            return ""
+        else:
+            # Standard: extract between tags
+            content = extract_tag(
+                model_output,
+                tag=target,
+            ).strip()
+            return content
 
     def compute_reward(
         self,

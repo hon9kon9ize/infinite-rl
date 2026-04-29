@@ -52,10 +52,23 @@ class Task:
         return latest.primary_score if latest else 0.0
 
     def add_generation(
-        self, output: str, rewards: List[RewardFunctionScore], primary_score: float
+        self,
+        output: str,
+        rewards: List[RewardFunctionScore],
+        primary_score: float,
+        is_correct: bool = False,
     ) -> Generation:
-        """Add a generation to this task."""
-        gen = Generation(output=output, rewards=rewards, primary_score=primary_score)
+        """Add a generation to this task.
+
+        Args:
+            output: The model's response/output
+            rewards: List of RewardFunctionScore objects
+            primary_score: The primary score from the main reward function
+            is_correct: Whether this generation is correct (default: False)
+        """
+        gen = Generation(
+            output=output, rewards=rewards, primary_score=primary_score, is_correct=is_correct
+        )
         self.generations.append(gen)
         if self.first_response_at is None:
             self.first_response_at = datetime.datetime.now()

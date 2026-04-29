@@ -20,3 +20,4 @@ htmlcov/
 coverage.xml
 *.jsonl
 train
+*.egg-info

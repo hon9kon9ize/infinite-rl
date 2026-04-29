@@ -23,6 +23,7 @@ class FormatRewardFunction(RewardFunction):
         answer_tag: str = "answer",
         think_tag: str = "think",
         target_tag: str = None,
+        reasoning_template: bool = False,
     ):
         super().__init__(
             task_name,
@@ -30,6 +31,7 @@ class FormatRewardFunction(RewardFunction):
             answer_tag=answer_tag,
             think_tag=think_tag,
             target_tag=target_tag,
+            reasoning_template=reasoning_template,
         )
 
     def initialize(self):
@@ -48,6 +50,41 @@ class FormatRewardFunction(RewardFunction):
         tag_end = f"</{self.target_tag}>"
 
         import re
+
+        # When reasoning_template=True and target is think tag,
+        # the opening </think> tag is omitted by the chat template.
+        # We check for </think> closing tag and content before it.
+        if self.reasoning_template and self.target_tag == self.think_tag:
+            think_close = f"</{self.think_tag}>"
+            close_count = task.model_output.count(think_close)
+            if close_count > 1:
+                return RewardFunctionScore(
+                    score=0.0,
+                    info=f"Multiple </{self.think_tag}> tags found.",
+                )
+            if close_count == 0:
+                return RewardFunctionScore(
+                    score=0.0,
+                    info=f"No </{self.think_tag}> closing tag found.",
+                )
+            # Content is everything before </think>
+            close_index = task.model_output.find(think_close)
+            raw_content = task.model_output[:close_index].strip()
+            # Check there's actual reasoning content
+            if not raw_content:
+                return RewardFunctionScore(
+                    score=0.0,
+                    info=f"Empty reasoning content before </{self.think_tag}>.",
+                )
+            # Check for nested answer tag inside reasoning content
+            answer_open = f"<{self.answer_tag}>"
+            answer_close = f"</{self.answer_tag}>"
+            if answer_open in raw_content or answer_close in raw_content:
+                return RewardFunctionScore(
+                    score=0.0,
+                    info=f"<{self.answer_tag}> tag found inside reasoning section. Tags cannot be nested.",
+                )
+            return RewardFunctionScore(score=1.0, info=f"Valid {self.target_tag} format (reasoning template).")
 
         # Note: Do NOT use re.escape() on tag_start/end since they are literal tags, not regex patterns
         pattern = f"{tag_start}(.*?){tag_end}"
@@ -86,10 +123,21 @@ class FormatRewardFunction(RewardFunction):
             # Answer tag can have think tag before it, but check for other content
             # Remove the think tag section if present
             if content_before_tag:
-                think_tag_pattern = f"<{self.think_tag}>.*?</{self.think_tag}>"
-                content_without_think = re.sub(
-                    think_tag_pattern, "", content_before_tag, flags=re.DOTALL
-                ).strip()
+                if self.reasoning_template:
+                    # With reasoning template, the "think section" is everything up to and
+                    # including </think> (which marks the end of auto-injected reasoning)
+                    think_close = f"</{self.think_tag}>"
+                    close_idx = content_before_tag.find(think_close)
+                    if close_idx >= 0:
+                        # Everything up to </think> is the reasoning section; ignore it
+                        content_without_think = content_before_tag[close_idx + len(think_close):].strip()
+                    else:
+                        content_without_think = content_before_tag.strip()
+                else:
+                    think_tag_pattern = f"<{self.think_tag}>.*?</{self.think_tag}>"
+                    content_without_think = re.sub(
+                        think_tag_pattern, "", content_before_tag, flags=re.DOTALL
+                    ).strip()
                 if content_without_think:
                     return RewardFunctionScore(
                         score=0.0,

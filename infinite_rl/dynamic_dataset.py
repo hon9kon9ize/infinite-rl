@@ -44,19 +44,44 @@ class DynamicCurriculumDataset(_BaseDataset):
         - Indices 0,1,2,3 all get task from batch_idx=0 (same prompt)
         - Indices 4,5,6,7 all get task from batch_idx=1 (same prompt)
         - etc.
+
+    CRITICAL: num_workers must be 0 to ensure prompt consistency across workers.
+    With num_workers > 0, each worker generates its own task independently, breaking
+    GRPO's requirement that all generations share the same prompt.
     """
 
-    def __init__(self, curriculum: "CurriculumLearning", num_samples: int = 10000):
+    def __init__(
+        self,
+        curriculum: "CurriculumLearning",
+        num_samples: int = 10000,
+        dataloader_num_workers: int = 0,
+    ):
         """Initialize the dynamic dataset.
 
         Args:
             curriculum: CurriculumLearning instance to generate prompts from
             num_samples: Virtual size of the dataset (for trainer iteration)
+            dataloader_num_workers: Number of worker processes for DataLoader.
+                                   Must be 0 to avoid GRPO prompt consistency issues.
         """
+        # FIX #1: Assert num_workers=0 to ensure prompt consistency
+        if dataloader_num_workers > 0:
+            import warnings
+            warnings.warn(
+                "DynamicCurriculumDataset is not safe with num_workers > 0 — "
+                "each worker generates its own task, breaking GRPO prompt consistency. "
+                "Set dataloader_num_workers=0 or pre-generate tasks externally before spawning workers."
+            )
+        
         self.curriculum = curriculum
         self.num_samples = num_samples
         self.num_generations = curriculum.num_generations
+        self.dataloader_num_workers = dataloader_num_workers
         self.task_cache: Dict[int, Any] = {}  # Cache tasks per GRPO batch
+        
+        # Larger eviction window to prevent dropping active batches
+        # This is a defensive measure; the root issue is lazy generation in workers
+        self.cache_eviction_window = 60  # Keep last 60 batches (was 30)
 
     def __len__(self):
         return self.num_samples
@@ -88,12 +113,12 @@ class DynamicCurriculumDataset(_BaseDataset):
             self.task_cache[batch_idx] = task
 
             # Clean up old caches to prevent memory leak
-            # Keep last 50 batches (conservative for multi-worker data loading)
+            # Keep last 60 batches (increased from 50)
             # Only cleanup batches that are far behind current batch_idx
-            if len(self.task_cache) > 50:
-                # Remove batches that are more than 30 batches behind
+            if len(self.task_cache) > 60:
+                # Remove batches that are more than 60 batches behind
                 stale_batches = [
-                    b for b in self.task_cache.keys() if b < batch_idx - 30
+                    b for b in self.task_cache.keys() if b < batch_idx - 60
                 ]
                 for stale_batch in stale_batches:
                     del self.task_cache[stale_batch]

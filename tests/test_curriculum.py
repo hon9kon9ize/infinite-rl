@@ -149,18 +149,19 @@ class TestTask(unittest.TestCase):
         self.assertEqual(len(self.task.generations), 0)
         self.assertIsNone(self.task.latest_generation)
 
-        # Add first generation
+        # Add first generation with is_correct=True explicitly
         reward1 = RewardFunctionScore(0.8, "primary", "good answer")
-        gen1 = self.task.add_generation("output1", [reward1], 0.8)
+        gen1 = self.task.add_generation("output1", [reward1], 0.8, is_correct=True)
 
         self.assertEqual(len(self.task.generations), 1)
         self.assertEqual(self.task.generations[0].output, "output1")
         self.assertEqual(self.task.generations[0].primary_score, 0.8)
+        self.assertTrue(self.task.generations[0].is_correct)
         self.assertEqual(self.task.latest_generation, gen1)
 
-        # Add second generation
+        # Add second generation with is_correct=True explicitly
         reward2 = RewardFunctionScore(0.6, "primary", "okay answer")
-        gen2 = self.task.add_generation("output2", [reward2], 0.6)
+        gen2 = self.task.add_generation("output2", [reward2], 0.6, is_correct=True)
 
         self.assertEqual(len(self.task.generations), 2)
         self.assertEqual(self.task.generations[1].output, "output2")
@@ -170,7 +171,9 @@ class TestTask(unittest.TestCase):
         self.assertEqual(self.task.latest_generation.output, "output2")
         self.assertEqual(len(self.task.latest_generation.rewards), 1)
         self.assertEqual(self.task.latest_generation.rewards[0].score, 0.6)
-        self.assertEqual(self.task.latest_generation.is_correct, True)  # 0.6 >= 0.5
+        self.assertTrue(
+            self.task.latest_generation.is_correct
+        )  # is_correct=True explicitly set
 
         # Test to_dict includes generations
         task_dict = self.task.to_dict()
@@ -304,9 +307,15 @@ class TestSession(unittest.TestCase):
             RewardFunctionScore(score=1.0, reward_function_name="primary", info="")
         ]
 
-        task.add_generation("First attempt", rewards1, 0.5)
-        task.add_generation("Second attempt", rewards2, 0.8)
-        task.add_generation("Third attempt", rewards3, 1.0)
+        task.add_generation(
+            "First attempt", rewards1, 0.5, is_correct=True
+        )  # 0.5 >= 0.5
+        task.add_generation(
+            "Second attempt", rewards2, 0.8, is_correct=True
+        )  # 0.8 >= 0.5
+        task.add_generation(
+            "Third attempt", rewards3, 1.0, is_correct=True
+        )  # 1.0 >= 0.5
 
         self.session.add_task(task)
 
@@ -347,16 +356,19 @@ class TestSession(unittest.TestCase):
             "Bad",
             [RewardFunctionScore(score=0.2, reward_function_name="primary", info="")],
             0.2,
+            is_correct=False,  # 0.2 < 0.5
         )
         task.add_generation(
             "Good",
             [RewardFunctionScore(score=0.9, reward_function_name="primary", info="")],
             0.9,
+            is_correct=True,  # 0.9 >= 0.5
         )
         task.add_generation(
             "Perfect",
             [RewardFunctionScore(score=1.0, reward_function_name="primary", info="")],
             1.0,
+            is_correct=True,  # 1.0 >= 0.5
         )
 
         self.session.add_task(task)
@@ -408,6 +420,7 @@ class TestSession(unittest.TestCase):
             "Only attempt",
             [RewardFunctionScore(score=0.7, reward_function_name="primary", info="")],
             0.7,
+            is_correct=True,  # 0.7 >= 0.5
         )
         self.session.add_task(task)
 
@@ -542,6 +555,25 @@ class TestSession(unittest.TestCase):
         puzzle_task = session.create_puzzle_task(puzzle_data)
         self.assertEqual(session.task_instance_counter, initial_counter + 2)
         self.assertIn(str(initial_counter + 1), puzzle_task.task_id)
+
+    def test_add_generation_default_is_correct_false(self):
+        """Test that add_generation defaults is_correct to False when not specified."""
+        task = Task(
+            task_id="test_task",
+            task_name="Test Task",
+            task_type="math",
+            level=1,
+            prompt="Test",
+            expected_answer="4",
+        )
+
+        # Add a generation without specifying is_correct
+        reward = RewardFunctionScore(score=1.0, reward_function_name="primary", info="")
+        task.add_generation("Response", [reward], 1.0)
+
+        # is_correct should default to False
+        self.assertFalse(task.generations[0].is_correct)
+        self.assertEqual(task.generations[0].is_correct, False)
 
     def test_get_recent_task_ids(self):
         """Test getting recent task base IDs."""

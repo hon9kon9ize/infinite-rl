@@ -23,9 +23,11 @@ class Session:
         self,
         answer_tag: str = "answer",
         think_tag: str = "think",
+        reasoning_language: str = "en",
     ):
         self.answer_tag = answer_tag
         self.think_tag = think_tag
+        self.reasoning_language = reasoning_language
         self.task_instance_counter: int = 0
         self.tasks: Dict[str, Task] = {}
         self.task_history: List[str] = []  # task_ids in order of addition
@@ -225,7 +227,8 @@ class Session:
                 raise ValueError("Missing required fields: prompt, chosen, or rejected")
 
             user_prompt = format_truthy_user_prompt(
-                system_prompt, user_prompt, self.think_tag, language
+                system_prompt, user_prompt, self.think_tag, language,
+                reasoning_language=self.reasoning_language,
             )
 
             # Format the prompt with chosen and rejected options
@@ -247,7 +250,7 @@ class Session:
                 prompt=user_prompt,
                 judge_system_prompt=judge_system_prompt,
                 expected_answer=expected_answer,
-                reasoning_language=truthy_data.get("reasoning_language", "en"),
+                reasoning_language=self.reasoning_language,
                 language=truthy_data.get("lang", "en"),
                 dataset_id=base_task_id,
             )
@@ -277,7 +280,8 @@ class Session:
             problem_statement = math_data.get("prompt", "")
             language = math_data.get("lang", "en")
             prompt = format_math_prompt(
-                problem_statement, self.answer_tag, language, self.think_tag
+                problem_statement, self.answer_tag, language, self.think_tag,
+                reasoning_language=self.reasoning_language,
             )
             task_name = f"math_{hash(prompt)}"
             expected_output = math_data.get("response", "")
@@ -290,7 +294,7 @@ class Session:
                 prompt=prompt,
                 expected_answer=expected_output,
                 language=language,
-                reasoning_language="en",  # Math reasoning must be in English
+                reasoning_language=self.reasoning_language,
                 dataset_id=base_task_id,
             )
             self.add_task(task_obj)
@@ -323,6 +327,7 @@ class Session:
                 language,
                 self.answer_tag,
                 self.think_tag,
+                reasoning_language=self.reasoning_language,
             )
             puzzle_inputs = extract_puzzle_inputs(puzzle_data, language)
             expected_output = {

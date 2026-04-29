@@ -35,27 +35,7 @@ from peft import LoraConfig, get_peft_model, TaskType
 # Import infinite-rl components
 from infinite_rl.curriculum import CurriculumLearning
 from infinite_rl.dynamic_dataset import DynamicCurriculumDataset
-
 import functools
-
-
-# --- THE FIX ---
-from vllm import LLM
-
-original_init = LLM.__init__
-
-
-@functools.wraps(original_init)
-def patched_init(self, *args, **kwargs):
-    # Disable the code path that tries to 'profile' multimodal inputs
-    kwargs["skip_mm_profiling"] = True
-    # Optional: ensure it stays in eager mode for better memory control
-    kwargs["enforce_eager"] = True
-    return original_init(self, *args, **kwargs)
-
-
-LLM.__init__ = patched_init
-# ----------------
 
 
 def make_json_serializable(obj):
@@ -103,6 +83,8 @@ class InfiniteRLConfig:
     timeout: int = 40
     answer_tag: str = "answer"
     think_tag: str = "think"
+    reasoning_language: str = "en"
+    reasoning_template: bool = False
 
     # Auxiliary rewards
     use_format: bool = True
@@ -144,6 +126,8 @@ def create_curriculum(config: InfiniteRLConfig) -> CurriculumLearning:
         timeout=config.timeout,
         answer_tag=config.answer_tag,
         think_tag=config.think_tag,
+        reasoning_language=config.reasoning_language,
+        reasoning_template=config.reasoning_template,
         aux_weight=config.aux_weight,
         use_format=config.use_format,
         use_reasoning_steps=config.use_reasoning_steps,
@@ -458,7 +442,7 @@ def setup_training_args(
         per_device_train_batch_size=per_device_train_batch_size,
         num_generations=num_generations,
         max_completion_length=max_completion_length,
-        max_prompt_length=max_prompt_length,
+        # max_prompt_length=max_prompt_length, # TRL GRPOConfig not supports max_prompt_length
         gradient_accumulation_steps=gradient_accumulation_steps,
         warmup_steps=warmup_steps,
         temperature=0.9,
@@ -654,6 +638,19 @@ def main():
         type=float,
         default=0.4,
         help="Success rate threshold for demoting difficulty (demote if success_rate < demote_threshold)",
+    )
+    parser.add_argument(
+        "--reasoning_language",
+        type=str,
+        default="en",
+        choices=["en", "yue", "zh"],
+        help="Language for reasoning (CoT) in <think> tags (default: en). Options: en=English, yue=Cantonese, zh=Mandarin",
+    )
+    parser.add_argument(
+        "--reasoning_template",
+        action="store_true",
+        help="Model uses a reasoning chat template that injects <think> automatically. "
+        "When enabled, skip checking for the opening <think> tag (closing </think> is still required).",
     )
     parser.add_argument(
         "--log_curriculum_steps",
@@ -864,6 +861,8 @@ def main():
         variance_threshold=args.variance_threshold,
         demote_threshold=args.demote_threshold,
         num_generations=args.num_generations,
+        reasoning_language=args.reasoning_language,
+        reasoning_template=args.reasoning_template,
         use_llm_judge=args.use_llm_judge,
         llm_judge_host=args.llm_judge_host,
         llm_judge_port=args.llm_judge_port,

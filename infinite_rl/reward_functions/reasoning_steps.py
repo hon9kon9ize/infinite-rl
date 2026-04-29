@@ -23,9 +23,10 @@ class ReasoningStepsRewardFunction(RewardFunction):
         task_name: str = "reasoning_steps",
         timeout: int = 5,
         target_tag: str = "think",
+        reasoning_template: bool = False,
         **kwargs,
     ):
-        super().__init__(task_name, timeout=timeout, target_tag=target_tag, **kwargs)
+        super().__init__(task_name, timeout=timeout, target_tag=target_tag, reasoning_template=reasoning_template, **kwargs)
 
     def initialize(self):
         self.initialized = True
@@ -42,8 +43,8 @@ class ReasoningStepsRewardFunction(RewardFunction):
         if not task.model_output:
             return RewardFunctionScore(score=0.0)
 
-        # Extract think content using the think_tag
-        think_content = self.extract_tag(task.model_output)
+        # Extract think content (handles reasoning_template mode)
+        think_content = self.extract_think_content(task.model_output)
         if think_content:
             thinking_content = think_content.lower()
         else:

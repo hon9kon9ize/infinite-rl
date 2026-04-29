@@ -18,12 +18,8 @@ class Generation:
     rewards: List[RewardFunctionScore]
     primary_score: float
     combined_score: float = None
+    is_correct: bool = False  # FIX #7: Explicit field instead of computed property
     created_at: datetime.datetime = field(default_factory=datetime.datetime.now)
-
-    @property
-    def is_correct(self) -> bool:
-        """Whether this generation is considered correct."""
-        return self.primary_score >= 0.5
 
     def to_dict(self) -> dict:
         """Convert to dict for logging."""

@@ -34,6 +34,7 @@ class CurriculumLearning:
         use_length: bool = False,
         use_llm_judge: bool = False,
         reasoning_language: str = "en",
+        reasoning_template: bool = False,
         lang_consistency_kwargs: Optional[Dict[str, Any]] = None,
         format_kwargs: Optional[Dict[str, Any]] = None,
         reasoning_steps_kwargs: Optional[Dict[str, Any]] = None,
@@ -86,6 +87,7 @@ class CurriculumLearning:
         self.aux_weight = aux_weight
         self.llm_judge_weight = llm_judge_weight
         self.reasoning_language = reasoning_language
+        self.reasoning_template = reasoning_template
         self.reward_functions = get_reward_functions(
             timeout=timeout, answer_tag=answer_tag, think_tag=think_tag
         )
@@ -131,7 +133,7 @@ class CurriculumLearning:
         self.truthy_learning_rate = truthy_learning_rate
 
         # Session management
-        self.session = session or Session()
+        self.session = session or Session(reasoning_language=reasoning_language)
         self.log_file = Path(log_file) if log_file is not None else None
 
         # Track which tasks have been logged to prevent duplicate logging
@@ -191,6 +193,7 @@ class CurriculumLearning:
                     answer_tag=self.answer_tag,
                     think_tag=self.think_tag,
                     target_tag=self.think_tag,
+                    reasoning_template=self.reasoning_template,
                 )
 
                 self.aux_reward_functions["format_answer"] = FormatRewardFunction(
@@ -199,6 +202,7 @@ class CurriculumLearning:
                     answer_tag=self.answer_tag,
                     think_tag=self.think_tag,
                     target_tag=self.answer_tag,
+                    reasoning_template=self.reasoning_template,
                 )
             except Exception as e:
                 print(f"Warning: Could not initialize FormatRewardFunction: {e}")
@@ -216,6 +220,7 @@ class CurriculumLearning:
                         timeout=self.timeout,
                         answer_tag=self.answer_tag,
                         think_tag=self.think_tag,
+                        reasoning_template=self.reasoning_template,
                         **self.reasoning_steps_kwargs,
                     )
                 )
@@ -233,6 +238,7 @@ class CurriculumLearning:
                     timeout=self.timeout,
                     answer_tag=self.answer_tag,
                     think_tag=self.think_tag,
+                    reasoning_template=self.reasoning_template,
                     **self.length_kwargs,
                 )
             except Exception as e:
@@ -320,7 +326,7 @@ class CurriculumLearning:
 
         # Accumulate generation and save rewards (cap at num_generations for safety)
         if len(task.generations) < self.num_generations:
-            task.add_generation(model_output, task_rewards, score)
+            task.add_generation(model_output, task_rewards, score, is_correct)
         else:
             print(
                 f"Warning: Task {task_id} already has {len(task.generations)} generations, not adding more (num_generations={self.num_generations})"
@@ -333,7 +339,9 @@ class CurriculumLearning:
         combined_score = score  # Default to primary score for incomplete batches
         if len(task.generations) >= self.num_generations:
             scores = self._finalize_batch([task_id])
-            combined_score = scores[0] if scores else score
+            # FIX #2: Track generation index and return corresponding score
+            gen_index = len(task.generations) - 1  # index of the generation just added
+            combined_score = scores[gen_index] if scores and gen_index < len(scores) else score
 
         # Set task correctness
         task.is_correct = is_correct
@@ -377,7 +385,7 @@ class CurriculumLearning:
 
             # Accumulate generation without finalization
             if len(task.generations) < self.num_generations:
-                task.add_generation(completion, task_rewards, score)
+                task.add_generation(completion, task_rewards, score, is_correct)
             else:
                 print(
                     f"Warning: Task {task_id} already has {len(task.generations)} generations, not adding more (num_generations={self.num_generations})"
@@ -410,7 +418,10 @@ class CurriculumLearning:
                     scores.append(gen.primary_score)
                 continue
 
-            if task_id in self.logged_tasks:
+            # FIX #6: Key by (task_id, generation_count) instead of just task_id
+            # This prevents using stale rewards from previous batches
+            finalization_key = (task_id, len(task.generations))
+            if finalization_key in self.logged_tasks:
                 # Already finalized
                 for gen in task.generations:
                     scores.append(
@@ -420,7 +431,7 @@ class CurriculumLearning:
                     )
                 continue
 
-            self.logged_tasks.add(task_id)
+            self.logged_tasks.add(finalization_key)
 
             # Step 1: Compute batch LLM Judge (updates generation rewards in place)
             self._compute_batch_llm_judge([task_id])
@@ -1239,31 +1250,9 @@ class CurriculumLearning:
             ]:
                 aux_scores[reward.reward_function_name] = reward.score
 
-        # Apply correctness gating for math and puzzle tasks
-        if (
-            self.global_step >= self.warmup_step
-            and task.task_type in ["math", "puzzle"]
-            and not generation.is_correct
-        ):
-            if "length" in aux_scores:
-                aux_scores["length"] = 0.0
-                # Update info and score for length reward
-                for reward in generation.rewards:
-                    if reward.reward_function_name == "length":
-                        reward.info = (
-                            f"Gated due to incorrect generation: {reward.info or ''}"
-                        )
-                        reward.score = 0.0
-                        break
-            judge_score = 0.0
-            # Update info and score for llm_judge reward
-            for reward in generation.rewards:
-                if reward.reward_function_name == "llm_judge":
-                    reward.info = (
-                        f"Gated due to incorrect generation: {reward.info or ''}"
-                    )
-                    reward.score = 0.0
-                    break
+        # FIX #4: Keep auxiliary signals for incorrect responses
+        # Don't zero out length/judge for incorrect responses to maintain variance
+        # Only zero if strictly needed (e.g., for truthy tasks, we gate judge based on language consistency)
 
         # Normalize aux (assuming aux scores are now in [0, 1])
         if aux_scores:
@@ -1271,27 +1260,38 @@ class CurriculumLearning:
         else:
             aux_avg = 0
 
-        # Weights
+        # FIX #3: Recompute weights to sum to 1.0 based on what actually contributes
+        # Initialize effective_judge_weight to 0.0 to prevent UnboundLocalError for truthy tasks
+        effective_judge_weight = 0.0  # default: judge does not contribute
         if task.task_type == "truthy":
             primary_weight = 1.0 - self.aux_weight
         else:
-            if self.use_llm_judge:
-                primary_weight = 1.0 - self.aux_weight - self.llm_judge_weight
-            else:
-                primary_weight = 1.0 - self.aux_weight
+            # For non-truthy tasks, only include judge if it actually contributes
+            effective_judge_weight = (
+                self.llm_judge_weight
+                if (self.use_llm_judge and task.task_type != "truthy")
+                else 0.0
+            )
+            # Recompute primary_weight so weights always sum to 1.0
+            primary_weight = 1.0 - self.aux_weight - effective_judge_weight
 
         judge_contribution = (
-            self.llm_judge_weight * judge_score
-            if (self.use_llm_judge and task.task_type != "truthy")
+            effective_judge_weight * judge_score
+            if effective_judge_weight > 0
             else 0.0
         )
-        combined_score = max(
-            0.0,
-            min(
-                1.0,
+        
+        # Alternative approach: renormalize after the fact
+        total_weight = primary_weight + self.aux_weight + judge_contribution
+        if total_weight > 0:
+            combined_score = (
                 primary_weight * primary_score
                 + self.aux_weight * aux_avg
-                + judge_contribution,
-            ),
-        )
+                + judge_contribution
+            ) / total_weight
+        else:
+            combined_score = primary_score
+        
+        # Clamp to [0, 1]
+        combined_score = max(0.0, min(1.0, combined_score))
         return combined_score

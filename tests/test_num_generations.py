@@ -195,6 +195,47 @@ class TestNumGenerations(unittest.TestCase):
         self.assertEqual(curriculum.window_size, 100)
         self.assertEqual(curriculum.success_rate_threshold, 0.75)
 
+    def test_compute_reward_returns_correct_generation_score(self):
+        """Test that compute_reward() returns the score from the correct generation index.
+
+        This test verifies the fix for Issue #2 where compute_reward() would always
+        return scores[0] after batch completion. With num_generations=3, calling
+        compute_reward() three times should return scores[0], scores[1], and scores[2]
+        respectively.
+        """
+        # Create curriculum with num_generations=3
+        cl = CurriculumLearning(num_generations=3, warmup_step=0)
+
+        # Create a mock task
+        task_id = "test_task_123"
+        task = Task(
+            task_id=task_id,
+            task_name="Test Task",
+            task_type="math",
+            level=1,
+            prompt="What is 2 + 2?",
+            expected_answer="4",
+        )
+        cl.session.add_task(task)
+
+        # Mock _finalize_batch to return different scores for each generation
+        with patch.object(cl, "_finalize_batch") as mock_finalize:
+            mock_finalize.return_value = [0.1, 0.5, 0.9]
+
+            # First call - incomplete batch, should return primary score (0.0 initially)
+            s0 = cl.compute_reward(task_id, "<answer>4</answer>")
+            self.assertIsNotNone(s0)
+
+            # Second call - incomplete batch, should return primary score (0.0)
+            s1 = cl.compute_reward(task_id, "<answer>4</answer>")
+            self.assertIsNotNone(s1)
+
+            # Third call - batch complete, should return scores[2] = 0.9, not scores[0] = 0.1
+            s2 = cl.compute_reward(task_id, "<answer>4</answer>")
+            self.assertAlmostEqual(s2, 0.9, places=5)
+            # Verify that _finalize_batch was called
+            mock_finalize.assert_called_once()
+
 
 class TestGRPOBatching(unittest.TestCase):
     """Test GRPO batching behavior with proper task ID reuse."""

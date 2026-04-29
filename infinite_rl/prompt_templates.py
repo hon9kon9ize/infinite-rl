@@ -20,6 +20,7 @@ def format_math_prompt(
     answer_tag: str = "answer",
     language: Optional[str] = None,
     think_tag: str = "think",
+    reasoning_language: Optional[str] = None,
 ) -> str:
     """Format a math problem prompt with explicit answer tag format.
 
@@ -30,22 +31,24 @@ def format_math_prompt(
         answer_tag: XML tag name for wrapping the answer (default: "answer")
         language: Target language for the response (e.g., 'en', 'zh', 'es')
         think_tag: XML tag name for wrapping reasoning (default: "think")
+        reasoning_language: Language for reasoning (e.g., 'en', 'yue', 'zh'). Defaults to 'en'.
 
     Returns:
         Formatted prompt string with instructions for the model
     """
+    reasoning_lang_name = LANG_MAP.get(reasoning_language or "en", "English")
     prompt = f"""Solve this math problem.
 
 **Problem:**
 {problem_statement}
 
 **Instructions:**
-1. **Reasoning**: You MUST perform your step-by-step reasoning in **English** inside <{think_tag}> tags. Write naturally with proper spaces and punctuation—do NOT remove spaces to compress text.
+1. **Reasoning**: You MUST perform your step-by-step reasoning in **{reasoning_lang_name}** inside <{think_tag}> tags. Write naturally with proper spaces and punctuation—do NOT remove spaces to compress text.
 2. **Final Answer:** Wrap the final numeric value inside <{answer_tag}> tags.
 
 **Response Structure:**
 <{think_tag}>
-[Reasoning steps in English, with proper spaces and punctuation...]
+[Reasoning steps in {reasoning_lang_name}, with proper spaces and punctuation...]
 </{think_tag}>
 
 <{answer_tag}>[Final numeric result]</{answer_tag}>
@@ -58,6 +61,7 @@ def format_puzzle_prompt(
     language: str,
     answer_tag: str = "answer",
     think_tag: str = "think",
+    reasoning_language: Optional[str] = None,
 ) -> str:
     """Format a puzzle prompt for the model.
 
@@ -68,6 +72,7 @@ def format_puzzle_prompt(
         language: Programming language for the puzzle (javascript or python)
         answer_tag: XML tag name for wrapping the answer (default: "answer")
         think_tag: XML tag name for wrapping reasoning (default: "think")
+        reasoning_language: Language for reasoning (e.g., 'en', 'yue', 'zh'). Defaults to 'en'.
 
     Returns:
         Formatted prompt string with puzzle specification and solution template
@@ -103,6 +108,7 @@ def format_puzzle_prompt(
 ```
 </{answer_tag}>"""
 
+    reasoning_lang_name = LANG_MAP.get(reasoning_language or "en", "English")
     prompt = f"""# {name}
 
 {docstring}
@@ -116,13 +122,12 @@ Write a function that satisfies the following condition:
 First, show your reasoning and approach in <{think_tag}> tags (write naturally with proper spaces and punctuation):
 
 <{think_tag}>
-[Reasoning steps here, must be in English, with proper spacing]
+[Reasoning steps here, must be in {reasoning_lang_name}, with proper spacing]
 </{think_tag}>
 
 Then provide your solution in <{answer_tag}> tags, Your solution should be a {language} function with this signature:
 
 {solution_template}"""
-
     return prompt
 
 
@@ -165,7 +170,8 @@ def format_truthy_judge_system_prompt(
 
 
 def format_truthy_user_prompt(
-    system_prompt: str, question: str, think_tag: str, language: str
+    system_prompt: str, question: str, think_tag: str, language: str,
+    reasoning_language: Optional[str] = None,
 ) -> str:
     """Format the prompt for truth tasks.
 
@@ -174,10 +180,11 @@ def format_truthy_user_prompt(
     Returns:
         Formatted prompt string for truth tasks
     """
+    reasoning_lang_name = LANG_MAP.get(reasoning_language or "en", "English")
     return f"""Analyze the provided System Prompt and User Input. You must first output your internal reasoning process, followed by your final response.
 
 ### Constraints
-* **Thinking Language:** Your reasoning process MUST be written in **English**, regardless of the language of the user input.
+* **Thinking Language:** Your reasoning process MUST be written in **{reasoning_lang_name}**, regardless of the language of the user input.
 * **Thinking Format:** Wrap this process strictly inside <{think_tag}> tags.
 * **Final Answer:** The final response should be in the **same language** as the user input and must directly address the user's request.
 

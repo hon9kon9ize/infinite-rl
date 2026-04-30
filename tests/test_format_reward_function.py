@@ -97,8 +97,8 @@ Now the actual thinking content
         self.assertIn("before", score.info.lower())
 
     def test_content_before_opening_tag_answer(self):
-        """Test that content before <answer> tag returns -1.0"""
-        fn = FormatRewardFunction(task_name="format_answer", target_tag="answer")
+        """Test that content before <answer> tag returns 0.0 when allow_explanation=False"""
+        fn = FormatRewardFunction(task_name="format_answer", target_tag="answer", allow_explanation_between_tags=False)
         fn.initialize()
         out = """The answer is 42
 <answer>42</answer>"""

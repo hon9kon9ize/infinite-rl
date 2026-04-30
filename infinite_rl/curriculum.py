@@ -214,6 +214,7 @@ class CurriculumLearning:
                     think_tag=self.think_tag,
                     target_tag=self.answer_tag,
                     reasoning_template=self.reasoning_template,
+                    allow_explanation_between_tags=self.use_response_content,
                 )
             except Exception as e:
                 print(f"Warning: Could not initialize FormatRewardFunction: {e}")

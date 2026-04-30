@@ -502,6 +502,58 @@ def sol(v, d):
         score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 1.0)
 
+    def test_no_answer_tags_code_after_think_close(self):
+        """Code block without <answer> tags should work if after </think>."""
+        model_output = """Let me think about this.
+</think>
+
+```python
+def sol(coeffs):
+    return 1.0
+```"""
+        expected_output = {
+            "puzzle": "QuadraticRoot",
+            "inputs": {"coeffs": [1.0, -3.0, 2.0]},
+            "language": "python",
+        }
+        task = Task(
+            task_id="test_21",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="python",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
+        self.assertEqual(score.score, 1.0)
+
+    def test_no_answer_tags_code_anywhere(self):
+        """Code block without <answer> tags should work even without </think>."""
+        model_output = """Here's my solution:
+```python
+def sol(coeffs):
+    return 1.0
+```"""
+        expected_output = {
+            "puzzle": "QuadraticRoot",
+            "inputs": {"coeffs": [1.0, -3.0, 2.0]},
+            "language": "python",
+        }
+        task = Task(
+            task_id="test_22",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="python",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
+        self.assertEqual(score.score, 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

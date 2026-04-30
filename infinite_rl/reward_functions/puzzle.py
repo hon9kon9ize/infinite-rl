@@ -61,36 +61,25 @@ class PuzzleRewardFunction(RewardFunction):
         # Special case for simulation dummy puzzle
         if puzzle_name == "dummy_puzzle":
             # For simulation, score based on format and code content
-            tag_start = f"<{self.target_tag}>"
-            tag_end = f"</{self.target_tag}>"
-
-            # Debug: print what we're looking for
-            # print(f"DEBUG: Looking for tags: {tag_start}...{tag_end}")
-            # print(f"DEBUG: Model output: {task.model_output[:200]}")
-
-            if tag_start not in task.model_output or tag_end not in task.model_output:
-                return RewardFunctionScore(
-                    score=0.0,
-                    info=f"Missing <{self.target_tag}> tags in response.",
-                )
-            # Extract code
             import re as re_module
 
-            pattern = f"{re_module.escape(tag_start)}(.*?){re_module.escape(tag_end)}"
-            raw_matches = re_module.findall(
-                pattern, task.model_output, re_module.DOTALL
-            )
-            if not raw_matches:
-                return RewardFunctionScore(
-                    score=0.0,
-                    info=f"Missing content in <{self.target_tag}> tags.",
-                )
-            raw_content = raw_matches[0]
-            # Check for code block
+            # Find code block directly (prefer after </think>)
             lang_pattern = r"```(?:javascript)\b\s*(.*?)```"
+            search_region = task.model_output
+            think_close = f"</{self.think_tag}>"
+            close_idx = task.model_output.find(think_close)
+            if close_idx >= 0:
+                search_region = task.model_output[close_idx + len(think_close):]
+
             match = re_module.search(
-                lang_pattern, raw_content, re_module.DOTALL | re_module.IGNORECASE
+                lang_pattern, search_region, re_module.DOTALL | re_module.IGNORECASE
             )
+            if not match:
+                # Fallback: search entire output
+                if close_idx >= 0:
+                    match = re_module.search(
+                        lang_pattern, task.model_output, re_module.DOTALL | re_module.IGNORECASE
+                    )
             if not match:
                 return RewardFunctionScore(
                     score=0.0,
@@ -109,41 +98,38 @@ class PuzzleRewardFunction(RewardFunction):
                     info="Dummy puzzle simulation - incorrect",
                 )
 
-        # 1. Format Objective: Check for tags
-        # First, check if raw answer tags exist
-        tag_start = f"<{self.target_tag}>"
-        tag_end = f"</{self.target_tag}>"
-        if tag_start not in task.model_output or tag_end not in task.model_output:
-            return RewardFunctionScore(
-                score=0.0,
-                info=f"Missing <{self.target_tag}> tags in response.",
-            )
-
-        # Extract raw content (with backticks still intact) to check format
+        # 1. Extract code block (```language ... ```)
+        # Prefer code blocks AFTER </think> (reasoning boundary) to avoid prompt echoes.
+        # Falls back to anywhere in output if no reasoning boundary found.
         import re as re_module
 
-        pattern = f"{re_module.escape(tag_start)}(.*?){re_module.escape(tag_end)}"
-        raw_matches = re_module.findall(pattern, task.model_output, re_module.DOTALL)
-
-        if not raw_matches:
-            return RewardFunctionScore(
-                score=0.0,
-                info=f"Missing content in <{self.target_tag}> tags.",
-            )
-
-        raw_content = raw_matches[0]
-
-        # Check for code block with language specifier in raw content
         lang_pattern = rf"```(?:{language})\b\s*(.*?)```"
+        search_region = task.model_output
+        think_close = f"</{self.think_tag}>"
+        close_idx = task.model_output.find(think_close)
+        if close_idx >= 0:
+            search_region = task.model_output[close_idx + len(think_close):]
+
         match = re_module.search(
-            lang_pattern, raw_content, re_module.DOTALL | re_module.IGNORECASE
+            lang_pattern, search_region, re_module.DOTALL | re_module.IGNORECASE
         )
 
         if not match:
-            return RewardFunctionScore(
-                score=0.0,
-                info=f"Missing code block with language '{language}' inside <{self.target_tag}> tags.",
-            )
+            # Fallback: search entire output (in case no reasoning boundary)
+            if close_idx >= 0:
+                match = re_module.search(
+                    lang_pattern, task.model_output, re_module.DOTALL | re_module.IGNORECASE
+                )
+                if not match:
+                    return RewardFunctionScore(
+                        score=0.0,
+                        info=f"Missing code block with language '{language}' in response.",
+                    )
+            else:
+                return RewardFunctionScore(
+                    score=0.0,
+                    info=f"Missing code block with language '{language}' in response.",
+                )
 
         # 2. Extract sol function
         code_content = match.group(1).strip()

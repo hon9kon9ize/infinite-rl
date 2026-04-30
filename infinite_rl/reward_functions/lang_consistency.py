@@ -35,6 +35,36 @@ class LangConsistencyRewardFunction(RewardFunction):
         judgement = self.yue_detector(text)
         return judgement in ["cantonese", "mixed", "neutral"]
 
+    def _extract_reasoning_content(self, model_output: str) -> str:
+        """Extract reasoning/CoT content from model output.
+
+        For reasoning_template=True: everything before </think> tag.
+        For standard mode: content inside <think>...</think> tags.
+        """
+        output = model_output or ""
+        open_tag = "</think>"
+        close_tag = "</think>"
+        # Standard mode: look for <think>...</think>
+        if open_tag in output and close_tag in output:
+            start = output.index(open_tag)
+            end = output.index(close_tag, start)
+            if start < end:
+                return output[start:end].strip()
+        # Reasoning template mode (closing tag only): everything before </think>
+        if close_tag in output:
+            return output.split(close_tag)[0].strip()
+        return ""
+
+    def _detect_language(self, content: str):
+        """Detect language of content using CLD2."""
+        import pycld2 as cld2
+        _, _, details = cld2.detect(content.encode("utf-8"))
+        return details[0][1].lower() if details else None
+
+    def _check_cantonese(self, content: str) -> bool:
+        """Check if content is Cantonese."""
+        return self._is_cantonese(content)
+
     def compute_reward(
         self,
         task: "Task",
@@ -47,28 +77,32 @@ class LangConsistencyRewardFunction(RewardFunction):
         if not self.initialized:
             self.initialize()
 
-        # Skip language consistency check for non-truthy tasks (puzzle and math)
-        if task.task_type != "truthy":
-            return RewardFunctionScore(
-                score=0.0,
-                info=f"Language consistency not applicable for {task.task_type} tasks",
-            )
+        # Get expected language: prefer task.reasoning_language for math/puzzle, task.language for truthy
+        if task.task_type == "truthy":
+            expected_output = kwargs.get("target_language", self.target_language)
+            # For truthy tasks, use task.language (the conversation language)
+            if task.language:
+                expected_output = task.language
+        else:
+            # For math/puzzle tasks, use reasoning_language (the CoT language)
+            expected_output = task.reasoning_language or self.target_language
 
-        # Get expected language from curriculum config (not task.language which may be programming language)
-        # Allow overriding via kwargs for dynamic language checking
-        expected_output = kwargs.get("target_language", self.target_language)
-
-        # Extract content using tag_excluded parameter
-        content = extract_tag_util(
-            task.model_output or "",
-            tag=self.target_tag,
-            exclude=self.tag_excluded,
-        ).strip()
+        # Determine which content to check based on task type
+        if task.task_type == "truthy":
+            # For truthy tasks, check content outside <think> tags (the final response)
+            content = extract_tag_util(
+                task.model_output or "",
+                tag=self.target_tag,
+                exclude=self.tag_excluded,
+            ).strip()
+        else:
+            # For math/puzzle tasks, check the reasoning/CoT content (inside <think> tags)
+            content = self._extract_reasoning_content(task.model_output or "")
 
         if not content:
             return RewardFunctionScore(
                 score=0.0,
-                info=f"No content found in the <{self.target_tag}> tag.",
+                info=f"No content found for language check.",
             )
 
         norm_expected = expected_output.lower()
@@ -76,9 +110,10 @@ class LangConsistencyRewardFunction(RewardFunction):
         # Determine expected language code or dialect
         # expected_output is expected to be a short language target like 'en', 'zh', or 'yue'.
         if norm_expected not in ["en", "zh", "yue", "zh-hant"]:
+            # For programming languages (python, javascript), skip the check
             return RewardFunctionScore(
-                score=0.0,
-                info=f"Expected output must be a language code like 'en', 'zh', 'zh-Hant', or 'yue'. Received: {norm_expected}",
+                score=1.0,
+                info=f"Skipping language check for '{norm_expected}' (not a natural language target)",
             )
 
         # Get detected language (CLD2) details
@@ -88,7 +123,7 @@ class LangConsistencyRewardFunction(RewardFunction):
         if not norm_detected:
             return RewardFunctionScore(
                 score=0.0,
-                info=f"Failed to detect language of the response inside <{self.target_tag}>.",
+                info="Failed to detect language of the content.",
             )
 
         # Check if Cantonese is expected and detected

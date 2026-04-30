@@ -35,6 +35,7 @@ class CurriculumLearning:
         use_llm_judge: bool = False,
         reasoning_language: str = "en",
         reasoning_template: bool = False,
+        use_system_prompt: bool = True,
         lang_consistency_kwargs: Optional[Dict[str, Any]] = None,
         format_kwargs: Optional[Dict[str, Any]] = None,
         reasoning_steps_kwargs: Optional[Dict[str, Any]] = None,
@@ -88,6 +89,7 @@ class CurriculumLearning:
         self.llm_judge_weight = llm_judge_weight
         self.reasoning_language = reasoning_language
         self.reasoning_template = reasoning_template
+        self.use_system_prompt = use_system_prompt
         self.reward_functions = get_reward_functions(
             timeout=timeout, answer_tag=answer_tag, think_tag=think_tag
         )
@@ -1077,9 +1079,7 @@ class CurriculumLearning:
             if is_truthy_task and aux_name == "format_answer":
                 # Skip format_answer for truthy tasks
                 continue
-            if not is_truthy_task and aux_name == "lang_consistency":
-                # Skip lang_consistency for non-truthy tasks (puzzle and math)
-                continue
+
             if aux_name == "llm_judge":
                 # Skip llm_judge as it's computed in batch via get_rewards()
                 continue

@@ -85,6 +85,7 @@ class InfiniteRLConfig:
     think_tag: str = "think"
     reasoning_language: str = "en"
     reasoning_template: bool = False
+    use_system_prompt: bool = True
 
     # Auxiliary rewards
     use_format: bool = True
@@ -128,6 +129,7 @@ def create_curriculum(config: InfiniteRLConfig) -> CurriculumLearning:
         think_tag=config.think_tag,
         reasoning_language=config.reasoning_language,
         reasoning_template=config.reasoning_template,
+        use_system_prompt=config.use_system_prompt,
         aux_weight=config.aux_weight,
         use_format=config.use_format,
         use_reasoning_steps=config.use_reasoning_steps,
@@ -653,6 +655,18 @@ def main():
         "When enabled, skip checking for the opening <think> tag (closing </think> is still required).",
     )
     parser.add_argument(
+        "--system_prompt",
+        action="store_true",
+        default=True,
+        help="Inject a system prompt instructing the model to reason in the target language. "
+        "Enabled by default when reasoning_language != en. Use --no_system_prompt to disable.",
+    )
+    parser.add_argument(
+        "--no_system_prompt",
+        action="store_true",
+        help="Disable the reasoning language system prompt.",
+    )
+    parser.add_argument(
         "--log_curriculum_steps",
         type=int,
         default=10,
@@ -863,6 +877,7 @@ def main():
         num_generations=args.num_generations,
         reasoning_language=args.reasoning_language,
         reasoning_template=args.reasoning_template,
+        use_system_prompt=not args.no_system_prompt,
         use_llm_judge=args.use_llm_judge,
         llm_judge_host=args.llm_judge_host,
         llm_judge_port=args.llm_judge_port,

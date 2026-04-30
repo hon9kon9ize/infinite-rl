@@ -181,14 +181,20 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
         self.assertEqual(score.score, 1.0)
         self.assertEqual(score.info, "")
 
-    def test_non_truthy_task_returns_zero(self):
-        """Test that lang_consistency returns 0.0 for non-truthy tasks (math, puzzle)."""
+    def test_math_puzzle_task_checks_cot_language(self):
+        """Test that lang_consistency checks CoT language for math/puzzle tasks.
+
+        For math/puzzle tasks, language consistency is evaluated on the reasoning
+        content (before </think> tag) using task.reasoning_language.
+        """
         reward_fn = LangConsistencyRewardFunction(
             task_name="lang_consistency", tag_excluded=True, target_language="yue"
         )
         reward_fn.initialize()
 
-        # Test with math task
+        # Test with math task - CoT in English, reasoning_language defaults to "en"
+        # In reasoning_template mode, output starts after auto-injected <think>
+        # So model_output contains content + </think> closing tag
         task = Task(
             task_id="math_test",
             task_name="Math Test",
@@ -196,14 +202,14 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
             level=0,
             prompt="What is 2+2?",
             expected_answer="4",
-            model_output="<think>Reasoning</think><answer>4</answer>",
+            model_output="Step by step reasoning in English. The answer is 4.</think><answer>4</answer>",
         )
-
         score = reward_fn.compute_reward(task)
-        self.assertEqual(score.score, 0.0)
-        self.assertIn("not applicable for math tasks", score.info)
+        # reasoning_language defaults to "en", CoT is in English, so should match
+        self.assertEqual(score.score, 1.0)
 
-        # Test with puzzle task
+        # Test with puzzle task - CoT in English, reasoning_language set to "yue"
+        # So it should NOT match (score 0.0)
         task_puzzle = Task(
             task_id="puzzle_test",
             task_name="Puzzle Test",
@@ -211,9 +217,11 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
             level=0,
             prompt="Solve this puzzle",
             expected_answer="solution",
-            model_output="<think>Thinking</think><answer>solution</answer>",
+            model_output="Thinking in English about the puzzle.</think><answer>solution</answer>",
+            reasoning_language="yue",
         )
 
         score_puzzle = reward_fn.compute_reward(task_puzzle)
+        # CoT is in English but reasoning_language is "yue", so should not match
         self.assertEqual(score_puzzle.score, 0.0)
-        self.assertIn("not applicable for puzzle tasks", score_puzzle.info)
+        self.assertIn("does not match expected", score_puzzle.info)

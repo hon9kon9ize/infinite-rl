@@ -15,6 +15,28 @@ LANG_MAP = {
 }
 
 
+def create_reasoning_language_system_prompt(
+    reasoning_language: str,
+    think_tag: str = "think",
+) -> str:
+    """Create a system prompt that instructs the model to reason in a specific language.
+
+    This is used when reasoning_template=True and the model auto-injects thinking tags.
+    The system prompt ensures the model knows to use the target language for its CoT.
+
+    Args:
+        reasoning_language: Language code for reasoning (e.g., 'en', 'yue', 'zh')
+        think_tag: XML tag name for reasoning (default: 'think')
+
+    Returns:
+        System prompt string instructing reasoning language.
+    """
+    lang_name = LANG_MAP.get(reasoning_language, reasoning_language)
+    return f"You are a helpful assistant. When you think/reason, you MUST write your entire reasoning process in {lang_name}. " \
+           f"Your reasoning should be natural and fluent in {lang_name}, with proper spaces and punctuation. " \
+           f"Do NOT switch to English or any other language during reasoning."
+
+
 def format_math_prompt(
     problem_statement: str,
     answer_tag: str = "answer",

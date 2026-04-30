@@ -6,7 +6,7 @@ curriculum learning system, ensuring proper GRPO batching where multiple
 completions share the same prompt.
 """
 
-from typing import Any, Dict, TYPE_CHECKING
+from typing import Any, Dict, List, TYPE_CHECKING
 import json
 
 if TYPE_CHECKING:
@@ -139,7 +139,22 @@ class DynamicCurriculumDataset(_BaseDataset):
         task = self.task_cache[batch_idx]
 
         # Format as TRL expects: list of message dicts
-        prompt = [{"role": "user", "content": task.prompt}]
+        # Add system prompt with reasoning language instruction when enabled
+        # and reasoning language is not English (default)
+        messages = []
+        if (getattr(self.curriculum, 'use_system_prompt', True)
+                and task.reasoning_language
+                and task.reasoning_language != "en"
+                and task.task_type in ("math", "puzzle")):
+            from .prompt_templates import create_reasoning_language_system_prompt
+            system_prompt = create_reasoning_language_system_prompt(
+                task.reasoning_language,
+                self.curriculum.think_tag,
+            )
+            messages.append({"role": "system", "content": system_prompt})
+
+        messages.append({"role": "user", "content": task.prompt})
+        prompt = messages
 
         # Metadata for reward function
         task_metadata = {

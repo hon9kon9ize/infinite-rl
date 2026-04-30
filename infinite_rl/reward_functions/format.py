@@ -79,40 +79,40 @@ class FormatRewardFunction(RewardFunction):
                     info=f"Empty reasoning content before </{self.think_tag}>.",
                 )
             # Check for actual nested answer tags (not quoted examples)
-            # Look for <answer>...</answer> patterns with content, ignoring instruction echoes like "<answer>[Final numeric result]</answer>"
+            # Skip instruction echoes like "<answer>[Final numeric result]</answer>" or "<answer>...</answer>"
             answer_open = f"<{self.answer_tag}>"
             answer_close = f"</{self.answer_tag}>"
             if answer_open in raw_content or answer_close in raw_content:
-                # Check for standalone closing tags (always an error)
-                if answer_close in raw_content:
-                    # If there's a closing tag without a matching opening (placeholder), it's suspicious
-                    # Count opening vs closing tags
-                    import re as re_module
+                import re as re_module
+                # Strip all placeholder patterns: [anything], ..., answer here, your answer, etc.
+                content_cleaned = raw_content
+                # Remove <answer>[...]</answer>
+                content_cleaned = re_module.sub(
+                    rf"<{self.answer_tag}>\[.*?\]</{self.answer_tag}>", "", content_cleaned, flags=re_module.DOTALL
+                )
+                # Remove <answer>...</answer>
+                content_cleaned = re_module.sub(
+                    rf"<{self.answer_tag}>\.\.\.</{self.answer_tag}>", "", content_cleaned, flags=re_module.DOTALL
+                )
+                # Check remaining content for real tags
+                has_real_answer = False
+                if answer_open in content_cleaned or answer_close in content_cleaned:
+                    # Check if any remaining <answer>...</answer> has real content
                     answer_pattern = f"<{self.answer_tag}>(.*?)</{self.answer_tag}>"
-                    matches = re_module.findall(answer_pattern, raw_content, re_module.DOTALL)
-                    has_real_answer = False
+                    matches = re_module.findall(answer_pattern, content_cleaned, re_module.DOTALL)
                     for match in matches:
                         stripped = match.strip()
-                        # Skip placeholder patterns like [Final numeric result], [...], etc.
-                        if stripped.startswith("[") and stripped.endswith("]"):
+                        if stripped.lower() in ("answer here", "your answer", "final answer", "the answer"):
                             continue
-                        if stripped.lower() in ("...", "answer here", "your answer", "final answer", "the answer"):
-                            continue
-                        # Real answer tag detected
                         has_real_answer = True
                         break
-                    # Also check for bare closing tags not paired with placeholders
-                    # Remove all placeholder patterns to see if any real tags remain
-                    content_no_placeholders = re_module.sub(
-                        rf"<{self.answer_tag}>\[.*?\]</{self.answer_tag}>", "", raw_content, flags=re_module.DOTALL
-                    )
-                    if answer_close in content_no_placeholders:
+                    if not has_real_answer and answer_close in content_cleaned:
                         has_real_answer = True
-                    if has_real_answer:
-                        return RewardFunctionScore(
-                            score=0.0,
-                            info=f"<{self.answer_tag}> tag found inside reasoning section. Tags cannot be nested.",
-                        )
+                if has_real_answer:
+                    return RewardFunctionScore(
+                        score=0.0,
+                        info=f"<{self.answer_tag}> tag found inside reasoning section. Tags cannot be nested.",
+                    )
             return RewardFunctionScore(score=1.0, info=f"Valid {self.target_tag} format (reasoning template).")
 
         # Note: Do NOT use re.escape() on tag_start/end since they are literal tags, not regex patterns
@@ -120,8 +120,22 @@ class FormatRewardFunction(RewardFunction):
         matches = re.findall(pattern, task.model_output or "", re.DOTALL)
 
         # count how many tag_start and tag_end are present
-        start_count = task.model_output.count(tag_start)
-        end_count = task.model_output.count(tag_end)
+        # But for answer_tag, exclude tags that are inside the reasoning section (before </think>)
+        # since those are typically prompt echoes like "Response Structure: <answer>[...]</answer>"
+        if self.target_tag == self.answer_tag and self.reasoning_template:
+            think_close = f"</{self.think_tag}>"
+            close_idx = task.model_output.find(think_close)
+            if close_idx >= 0:
+                # Only count tags AFTER the reasoning section
+                content_after_reasoning = task.model_output[close_idx + len(think_close):]
+                start_count = content_after_reasoning.count(tag_start)
+                end_count = content_after_reasoning.count(tag_end)
+            else:
+                start_count = task.model_output.count(tag_start)
+                end_count = task.model_output.count(tag_end)
+        else:
+            start_count = task.model_output.count(tag_start)
+            end_count = task.model_output.count(tag_end)
 
         if start_count > 1 or end_count > 1:
             return RewardFunctionScore(

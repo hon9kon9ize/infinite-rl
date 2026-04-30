@@ -117,7 +117,18 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 - Strict output format: the parser looks for `<answer>` tags; changing parsing requires updating tests.
 - **Prompt generation**: Use `format_puzzle_prompt()` and `format_math_prompt()` from `infinite_rl.prompt_templates` to create prompts.
 - **Puzzle data access**: Use `get_puzzle_data()` and `get_available_puzzles()` from `infinite_rl.puzzles` to access puzzle metadata.
-- **Auxiliary reward functions**: Additional metrics like `FormatRewardFunction`, `LangConsistencyRewardFunction` (only for truthy tasks), `ReasoningStepsRewardFunction`, and `LLMJudgeRewardFunction` are initialized via `CurriculumLearning._initialize_aux_reward_functions()` and blended with primary rewards.
+- **Auxiliary reward functions**: Additional metrics blended with primary rewards via `CurriculumLearning._initialize_aux_reward_functions()`:
+  - `FormatRewardFunction`: Validates `<answer>` and `<think>/</think>` tag structure. Key behaviors:
+    - `allow_explanation_between_tags=True` (default when `use_response_content=True`): allows content between `</think>` and `<answer>` — prevents conflict with `response_content` reward
+    - Nested tag detection skips placeholder patterns like `<answer>[Final numeric result]</answer>` and `<answer>...</answer>` (model echoing prompt instructions)
+    - Only counts `<answer>` tags AFTER `</think>` for "Multiple tags" check — reasoning section echoes are ignored
+    - Real nested tags (e.g., `<answer>315</answer>` in CoT) still rejected by `format_think` (0.0)
+  - `LangConsistencyRewardFunction`: Only for truthy tasks — checks language consistency outside `<think>` tags
+  - `ReasoningStepsRewardFunction`: Rewards structured reasoning with indicators (English: "First", "Then", "Finally", "Therefore"; Cantonese/Chinese: "首先", "然後", "最後", "所以", etc. — 40+ keywords). Minimum score is 0.0 (no longer -1.0 penalty). Empty reasoning returns 0.0.
+  - `ResponseContentRewardFunction` (v0.1.29+): Rewards brief explanations between `</think>` and `<answer>` tags. Sweet-spot curve: 30-500 chars = 1.0, empty = 0.0, verbose >1000 chars decays to 0.4. Default: enabled (`use_response_content=True`).
+  - `LLMJudgeRewardFunction`: Remote LLM-based quality scoring via sglang API
+  - `LengthRewardFunction`: Rewards appropriate response length
+  - Default `aux_weight = 0.5` (blends auxiliary rewards at 50% weight alongside primary rewards)
 - **Reasoning template mode**: Some models use a "reasoning" chat template that auto-injects the opening `<think>` tag into the model output. When the model's chat template handles the opening tag, enable `--reasoning-template` (or `reasoning_template=True` in config) so that:
   - `FormatRewardFunction`, `ReasoningStepsRewardFunction`, and `LengthRewardFunction` extract reasoning content as everything before `</think>` (closing tag) rather than requiring both `<think>...` and `</think>` tags
   - The closing `</think>` tag is always required regardless of the flag

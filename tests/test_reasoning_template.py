@@ -244,7 +244,7 @@ class TestReasoningTemplateReasoningSteps(unittest.TestCase):
         self.assertAlmostEqual(score.score, 1.0, places=5)
 
     def test_no_indicators_in_reasoning_content(self):
-        """No indicators in content before close tag gets penalty."""
+        """No indicators in content before close tag gets 0.0 (no penalty)."""
         fn = ReasoningStepsRewardFunction(reasoning_template=True)
         fn.initialize()
         task = Task(
@@ -261,7 +261,7 @@ class TestReasoningTemplateReasoningSteps(unittest.TestCase):
             ),
         )
         score = fn.compute_reward(task)
-        self.assertAlmostEqual(score.score, -1.0, places=5)
+        self.assertAlmostEqual(score.score, 0.0, places=5)
 
     def test_missing_close_tag_returns_zero(self):
         """Missing close tag returns 0."""
@@ -281,7 +281,7 @@ class TestReasoningTemplateReasoningSteps(unittest.TestCase):
         self.assertAlmostEqual(score.score, 0.0, places=5)
 
     def test_standard_mode_rejected_without_open_tag(self):
-        """Without reasoning_template missing open tag is rejected."""
+        """Without reasoning_template missing open tag falls back to content before close tag."""
         fn = ReasoningStepsRewardFunction(reasoning_template=False)
         fn.initialize()
         task = Task(
@@ -298,8 +298,9 @@ class TestReasoningTemplateReasoningSteps(unittest.TestCase):
             ),
         )
         score = fn.compute_reward(task)
+        # Falls back to content before close tag, finds 0 indicators
         self.assertAlmostEqual(score.score, 0.0, places=5)
-        self.assertIn("tag content found", score.info.lower())
+        self.assertIn("indicators", score.info.lower())
 
     def test_standard_mode_works_with_both_tags(self):
         """Standard mode works with full open and close tags."""

@@ -1341,6 +1341,7 @@ class TestCurriculumLearning(unittest.TestCase):
             use_lang_consistency=False,
             use_format=False,
             use_reasoning_steps=False,
+            use_response_content=False,
         )
 
         # Create a simple task object for testing
@@ -1694,9 +1695,9 @@ class TestCurriculumLearning(unittest.TestCase):
         self.assertEqual(judge_info, "Good quality")
 
     def test_aux_weight_default_value(self):
-        """Test that aux_weight defaults to 0.2."""
+        """Test that aux_weight defaults to 0.5."""
         cl = CurriculumLearning()
-        self.assertEqual(cl.aux_weight, 0.2)
+        self.assertEqual(cl.aux_weight, 0.5)
 
     def test_llm_judge_weight_default_value(self):
         """Test that llm_judge_weight defaults to 0.2."""

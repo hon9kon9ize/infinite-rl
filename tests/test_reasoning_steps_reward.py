@@ -85,7 +85,7 @@ class TestReasoningStepsRewardFunction(unittest.TestCase):
         self.assertAlmostEqual(out.score, 0.5, places=5)
 
     def test_no_indicators_penalty(self):
-        """Test that no reasoning indicators results in -1.0 penalty."""
+        """Test that no reasoning indicators results in 0.0 (no penalty)."""
         model_output = "<think>The answer is correct.</think>"
         task = Task(
             task_id="test_5",
@@ -98,8 +98,8 @@ class TestReasoningStepsRewardFunction(unittest.TestCase):
             model_output=model_output,
         )
         out = self.rf.compute_reward(task)
-        # No indicators results in -1.0 penalty
-        self.assertEqual(out.score, -1.0)
+        # No indicators results in 0.0 (no longer penalized)
+        self.assertEqual(out.score, 0.0)
 
 
 if __name__ == "__main__":

@@ -90,9 +90,10 @@ class InfiniteRLConfig:
     # Auxiliary rewards
     use_format: bool = True
     use_reasoning_steps: bool = True
+    use_response_content: bool = True
     use_lang_consistency: bool = True
     use_length: bool = True
-    aux_weight: float = 0.2
+    aux_weight: float = 0.5
 
     # LLM Judge configuration
     use_llm_judge: bool = False
@@ -133,6 +134,7 @@ def create_curriculum(config: InfiniteRLConfig) -> CurriculumLearning:
         aux_weight=config.aux_weight,
         use_format=config.use_format,
         use_reasoning_steps=config.use_reasoning_steps,
+        use_response_content=config.use_response_content,
         use_lang_consistency=config.use_lang_consistency,
         use_llm_judge=config.use_llm_judge,
         use_length=config.use_length,

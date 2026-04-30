@@ -26,11 +26,12 @@ class CurriculumLearning:
         timeout: int = 10,
         answer_tag: str = "answer",
         think_tag: str = "think",
-        aux_weight: float = 0.2,
+        aux_weight: float = 0.5,
         llm_judge_weight: float = 0.2,
         use_lang_consistency: bool = True,
         use_format: bool = True,
         use_reasoning_steps: bool = True,
+        use_response_content: bool = True,
         use_length: bool = False,
         use_llm_judge: bool = False,
         reasoning_language: str = "en",
@@ -39,6 +40,7 @@ class CurriculumLearning:
         lang_consistency_kwargs: Optional[Dict[str, Any]] = None,
         format_kwargs: Optional[Dict[str, Any]] = None,
         reasoning_steps_kwargs: Optional[Dict[str, Any]] = None,
+        response_content_kwargs: Optional[Dict[str, Any]] = None,
         length_kwargs: Optional[Dict[str, Any]] = None,
         llm_judge_kwargs: Optional[Dict[str, Any]] = None,
         log_file: Optional[str] = None,
@@ -59,17 +61,19 @@ class CurriculumLearning:
             timeout: Timeout for reward function execution
             answer_tag: Tag used to extract answers from model responses
             think_tag: Tag used to extract reasoning from model responses
-            aux_weight: Weight for auxiliary rewards in combined score (0-1, default: 0.2)
+            aux_weight: Weight for auxiliary rewards in combined score (0-1, default: 0.5)
             llm_judge_weight: Weight for LLM Judge reward, computed independently of format/correctness gates (0-1, default: 0.2)
             use_lang_consistency: Enable language consistency auxiliary reward (default: True)
             use_format: Enable format validation auxiliary reward (default: True)
             use_reasoning_steps: Enable chain-of-thought reasoning steps bonus (default: True)
-            use_length: Enable response length auxiliary reward (default: False)
+            use_response_content: Enable response content length reward between </think> and <answer> (default: True)
+            use_length: Enable thinking length auxiliary reward (default: False)
             use_llm_judge: Enable LLM-based quality evaluation via remote sglang server (default: False)
             reasoning_language: ISO language code for reasoning analysis (default: "en")
             lang_consistency_kwargs: Keyword arguments for LangConsistencyRewardFunction
             format_kwargs: Keyword arguments for FormatRewardFunction
             reasoning_steps_kwargs: Keyword arguments for ReasoningStepsRewardFunction
+            response_content_kwargs: Keyword arguments for ResponseContentRewardFunction
             length_kwargs: Keyword arguments for LengthRewardFunction
             llm_judge_kwargs: Keyword arguments for LLMJudgeRewardFunction (api_host, api_port, model_name, etc.)
             log_file: Path to the logging file (JSON Lines format). If None, defaults to 'curriculum_log.jsonl' in the module directory.
@@ -98,11 +102,13 @@ class CurriculumLearning:
         self.use_lang_consistency = use_lang_consistency
         self.use_format = use_format
         self.use_reasoning_steps = use_reasoning_steps
+        self.use_response_content = use_response_content
         self.use_length = use_length
         self.use_llm_judge = use_llm_judge
         self.lang_consistency_kwargs = lang_consistency_kwargs or {}
         self.format_kwargs = format_kwargs or {}
         self.reasoning_steps_kwargs = reasoning_steps_kwargs or {}
+        self.response_content_kwargs = response_content_kwargs or {}
         self.length_kwargs = length_kwargs or {}
         self.llm_judge_kwargs = llm_judge_kwargs or {}
 
@@ -232,6 +238,25 @@ class CurriculumLearning:
             except Exception as e:
                 print(
                     f"Warning: Could not initialize ReasoningStepsRewardFunction: {e}"
+                )
+
+        if self.use_response_content:
+            try:
+                from .reward_functions import ResponseContentRewardFunction
+
+                self.aux_reward_functions["response_content"] = (
+                    ResponseContentRewardFunction(
+                        "response_content",
+                        timeout=self.timeout,
+                        answer_tag=self.answer_tag,
+                        think_tag=self.think_tag,
+                        reasoning_template=self.reasoning_template,
+                        **self.response_content_kwargs,
+                    )
+                )
+            except Exception as e:
+                print(
+                    f"Warning: Could not initialize ResponseContentRewardFunction: {e}"
                 )
 
         if self.use_length:

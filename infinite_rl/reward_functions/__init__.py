@@ -6,6 +6,7 @@ from .reasoning_steps import ReasoningStepsRewardFunction
 from .format import FormatRewardFunction
 from .llm_judge import LLMJudgeRewardFunction
 from .length import LengthRewardFunction
+from .response_content import ResponseContentRewardFunction
 
 
 def get_reward_functions(

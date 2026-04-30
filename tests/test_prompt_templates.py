@@ -91,8 +91,9 @@ class TestFormatPuzzlePrompt(unittest.TestCase):
         self.assertIn("# fibonacci", result)
         self.assertIn("Return the nth Fibonacci number", result)
         self.assertIn("<think>", result)
-        self.assertIn("<answer>", result)
         self.assertIn("```python", result)
+        # Puzzle prompts no longer use <answer> tags (code blocks are extracted directly)
+        self.assertNotIn("<answer>", result)
 
     def test_puzzle_with_javascript(self):
         """Test puzzle with JavaScript language."""
@@ -110,16 +111,15 @@ class TestFormatPuzzlePrompt(unittest.TestCase):
         self.assertIn("```python", result)
 
     def test_custom_puzzle_tags(self):
-        """Test puzzle with custom think and answer tags."""
+        """Test puzzle with custom think tag (answer_tag ignored for puzzles)."""
         result = format_puzzle_prompt(
             self.puzzle_data, "python", think_tag="analysis", answer_tag="solution"
         )
 
         self.assertIn("<analysis>", result)
         self.assertIn("</analysis>", result)
-        self.assertIn("<solution>", result)
-        self.assertIn("</solution>", result)
-        self.assertNotIn("<think>", result)
+        # Puzzle prompts no longer use answer tags
+        self.assertNotIn("<solution>", result)
         self.assertNotIn("<answer>", result)
 
     def test_puzzle_includes_sat_function(self):
@@ -169,7 +169,8 @@ class TestFormatPuzzlePrompt(unittest.TestCase):
 
         self.assertIn("empty", result)
         self.assertIn("<think>", result)
-        self.assertIn("<answer>", result)
+        # Puzzle prompts no longer use <answer> tags
+        self.assertNotIn("<answer>", result)
 
 
 class TestLanguageMapping(unittest.TestCase):
@@ -300,17 +301,18 @@ class TestReasoningTemplatePuzzlePrompt(unittest.TestCase):
         self.assertNotIn("</think>", result)
         self.assertNotIn("reasoning and approach", result)
 
-        # Should still have answer tag and code block
-        self.assertIn("<answer>", result)
+        # Should still have code block (no <answer> tags for puzzles)
         self.assertIn("```python", result)
         self.assertIn("fibonacci", result)
+        self.assertNotIn("<answer>", result)
 
     def test_reasoning_template_default_includes_think_tag(self):
         """Default (reasoning_template=False) should include think tag instructions."""
         result = format_puzzle_prompt(self.puzzle_data, "python")
 
         self.assertIn("<think>", result)
-        self.assertIn("<answer>", result)
+        # Puzzle prompts no longer use <answer> tags
+        self.assertNotIn("<answer>", result)
 
     def test_reasoning_template_with_javascript(self):
         """reasoning_template=True should work with JavaScript too."""
@@ -319,7 +321,8 @@ class TestReasoningTemplatePuzzlePrompt(unittest.TestCase):
         )
 
         self.assertNotIn("<think>", result)
-        self.assertIn("<answer>", result)
+        # Puzzle prompts no longer use <answer> tags
+        self.assertNotIn("<answer>", result)
         self.assertIn("```javascript", result)
 
 

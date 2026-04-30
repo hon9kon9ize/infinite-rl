@@ -144,6 +144,9 @@ class FormatRewardFunction(RewardFunction):
             )
 
         if not matches:
+            # For puzzle tasks, accept code blocks without <answer> tags
+            if task.task_type == "puzzle":
+                return self._check_code_block_for_puzzle(task)
             return RewardFunctionScore(
                 score=0.0,
                 info=f"No content found in the <{self.target_tag}> tag.",
@@ -245,8 +248,58 @@ class FormatRewardFunction(RewardFunction):
                     score=1.0, info="Valid code block (no language specifier)."
                 )
 
-        # No code blocks - check if content is non-empty
+        # No code blocks in <answer> - check if content is non-empty
         if raw_content.strip():
             return RewardFunctionScore(score=1.0, info="Valid tag with content.")
         else:
             return RewardFunctionScore(score=0.0, info="Empty answer tag.")
+
+    def _check_code_block_for_puzzle(self, task: "Task") -> RewardFunctionScore:
+        """Check for code blocks directly (without <answer> tags) for puzzle tasks.
+
+        Puzzle tasks no longer require <answer> tags - the reward extracts code blocks directly.
+        This method checks that a valid code block exists in the output.
+        """
+        # Search region: prefer after </think> to avoid reasoning section
+        search_region = task.model_output
+        think_close = f"</{self.think_tag}>"
+        close_idx = task.model_output.find(think_close)
+        if close_idx >= 0:
+            search_region = task.model_output[close_idx + len(think_close):]
+
+        # Look for code blocks
+        if "```" not in search_region:
+            # Fallback: search entire output
+            if close_idx >= 0:
+                search_region = task.model_output
+            else:
+                return RewardFunctionScore(
+                    score=0.0,
+                    info="No code block found in response.",
+                )
+
+        if "```" not in search_region:
+            return RewardFunctionScore(
+                score=0.0,
+                info="No code block found in response.",
+            )
+
+        # Count triple backticks
+        opening_count = search_region.count("```")
+        if opening_count % 2 != 0:
+            return RewardFunctionScore(
+                score=0.0,
+                info="Code block not properly closed (missing closing ```).",
+            )
+
+        # Check for language specifier
+        code_pattern = r"```(\w+)"
+        has_language = bool(re.search(code_pattern, search_region))
+        if has_language:
+            return RewardFunctionScore(
+                score=1.0, info="Valid code block with language specifier."
+            )
+        else:
+            return RewardFunctionScore(
+                score=1.0, info="Valid code block (no language specifier)."
+            )

@@ -134,26 +134,21 @@ def format_puzzle_prompt(
     # Remove leading indents in docstring
     docstring = "\n".join(line.lstrip() for line in docstring.splitlines())
 
-    # Language-specific solution template
+    # Language-specific solution template (no <answer> wrapper - reward extracts from code block directly)
     if language == "python":
-        solution_template = f"""<{answer_tag}>
-```python
+        solution_template = f"""```python
 {sol_func}
     [Your code here]
-```
-</{answer_tag}>"""
+```"""
     else:  # javascript
-        solution_template = f"""<{answer_tag}>
-```javascript
+        solution_template = f"""```javascript
 {sol_func} {{
     [Your code here]
 }}
-```
-</{answer_tag}>"""
+```"""
 
     if reasoning_template:
         # Reasoning models (e.g. Qwen3) already know to use think tags.
-        # Only ask for the answer in answer_tag.
         prompt = f"""# {name}
 
 {docstring}
@@ -164,7 +159,7 @@ Write a function that satisfies the following condition:
 {sat_func}
 ```
 
-Provide your solution in <{answer_tag}> tags. Your solution should be a {language} function with this signature:
+Provide your solution as a {language} function with this signature:
 
 {solution_template}"""
     else:
@@ -185,7 +180,7 @@ First, show your reasoning and approach in <{think_tag}> tags (write naturally w
 [Reasoning steps here, must be in {reasoning_lang_name}, with proper spacing]
 </{think_tag}>
 
-Then provide your solution in <{answer_tag}> tags, Your solution should be a {language} function with this signature:
+Then provide your solution as a {language} function with this signature:
 
 {solution_template}"""
     return prompt

@@ -348,6 +348,46 @@ function sol() {
         score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 1.0)
 
+    def test_valid_js_sat_with_static_helper_methods(self):
+        """Extracted JS SAT payloads should include class static helper methods."""
+        cases = [
+            (
+                "NoRelativePrimes",
+                {"b": 7, "m": 6},
+                "function sol(b, m) { return [195, 594, 993, 1392, 1791, 2190]; }",
+            ),
+            (
+                "PrimeFib",
+                {"lower": 123456},
+                "function sol(lower) { return 514229; }",
+            ),
+        ]
+
+        for puzzle_name, inputs, code in cases:
+            with self.subTest(puzzle=puzzle_name):
+                model_output = f"""<answer>
+```javascript
+{code}
+```
+</answer>"""
+                expected_output = {
+                    "puzzle": puzzle_name,
+                    "inputs": inputs,
+                    "language": "javascript",
+                }
+                task = Task(
+                    task_id=f"test_js_static_helper_{puzzle_name}",
+                    task_name="test",
+                    task_type="puzzle",
+                    level=1,
+                    prompt="Test",
+                    expected_answer=expected_output,
+                    language="javascript",
+                    model_output=model_output,
+                )
+                score = self.reward_fn.compute_reward(task)
+                self.assertEqual(score.score, 1.0, score.info)
+
 
 class TestPuzzleRewardFunctionPython(unittest.TestCase):
     """Test Puzzle reward function with Python puzzle examples."""

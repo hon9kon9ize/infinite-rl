@@ -198,6 +198,43 @@ def _extract_js_helper_context(content):
     return "\n".join(helper_lines).strip()
 
 
+def _normalize_extracted_js_function(source):
+    source = source.replace("\t", "    ")
+    lines = source.split("\n")
+    return "\n".join(line[4:] if line.startswith("    ") else line for line in lines)
+
+
+def _rewrite_static_class_references(source, class_name):
+    return re.sub(rf"\b{re.escape(class_name)}\.", "", source)
+
+
+def _extract_class_static_helpers(class_content, class_name):
+    """Extract static helper methods used by a class SAT as plain functions."""
+    helpers = []
+    seen = set()
+    for match in re.finditer(r"static\s+([A-Za-z_]\w*)\s*\(", class_content):
+        helper_name = match.group(1)
+        if helper_name in {"sat", "sol"} or helper_name in seen:
+            continue
+
+        helper = _extract_balanced_function(class_content[match.start():], helper_name)
+        if not helper:
+            continue
+
+        helper = re.sub(
+            rf"^static\s+{re.escape(helper_name)}\s*\(",
+            f"function {helper_name} (",
+            helper,
+            count=1,
+        )
+        helper = _normalize_extracted_js_function(helper)
+        helper = _rewrite_static_class_references(helper, class_name)
+        helpers.append(helper)
+        seen.add(helper_name)
+
+    return "\n\n".join(helpers)
+
+
 def extract_js_puzzle_info(file_path, puzzle_name):
     """Extract puzzle information from a JavaScript generator file."""
     try:
@@ -244,11 +281,11 @@ def extract_js_puzzle_info(file_path, puzzle_name):
     # Extract sat function
     sat = _extract_balanced_function(class_content, "sat")
     sat = sat.replace("static sat", "function sat") if sat else ""
-    # Normalize tabs to 4 spaces
-    sat = sat.replace("\t", "    ")
-    # Remove one level of indentation (from being inside a class)
-    sat_lines = sat.split("\n")
-    sat = "\n".join(line[4:] if line.startswith("    ") else line for line in sat_lines)
+    sat = _normalize_extracted_js_function(sat)
+    sat = _rewrite_static_class_references(sat, puzzle_name)
+    class_helpers = _extract_class_static_helpers(class_content, puzzle_name)
+    if sat and class_helpers:
+        sat = f"{class_helpers}\n\n{sat}"
     if sat and helper_context:
         sat = f"{helper_context}\n\n{sat}"
 

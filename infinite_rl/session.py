@@ -89,6 +89,9 @@ class Session:
         if math_data:
             try:
                 for idx, item in enumerate(math_data):
+                    if item.get("lang", "en") != "en":
+                        continue
+
                     # Add unique dataset ID to prevent collisions
                     dataset_id = f"math_{idx}"
                     task_info = {

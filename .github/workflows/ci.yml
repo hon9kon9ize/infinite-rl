@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release_exists: ${{ steps.check_release.outputs.release_exists }}
+      assets_complete: ${{ steps.check_release.outputs.assets_complete }}
       version: ${{ steps.get_version.outputs.version }}
     steps:
       - name: Checkout
@@ -51,13 +52,28 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -e
           TAG="runtimes-${{ steps.get_version.outputs.version }}"
           resp=$(curl -sS -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG" || true)
           if echo "$resp" | jq -e '.id' >/dev/null 2>&1; then
             echo "release_exists=true" >> "$GITHUB_OUTPUT"
             echo "upload_url=$(echo "$resp" | jq -r '.upload_url' | sed 's/{?name,label}//')" >> "$GITHUB_OUTPUT"
+            assets=$(echo "$resp" | jq -r '.assets[].name')
+            missing=()
+            for required in puzzle_js.wasm puzzles.json math.json truthy.json; do
+              if ! grep -qx "$required" <<< "$assets"; then
+                missing+=("$required")
+              fi
+            done
+            if [ "${#missing[@]}" -eq 0 ]; then
+              echo "assets_complete=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "assets_complete=false" >> "$GITHUB_OUTPUT"
+              echo "Missing release assets: ${missing[*]}"
+            fi
           else
             echo "release_exists=false" >> "$GITHUB_OUTPUT"
+            echo "assets_complete=false" >> "$GITHUB_OUTPUT"
           fi
 
   test:
@@ -68,29 +84,29 @@ jobs:
 
     steps:
       - name: Exit if release missing
-        if: ${{ needs.version-check.outputs.release_exists == 'false' }}
+        if: ${{ needs.version-check.outputs.assets_complete == 'false' }}
         run: |
-          echo "Release runtimes-${{ needs.version-check.outputs.version }} not found. Exiting CI run."
+          echo "Release runtimes-${{ needs.version-check.outputs.version }} is missing required runtime assets. Exiting CI run."
           exit 0
 
       - name: Continue when release present
-        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
+        if: ${{ needs.version-check.outputs.assets_complete == 'true' }}
         uses: actions/checkout@v4
 
       - name: Set up Python
-        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
+        if: ${{ needs.version-check.outputs.assets_complete == 'true' }}
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Install system dependencies
-        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
+        if: ${{ needs.version-check.outputs.assets_complete == 'true' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y nodejs openjdk-17-jdk g++
 
       - name: Install Python package from current commit
-        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
+        if: ${{ needs.version-check.outputs.assets_complete == 'true' }}
         env:
           # Tell setup.py which release tag to fetch runtimes from (version is like 'vX.Y.Z')
           RUNTIME_RELEASE_TAG: ${{ needs.version-check.outputs.version }}
@@ -106,7 +122,7 @@ jobs:
           pip install pytest pytest-cov pytest-html
 
       - name: Verify runtime assets were downloaded
-        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
+        if: ${{ needs.version-check.outputs.assets_complete == 'true' }}
         run: |
           python - <<'PY'
           import subprocess
@@ -167,19 +183,19 @@ jobs:
           PY
 
       - name: Remove local source to force using pip-installed package
-        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
+        if: ${{ needs.version-check.outputs.assets_complete == 'true' }}
         run: |
           echo "Removing local infinite_rl source directory to ensure tests use pip-installed version..."
           rm -rf infinite_rl/
           ls -la
 
       - name: Run unit tests with coverage
-        if: ${{ needs.version-check.outputs.release_exists == 'true' }}
+        if: ${{ needs.version-check.outputs.assets_complete == 'true' }}
         run: |
           python -m pytest --cov=infinite_rl --cov-report=xml --cov-report=term-missing
 
       - name: Set coverage status check
-        if: ${{ needs.version-check.outputs.release_exists == 'true' && always() }}
+        if: ${{ needs.version-check.outputs.assets_complete == 'true' && always() }}
         shell: bash
         run: |
           # Extract coverage percentage from coverage.xml if it exists
@@ -212,7 +228,7 @@ jobs:
             }"
 
       - name: Update coverage badge in README
-        if: ${{ needs.version-check.outputs.release_exists == 'true' && github.ref == 'refs/heads/main' }}
+        if: ${{ needs.version-check.outputs.assets_complete == 'true' && github.ref == 'refs/heads/main' }}
         run: |
           if [ -f coverage.xml ]; then
             python tests/update_coverage_badge.py

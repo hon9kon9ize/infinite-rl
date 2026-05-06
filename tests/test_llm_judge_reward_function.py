@@ -1,10 +1,18 @@
 """Unit tests for LLMJudgeRewardFunction."""
 
+import sys
+import types
 import unittest
 from unittest.mock import Mock, patch, MagicMock
 import requests
 from infinite_rl.reward_functions.llm_judge import LLMJudgeRewardFunction
 from infinite_rl.task import Task
+
+
+if "transformers" not in sys.modules:
+    transformers_stub = types.ModuleType("transformers")
+    transformers_stub.AutoTokenizer = MagicMock()
+    sys.modules["transformers"] = transformers_stub
 
 
 class MockTokenizer:

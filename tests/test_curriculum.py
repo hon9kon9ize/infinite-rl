@@ -2016,6 +2016,79 @@ class TestCurriculumLearning(unittest.TestCase):
                 # With aux_weight=0.0: combined = 1.0 * (1-0) + 0.8 * 0 = 1.0
                 self.assertAlmostEqual(math_reward, 1.0, places=5)
 
+    def test_batch_llm_judge_skips_incorrect_standard_generations(self):
+        """Incorrect math/puzzle generations should not be sent to LLM Judge."""
+        cl = CurriculumLearning(
+            use_llm_judge=True,
+            use_format=False,
+            use_lang_consistency=False,
+            use_reasoning_steps=False,
+            use_response_content=False,
+            use_length=False,
+            num_generations=4,
+            llm_judge_kwargs={
+                "api_host": "localhost",
+                "api_port": 8000,
+                "model_name": "Skywork/Skywork-Reward-V2-Qwen3-4B",
+            },
+        )
+        setup_llm_judge_with_mock_tokenizer(cl)
+
+        task = Task(
+            task_id="puzzle_judge_gate",
+            task_name="Puzzle",
+            task_type="puzzle",
+            level=1,
+            prompt="Solve the puzzle",
+            expected_answer={"puzzle": "Example", "inputs": {}, "language": "javascript"},
+        )
+        cl.session.add_task(task)
+
+        for idx, is_correct in enumerate([True, False, True, False]):
+            primary_score = 1.0 if is_correct else 0.0
+            task.add_generation(
+                output=f"generation {idx}",
+                rewards=[
+                    RewardFunctionScore(
+                        score=primary_score,
+                        reward_function_name="primary",
+                        info="",
+                    )
+                ],
+                primary_score=primary_score,
+                is_correct=is_correct,
+            )
+
+        judge_scores = [
+            RewardFunctionScore(score=0.8, reward_function_name="llm_judge", info="good"),
+            RewardFunctionScore(score=0.6, reward_function_name="llm_judge", info="ok"),
+        ]
+        with patch.object(
+            cl.aux_reward_functions["llm_judge"],
+            "compute_rewards_batch",
+            return_value=[judge_scores],
+        ) as mock_batch:
+            cl._compute_batch_llm_judge(["puzzle_judge_gate"])
+
+        mock_batch.assert_called_once()
+        judged_tasks = mock_batch.call_args.args[0]
+        self.assertEqual(len(judged_tasks), 1)
+        self.assertEqual(len(judged_tasks[0].generations), 2)
+        self.assertTrue(all(gen.is_correct for gen in judged_tasks[0].generations))
+
+        llm_scores = []
+        llm_infos = []
+        for gen in task.generations:
+            reward = next(
+                r for r in gen.rewards if r.reward_function_name == "llm_judge"
+            )
+            llm_scores.append(reward.score)
+            llm_infos.append(reward.info)
+
+        self.assertEqual(llm_scores, [0.8, 0.0, 0.6, 0.0])
+        self.assertIn("gated", llm_infos[1].lower())
+        self.assertIn("gated", llm_infos[3].lower())
+
     def test_batch_llm_judge_with_fallback_to_individual(self):
         """Test LLM Judge with individual compute_reward calls."""
         cl = CurriculumLearning(

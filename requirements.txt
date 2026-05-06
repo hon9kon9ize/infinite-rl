@@ -2,3 +2,4 @@ antlr4-python3-runtime==4.11.1
 pycld2
 canto-filter
 pylatexenc
+requests

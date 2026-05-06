@@ -68,23 +68,38 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -e
           TAG="runtimes-${{ steps.get_version.outputs.version }}"
           resp=$(curl -sS -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG" || true)
           if echo "$resp" | jq -e '.id' >/dev/null 2>&1; then
             echo "release_exists=true" >> "$GITHUB_OUTPUT"
             echo "upload_url=$(echo "$resp" | jq -r '.upload_url' | sed 's/{?name,label}//')" >> "$GITHUB_OUTPUT"
+            assets=$(echo "$resp" | jq -r '.assets[].name')
+            missing=()
+            for required in puzzle_js.wasm puzzles.json math.json truthy.json; do
+              if ! grep -qx "$required" <<< "$assets"; then
+                missing+=("$required")
+              fi
+            done
+            if [ "${#missing[@]}" -eq 0 ]; then
+              echo "assets_complete=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "assets_complete=false" >> "$GITHUB_OUTPUT"
+              echo "Missing release assets: ${missing[*]}"
+            fi
           else
             echo "release_exists=false" >> "$GITHUB_OUTPUT"
+            echo "assets_complete=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Stop early if release exists
-        if: steps.check_release.outputs.release_exists == 'true'
+        if: steps.check_release.outputs.release_exists == 'true' && steps.check_release.outputs.assets_complete == 'true'
         run: |
           echo "Release runtimes-${{ steps.get_version.outputs.version }} already exists. Skipping export/build and upload."
           exit 0
 
       - name: Build datasets(math.json and truthy.json) needed for runtimes
-        if: steps.check_release.outputs.release_exists == 'false'
+        if: steps.check_release.outputs.assets_complete == 'false'
         run: |
           python -m pip install --upgrade pip
           pip install datasets huggingface_hub pandas
@@ -93,11 +108,11 @@ jobs:
 
       # 5. Build WASM Runtimes - only run when we need to create release
       - name: Make build script executable
-        if: steps.check_release.outputs.release_exists == 'false'
+        if: steps.check_release.outputs.assets_complete == 'false'
         run: chmod +x build_src/build_wasm.sh
 
       - name: Run runtime build
-        if: steps.check_release.outputs.release_exists == 'false'
+        if: steps.check_release.outputs.assets_complete == 'false'
         run: |
           # Inject SIMD optimization into the environment for the build script
           export RUSTFLAGS="-C target-feature=+simd128"
@@ -114,46 +129,17 @@ jobs:
           release_name: "Runtimes ${{ steps.get_version.outputs.version }}"
           body: "Automated Build: Includes WASM Runtimes."
 
-      - name: Upload puzzle_js.wasm
-        if: steps.check_release.outputs.release_exists == 'false'
-        uses: actions/upload-release-asset@v1
+      - name: Upload runtime assets
+        if: steps.check_release.outputs.assets_complete == 'false'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: assets/puzzle_js.wasm
-          asset_name: puzzle_js.wasm
-          asset_content_type: application/wasm
-
-      - name: Upload puzzles.json
-        if: steps.check_release.outputs.release_exists == 'false'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: assets/puzzles.json
-          asset_name: puzzles.json
-          asset_content_type: application/json
-
-      - name: Upload math.json
-        if: steps.check_release.outputs.release_exists == 'false'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: assets/math.json
-          asset_name: math.json
-          asset_content_type: application/json
-
-      - name: Upload truthy.json
-        if: steps.check_release.outputs.release_exists == 'false'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: assets/truthy.json
-          asset_name: truthy.json
-          asset_content_type: application/json
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          TAG="runtimes-${{ steps.get_version.outputs.version }}"
+          gh release upload "$TAG" \
+            assets/puzzle_js.wasm \
+            assets/puzzles.json \
+            assets/math.json \
+            assets/truthy.json \
+            --repo "${{ github.repository }}" \
+            --clobber

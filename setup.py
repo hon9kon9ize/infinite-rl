@@ -9,8 +9,16 @@ from setuptools.command.build_py import build_py as _build_py
 RUNTIME_FILES = ["puzzle_js.wasm"]
 PUZZLE_FILES = ["puzzles.json", "math.json", "truthy.json"]
 GITHUB_REPO = os.environ.get("RUNTIME_GITHUB_REPO", "hon9kon9ize/infinite-rl")
-# Use a known-good tag if the version-specific one fails
-FALLBACK_TAG = "runtimes-v0.1.26"
+
+
+def normalize_runtime_tag(tag):
+    """Normalize version/tag strings to the runtimes-vX.Y.Z release tag."""
+    tag = tag.strip()
+    if tag.startswith("runtimes-"):
+        return tag
+    if tag.startswith("v"):
+        return f"runtimes-{tag}"
+    return f"runtimes-v{tag}"
 
 
 def get_version():
@@ -24,14 +32,30 @@ def get_version():
 PACKAGE_VERSION = get_version()
 
 
+def runtime_tags_to_try():
+    """Return runtime release tags in priority order.
+
+    If RUNTIME_RELEASE_TAG is set, treat it as authoritative. Falling back to
+    older runtime assets can make new runner code install with stale WASM.
+    """
+    explicit_tag = os.environ.get("RUNTIME_RELEASE_TAG")
+    if explicit_tag:
+        return [normalize_runtime_tag(explicit_tag)]
+
+    tags = [normalize_runtime_tag(PACKAGE_VERSION)]
+    fallback_tag = os.environ.get("RUNTIME_FALLBACK_TAG")
+    if fallback_tag:
+        normalized = normalize_runtime_tag(fallback_tag)
+        if normalized not in tags:
+            tags.append(normalized)
+    return tags
+
+
 def download_assets(target_dir):
     """Downloads files directly without relying on the GitHub API JSON."""
     os.makedirs(target_dir, exist_ok=True)
 
-    # We try the current version tag first, then fallback
-    tags_to_try = [f"runtimes-v{PACKAGE_VERSION}", FALLBACK_TAG]
-
-    for tag in tags_to_try:
+    for tag in runtime_tags_to_try():
         success = True
         print(f"--> [Action] Attempting to download assets from tag: {tag}")
 
@@ -83,6 +107,7 @@ setup(
     python_requires=">=3.11",
     install_requires=[
         "wasmtime",
+        "requests",
         "antlr4-python3-runtime==4.11.1",
         "pycld2",
         "pylatexenc",

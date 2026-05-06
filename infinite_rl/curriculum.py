@@ -1171,7 +1171,7 @@ class CurriculumLearning:
 
         # Collect all tasks that need LLM Judge evaluation
         tasks_to_judge = []
-        task_index_map = {}  # Maps index in tasks_to_judge to task_id
+        task_judge_plan = []  # Maps judge task index to (task_id, generation indices)
 
         for task_id in task_ids:
             task = self.session.get_task(task_id)
@@ -1180,19 +1180,36 @@ class CurriculumLearning:
             # Skip tasks that haven't been processed yet (no generations)
             if not task.latest_generation:
                 continue
-            # Collect all tasks that need LLM Judge evaluation (including truthy)
-            # Check if any generation needs judge (not just latest)
-            needs_judge = False
-            for gen in task.generations:
+            pending_generation_indices = []
+            for gen_idx, gen in enumerate(task.generations):
                 has_judge = any(
                     r.reward_function_name == "llm_judge" for r in gen.rewards
                 )
-                if not has_judge:
-                    needs_judge = True
-                    break
-            if needs_judge:
-                task_index_map[len(tasks_to_judge)] = task_id
-                tasks_to_judge.append(task)
+                if has_judge:
+                    continue
+
+                if task.task_type in ["math", "puzzle"] and not gen.is_correct:
+                    gen.rewards.append(
+                        RewardFunctionScore(
+                            score=0.0,
+                            reward_function_name="llm_judge",
+                            info="LLM Judge reward gated: generation is incorrect.",
+                        )
+                    )
+                    gen.combined_score = self._compute_combined_score(task, gen)
+                    continue
+
+                pending_generation_indices.append(gen_idx)
+
+            if pending_generation_indices:
+                import copy
+
+                judge_task = copy.copy(task)
+                judge_task.generations = [
+                    task.generations[gen_idx] for gen_idx in pending_generation_indices
+                ]
+                tasks_to_judge.append(judge_task)
+                task_judge_plan.append((task_id, pending_generation_indices))
 
         if not tasks_to_judge:
             return  # No tasks need LLM Judge evaluation
@@ -1205,7 +1222,7 @@ class CurriculumLearning:
 
             # Update task rewards with LLM Judge scores
             for idx, judge_scores in enumerate(judge_results):
-                task_id = task_index_map[idx]
+                task_id, judged_generation_indices = task_judge_plan[idx]
                 task = self.session.get_task(task_id)
                 if not task:
                     continue
@@ -1213,9 +1230,10 @@ class CurriculumLearning:
                 if task.task_type == "truthy":
                     # For truthy: replace primary score with LLM Judge score
                     # Apply language consistency gate: if lang_consistency < 1.0, gate judge reward to 0.0
-                    for gen_idx, gen in enumerate(task.generations):
-                        if gen_idx < len(judge_scores):
-                            judge_score = judge_scores[gen_idx]
+                    for result_idx, gen_idx in enumerate(judged_generation_indices):
+                        gen = task.generations[gen_idx]
+                        if result_idx < len(judge_scores):
+                            judge_score = judge_scores[result_idx]
 
                             # Check language consistency gate for truthy tasks
                             lang_consistent = True
@@ -1246,9 +1264,10 @@ class CurriculumLearning:
                                     break
                 else:
                     # For math/puzzle: add as auxiliary reward to each generation that doesn't have it
-                    for gen_idx, gen in enumerate(task.generations):
-                        if gen_idx < len(judge_scores):
-                            judge_score = judge_scores[gen_idx]
+                    for result_idx, gen_idx in enumerate(judged_generation_indices):
+                        gen = task.generations[gen_idx]
+                        if result_idx < len(judge_scores):
+                            judge_score = judge_scores[result_idx]
                             # Check if this generation already has llm_judge
                             has_judge = any(
                                 r.reward_function_name == "llm_judge"

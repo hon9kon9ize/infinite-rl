@@ -28,7 +28,7 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 ## What to know before changing code
 - Reward functions are designed to integrate with fine-tuning frameworks (e.g., Tunix).
 - **Math tasks**: `MathRewardFunction` expects the answer tag to contain a numeric value or symbolic expression that can be parsed and compared symbolically.
-- **Puzzle tasks**: `PuzzleRewardFunction` expects the answer tag to contain a code block (triple-backtick) with valid Python or JavaScript code. The code is executed against the puzzle's SAT (satisfaction) function to determine correctness.
+- **Puzzle tasks**: `PuzzleRewardFunction` expects the answer tag to contain a code block (triple-backtick) with valid Python or JavaScript code. Python code is checked against the Python SAT function; JavaScript code is checked against the JavaScript SAT function inside the WASM runtime. Do not validate JavaScript outputs with Python SAT semantics.
 - **Truthy tasks**: Conversation-based quality evaluation where the **primary score IS the LLM Judge score** (not binary). System prompt + prompt + chosen/rejected are provided in conversation format. Requires `use_llm_judge=True` with `api_host`, `api_port`, and `model_name`. **lang_consistency** is only computed for truthy tasks (checks language consistency outside `<think>` tags).
 - **LLM Judge** serves two roles:
   1. **Primary evaluator for truthy tasks**: Rates quality on continuous scale (0.0-1.0)
@@ -86,6 +86,15 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 
 - Tip: install and test with `wasmtime` in your environment when running runtime-dependent tests or executing WASM-based examples.
 
+- When changing JavaScript puzzle execution or SAT extraction, regenerate and rebuild local runtime assets before testing:
+  ```bash
+  python build_src/puzzle_prompt.py
+  cp assets/puzzles.json infinite_rl/runtimes/puzzles.json
+  esbuild build_src/runner.js --bundle --outfile=build_src/bundled_runner.js --format=esm
+  build_src/javy build build_src/bundled_runner.js -o infinite_rl/runtimes/puzzle_js.wasm
+  python -m unittest tests.test_runner tests.test_puzzle_reward_function tests.test_javascript_puzzle_examples
+  ```
+
 - Run unit tests (CI uses unittest discover):
   ```bash
   python -m unittest discover tests
@@ -125,7 +134,7 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
     - Real nested tags (e.g., `<answer>315</answer>` in CoT) still rejected by `format_think` (0.0)
   - `LangConsistencyRewardFunction`: Only for truthy tasks — checks language consistency outside `<think>` tags
   - `ReasoningStepsRewardFunction`: Rewards structured reasoning with indicators (English: "First", "Then", "Finally", "Therefore"; Cantonese/Chinese: "首先", "然後", "最後", "所以", etc. — 40+ keywords). Minimum score is 0.0 (no longer -1.0 penalty). Empty reasoning returns 0.0.
-  - `ResponseContentRewardFunction` (v0.1.29+): Rewards brief explanations between `</think>` and `<answer>` tags. Sweet-spot curve: 30-500 chars = 1.0, empty = 0.0, verbose >1000 chars decays to 0.4. Default: enabled (`use_response_content=True`).
+  - `ResponseContentRewardFunction`: Rewards brief explanations between `</think>` and `<answer>` tags. Sweet-spot curve: 30-500 chars = 1.0, empty = 0.0, verbose >1000 chars decays to 0.4. Default: enabled (`use_response_content=True`).
   - `LLMJudgeRewardFunction`: Remote LLM-based quality scoring via sglang API
   - `LengthRewardFunction`: Rewards appropriate response length
   - Default `aux_weight = 0.5` (blends auxiliary rewards at 50% weight alongside primary rewards)
@@ -140,6 +149,8 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 
 ## Integration points & dependencies
 - Code execution: `wasmtime` + packaged WASM runtimes (`puzzle_js.wasm`) in `infinite_rl/runtimes`. The `Executor` exposes `javascript` for puzzles; Python puzzles use local subprocess execution via `infinite_rl/runner.py`.
+  - JavaScript puzzle correctness is computed by the JS runtime itself: `runner.py` passes the puzzle's JavaScript `sat` source from `runtimes/puzzles.json`, and `build_src/runner.js` returns `{ result, isCorrect }`. If a JavaScript puzzle has JS SAT metadata but the runtime response lacks `isCorrect`, rebuild `puzzle_js.wasm` instead of falling back to Python SAT.
+  - `build_src/puzzle_prompt.py` extracts balanced JS `static sat(...) { ... }` methods and includes module-level helper functions used by SAT checks. Keep `assets/puzzles.json`, `infinite_rl/runtimes/puzzles.json`, and `puzzle_js.wasm` in sync when changing JS puzzle generators or runner behavior.
   - Runtimes are built by the `build_src/build_wasm.sh` script and an automated GitHub Actions workflow (`.github/workflows/build_and_release_runtimes.yml`) uploads them to GitHub Releases.
   - Installation & CI notes:
     - `setup.py` will try to discover the latest release whose tag starts with `runtimes-` and download runtime assets into the package at build time. A `build_py` hook was added so installing from a git URL (e.g. `pip install git+https://github.com/owner/repo@runtimes-vX.Y.Z`) will include WASM files in the built wheel.

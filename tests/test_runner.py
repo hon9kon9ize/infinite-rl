@@ -12,6 +12,7 @@ class TestRunner(unittest.TestCase):
         """Set up test fixtures."""
         # Clear puzzle loader cache before each test
         runner._puzzle_loader_cache.clear()
+        runner._js_puzzle_info_cache = None
 
     @patch("infinite_rl.runner._get_executor")
     @patch("infinite_rl.runner._get_puzzle_class")
@@ -37,6 +38,55 @@ class TestRunner(unittest.TestCase):
         self.assertEqual(result, {"result": 42, "isCorrect": True})
         mock_executor_instance.run_single.assert_called_once()
         mock_puzzle_class.sat.assert_called_once_with(42, 1)
+
+    @patch("infinite_rl.runner._get_puzzle_class")
+    @patch("infinite_rl.runner._get_executor")
+    @patch(
+        "infinite_rl.runner._get_js_puzzle_info",
+        return_value={"sat": "function sat(x) { return x === 42; }"},
+    )
+    def test_eval_puzzle_javascript_uses_js_sat_result(
+        self, mock_get_js_puzzle_info, mock_get_executor, mock_get_puzzle
+    ):
+        """JavaScript puzzle correctness should come from the JS SAT function."""
+        mock_executor_instance = MagicMock()
+        mock_executor_instance.run_single.return_value = (
+            '{"result": 42, "isCorrect": true}',
+            "",
+        )
+        mock_get_executor.return_value = mock_executor_instance
+
+        result = runner.evalPuzzle(
+            "TestPuzzle", "function sol() { return 42; }", {}, "javascript"
+        )
+
+        self.assertEqual(result, {"result": 42, "isCorrect": True})
+        payload = json.loads(mock_executor_instance.run_single.call_args.args[0])
+        self.assertEqual(payload["sat"], "function sat(x) { return x === 42; }")
+        mock_get_js_puzzle_info.assert_called_once_with("TestPuzzle")
+        mock_get_puzzle.assert_not_called()
+
+    @patch("infinite_rl.runner._get_puzzle_class")
+    @patch("infinite_rl.runner._get_executor")
+    @patch(
+        "infinite_rl.runner._get_js_puzzle_info",
+        return_value={"sat": "function sat(x) { return x === 42; }"},
+    )
+    def test_eval_puzzle_javascript_requires_runtime_sat_validation(
+        self, mock_get_js_puzzle_info, mock_get_executor, mock_get_puzzle
+    ):
+        """A stale JS runtime must not silently fall back to Python SAT checks."""
+        mock_executor_instance = MagicMock()
+        mock_executor_instance.run_single.return_value = ('{"result": 42}', "")
+        mock_get_executor.return_value = mock_executor_instance
+
+        result = runner.evalPuzzle(
+            "TestPuzzle", "function sol() { return 42; }", {}, "javascript"
+        )
+
+        self.assertIn("Rebuild puzzle_js.wasm", result["error"])
+        mock_get_js_puzzle_info.assert_called_once_with("TestPuzzle")
+        mock_get_puzzle.assert_not_called()
 
     @patch("infinite_rl.runner._get_executor")
     def test_eval_puzzle_javascript_error(self, mock_get_executor):

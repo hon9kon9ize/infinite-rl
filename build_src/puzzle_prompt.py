@@ -86,52 +86,116 @@ def _extract_balanced_value(text):
     return None
 
 
+def _skip_js_string(text, i):
+    quote = text[i]
+    i += 1
+    while i < len(text):
+        if text[i] == "\\":
+            i += 2
+            continue
+        if text[i] == quote:
+            return i + 1
+        i += 1
+    return i
+
+
+def _skip_js_comment(text, i):
+    if text.startswith("//", i):
+        newline = text.find("\n", i + 2)
+        return len(text) if newline == -1 else newline + 1
+    if text.startswith("/*", i):
+        end = text.find("*/", i + 2)
+        return len(text) if end == -1 else end + 2
+    return i
+
+
+def _find_matching_js_delimiter(text, open_idx, open_char, close_char):
+    depth = 0
+    i = open_idx
+    while i < len(text):
+        skipped = _skip_js_comment(text, i)
+        if skipped != i:
+            i = skipped
+            continue
+
+        char = text[i]
+        if char in ('"', "'", "`"):
+            i = _skip_js_string(text, i)
+            continue
+
+        if char == open_char:
+            depth += 1
+        elif char == close_char:
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    return -1
+
+
 def _extract_balanced_function(text, func_name):
     """
-    Extract a balanced JavaScript function from text.
+    Extract a balanced JavaScript static method from text.
 
-    Finds 'static func_name' and extracts until the matching closing brace.
+    Finds `static func_name(...) { ... }`, skipping comments and strings while
+    balancing parameter and body delimiters.
     """
     text = text.lstrip()
-    # Find the start
-    start_pattern = rf"static {re.escape(func_name)} \("
+    start_pattern = rf"static\s+{re.escape(func_name)}\s*\("
     start_match = re.search(start_pattern, text)
     if not start_match:
         return None
 
     start_idx = start_match.start()
-    # Now find the opening brace after the params
-    params_end = text.find("{", start_idx)
+    params_start = text.find("(", start_match.start())
+    if params_start == -1:
+        return None
+
+    params_end = _find_matching_js_delimiter(text, params_start, "(", ")")
     if params_end == -1:
         return None
 
-    # Now balance from params_end
-    depth = 0
-    in_string = False
-    string_char = None
-    i = params_end
+    body_start = text.find("{", params_end)
+    if body_start == -1:
+        return None
 
-    while i < len(text):
-        char = text[i]
-        # Handle string literals
-        if char in ('"', "'") and (i == 0 or text[i - 1] != "\\"):
-            if in_string and string_char == char:
-                in_string = False
-                string_char = None
-            elif not in_string:
-                in_string = True
-                string_char = char
-        elif in_string:
-            pass
-        elif char == "{":
-            depth += 1
-        elif char == "}":
-            depth -= 1
-            if depth == 0:
-                return text[start_idx : i + 1].strip()
-        i += 1
+    body_end = _find_matching_js_delimiter(text, body_start, "{", "}")
+    if body_end == -1:
+        return None
 
-    return None
+    return text[start_idx : body_end + 1].strip()
+
+
+def _extract_js_helper_context(content):
+    """Return module-level helper code needed by extracted static methods."""
+    pieces = []
+    pos = 0
+
+    for class_match in re.finditer(
+        r"(?m)^\s*export class \w+(?:\s+extends\s+\w+)?", content
+    ):
+        body_start = content.find("{", class_match.end())
+        if body_start == -1:
+            continue
+
+        body_end = _find_matching_js_delimiter(content, body_start, "{", "}")
+        if body_end == -1:
+            continue
+
+        pieces.append(content[pos : class_match.start()])
+        pos = body_end + 1
+
+    pieces.append(content[pos:])
+    helper_context = "".join(pieces)
+
+    helper_lines = []
+    for line in helper_context.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("import "):
+            continue
+        helper_lines.append(line)
+
+    return "\n".join(helper_lines).strip()
 
 
 def extract_js_puzzle_info(file_path, puzzle_name):
@@ -160,7 +224,7 @@ def extract_js_puzzle_info(file_path, puzzle_name):
 
     # Find next class or end
     next_class_match = re.search(
-        r"export class \w+ extends PuzzleGenerator", content[class_start:]
+        r"(?m)^\s*export class \w+(?:\s+extends\s+\w+)?", content[class_start:]
     )
     class_end = class_start + (
         next_class_match.start() if next_class_match else len(content[class_start:])
@@ -175,6 +239,8 @@ def extract_js_puzzle_info(file_path, puzzle_name):
     docstring = docstring_match.group(1) if docstring_match else ""
     docstring = docstring.replace(r"\n", "\n").replace(r"\t", "\t")
 
+    helper_context = _extract_js_helper_context(content)
+
     # Extract sat function
     sat = _extract_balanced_function(class_content, "sat")
     sat = sat.replace("static sat", "function sat") if sat else ""
@@ -183,6 +249,8 @@ def extract_js_puzzle_info(file_path, puzzle_name):
     # Remove one level of indentation (from being inside a class)
     sat_lines = sat.split("\n")
     sat = "\n".join(line[4:] if line.startswith("    ") else line for line in sat_lines)
+    if sat and helper_context:
+        sat = f"{helper_context}\n\n{sat}"
 
     # Extract sol function header
     sol_match = re.search(r"static sol \([^)]*\)", class_content)

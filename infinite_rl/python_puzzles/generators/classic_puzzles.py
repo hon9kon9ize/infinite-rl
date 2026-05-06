@@ -987,7 +987,7 @@ class Easy63(PuzzleGenerator):
 
     @staticmethod
     def sat(s: str):
-        """Find a formula using two 8s and two 1's and -+*/ that evaluates to 1."""
+        """Find a formula using two 8s and one 1 and -+*/ that evaluates to 63."""
         return (
             set(s) <= set("18-+*/")
             and s.count("8") == 2
@@ -1005,7 +1005,7 @@ class Harder63(PuzzleGenerator):
 
     @staticmethod
     def sat(s: str):
-        """Find an expression using two 8s and two 1's and -+*/ that evaluates to 1."""
+        """Find an expression using three 8s and one 1 and -+*/ that evaluates to 63."""
         return (
             set(s) <= set("18-+*/")
             and s.count("8") == 3

@@ -1,23 +1,52 @@
 const input = JSON.parse(readStdin());
-const { puzzle, code, inputs } = input;
+const { puzzle, code, inputs, sat } = input;
 
-const result = evalPuzzle(puzzle, code, inputs);
+const result = evalPuzzle(puzzle, code, inputs, sat);
 writeOutput(result);
 
 // =======================
 // Puzzle evaluation
 // =======================
 
-function evalPuzzle (puzzle, code, inputs) {
+function evalPuzzle (puzzle, code, inputs, satSource) {
   try {
-    // Eval the user's code in global scope
-    const modifiedCode = code.replace('function sol', 'globalThis.sol = function');
+    // Eval the user's code in global scope.
+    globalThis.__infiniteRlSol = undefined;
+    globalThis.__infiniteRlSat = undefined;
+
+    const modifiedCode = code.replace(
+      /function\s+sol\s*\(/,
+      'globalThis.__infiniteRlSol = function ('
+    );
     globalThis.eval(modifiedCode);
 
-    // Call sol with inputs unpacked
-    const result = globalThis.sol(...Object.values(inputs));
+    if (typeof globalThis.__infiniteRlSol !== 'function') {
+      return { error: 'sol function not defined in submitted code' };
+    }
 
-    return { result };
+    // Call sol with inputs unpacked
+    const result = globalThis.__infiniteRlSol(...Object.values(inputs || {}));
+
+    if (!satSource) {
+      return { result };
+    }
+
+    const modifiedSat = satSource.replace(
+      /function\s+sat\s*\(/,
+      'globalThis.__infiniteRlSat = function ('
+    );
+    globalThis.eval(modifiedSat);
+
+    if (typeof globalThis.__infiniteRlSat !== 'function') {
+      return { error: 'sat function not defined for JavaScript puzzle' };
+    }
+
+    const isCorrect = globalThis.__infiniteRlSat(
+      result,
+      ...Object.values(inputs || {})
+    ) === true;
+
+    return { result, isCorrect };
   } catch (err) {
     return {
       error: String(err),

@@ -91,7 +91,14 @@ class RewardFunction:
             think_close = f"</{target}>"
             close_index = model_output.find(think_close)
             if close_index > 0:
-                return model_output[:close_index].strip()
+                content = model_output[:close_index].strip()
+                # Some collapsed checkpoints still emit a literal opening tag
+                # even when the chat template already injected it. Do not let
+                # the tag itself count as reasoning content.
+                think_open = f"<{target}>"
+                if content.startswith(think_open):
+                    content = content[len(think_open):].strip()
+                return content
             return ""
         else:
             # Standard: extract between tags

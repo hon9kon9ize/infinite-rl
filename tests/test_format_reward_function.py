@@ -215,6 +215,7 @@ My reasoning process
         out_think_first = """<think>
 Let me solve this step by step.
 First, I calculate 0.9 * 120 = 108
+Then I check the arithmetic carefully and confirm the discount calculation matches the problem statement.
 </think>
 
 <answer>108</answer>"""
@@ -280,6 +281,7 @@ More reasoning
         out = """<think>
 I think the answer should be 108
 Let me think about this more carefully
+I will verify the multiplication and make sure no tags are being used here beyond plain text references.
 </think>
 
 <answer>108</answer>"""

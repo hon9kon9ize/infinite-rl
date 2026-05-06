@@ -6,7 +6,7 @@ curriculum learning system, ensuring proper GRPO batching where multiple
 completions share the same prompt.
 """
 
-from typing import Any, Dict, List, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 import json
 
 if TYPE_CHECKING:
@@ -72,19 +72,51 @@ class DynamicCurriculumDataset(_BaseDataset):
                 "each worker generates its own task, breaking GRPO prompt consistency. "
                 "Set dataloader_num_workers=0 or pre-generate tasks externally before spawning workers."
             )
-        
+
         self.curriculum = curriculum
         self.num_samples = num_samples
         self.num_generations = curriculum.num_generations
         self.dataloader_num_workers = dataloader_num_workers
         self.task_cache: Dict[int, Any] = {}  # Cache tasks per GRPO batch
-        
+
         # Larger eviction window to prevent dropping active batches
         # This is a defensive measure; the root issue is lazy generation in workers
         self.cache_eviction_window = 60  # Keep last 60 batches (was 30)
 
     def __len__(self):
         return self.num_samples
+
+    def _create_task_synced(self, batch_idx: int) -> None:
+        """Deterministic, rank-consistent task selection with no collective ops.
+
+        Seeds Python random with batch_idx so all ranks pick the same puzzle
+        without any broadcast. Safe to call from the DataLoader — no collective
+        ops means no deadlock when ranks are between FSDP sync points.
+
+        Correctness: _get_recent_task_ids() strips the counter suffix to the
+        base task ID, so recent-task tracking stays identical across ranks.
+        """
+        import random
+        global_step = getattr(self.curriculum, "global_step", 0)
+        seed = (batch_idx * 7919 + global_step * 104729) & 0xFFFF_FFFF
+        saved_state = random.getstate()
+        random.seed(seed)
+        try:
+            task = self.curriculum.get_prompt()
+        finally:
+            random.setstate(saved_state)
+
+        if task is None:
+            stats = self.curriculum.get_learning_stats()
+            raise RuntimeError(
+                f"Failed to generate task at batch {batch_idx}. "
+                f"Level: {stats.get('current_level')}, "
+                f"Recent tasks: {stats.get('recent_tasks_count')}"
+            )
+        self.task_cache[batch_idx] = task
+        if len(self.task_cache) > 60:
+            for b in [b for b in self.task_cache if b < batch_idx - 60]:
+                del self.task_cache[b]
 
     def __getitem__(self, idx):
         """Generate a prompt on-demand from the curriculum.
@@ -93,48 +125,21 @@ class DynamicCurriculumDataset(_BaseDataset):
         Example with num_generations=4:
         - idx=0,1,2,3 all get task from batch_idx=0
         - idx=4,5,6,7 all get task from batch_idx=1
+
+        Multi-GPU safety: uses seed-based determinism so every rank picks the
+        same task without any distributed collective (broadcast would deadlock
+        when ranks are between FSDP gradient-sync points).
         """
         # Calculate which GRPO batch this index belongs to
         batch_idx = idx // self.num_generations
 
         # Generate task once per batch, reuse for all completions
         if batch_idx not in self.task_cache:
-            task = self.curriculum.get_prompt()
-            if task is None:
-                # Provide detailed debugging info
-                stats = self.curriculum.get_learning_stats()
-                raise RuntimeError(
-                    f"Failed to generate task at batch {batch_idx}. "
-                    f"Current level: {stats.get('current_level')}, "
-                    f"Available tasks by level: {stats.get('available_tasks_by_level')}, "
-                    f"Recent tasks: {stats.get('recent_tasks_count')}, "
-                    f"This usually indicates all tasks are marked as recent or all_available_tasks is empty."
-                )
-            self.task_cache[batch_idx] = task
-
-            # Clean up old caches to prevent memory leak
-            # Keep last 60 batches (increased from 50)
-            # Only cleanup batches that are far behind current batch_idx
-            if len(self.task_cache) > 60:
-                # Remove batches that are more than 60 batches behind
-                stale_batches = [
-                    b for b in self.task_cache.keys() if b < batch_idx - 60
-                ]
-                for stale_batch in stale_batches:
-                    del self.task_cache[stale_batch]
+            self._create_task_synced(batch_idx)
 
         # Defensive: re-check after cleanup (handles race conditions)
         if batch_idx not in self.task_cache:
-            task = self.curriculum.get_prompt()
-            if task is None:
-                stats = self.curriculum.get_learning_stats()
-                raise RuntimeError(
-                    f"Failed to generate task at batch {batch_idx} (after cleanup). "
-                    f"Current level: {stats.get('current_level')}, "
-                    f"Available tasks by level: {stats.get('available_tasks_by_level')}, "
-                    f"Recent tasks: {stats.get('recent_tasks_count')}"
-                )
-            self.task_cache[batch_idx] = task
+            self._create_task_synced(batch_idx)
 
         task = self.task_cache[batch_idx]
 
@@ -144,7 +149,6 @@ class DynamicCurriculumDataset(_BaseDataset):
         messages = []
         if (getattr(self.curriculum, 'use_system_prompt', True)
                 and task.reasoning_language
-                and task.reasoning_language != "en"
                 and task.task_type in ("math", "puzzle")):
             from .prompt_templates import create_reasoning_language_system_prompt
             system_prompt = create_reasoning_language_system_prompt(

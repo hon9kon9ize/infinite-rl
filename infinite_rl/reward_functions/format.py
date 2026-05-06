@@ -25,6 +25,8 @@ class FormatRewardFunction(RewardFunction):
         target_tag: str = None,
         reasoning_template: bool = False,
         allow_explanation_between_tags: bool = True,
+        min_think_chars: int = 100,
+        short_think_score: float = 0.5,
     ):
         super().__init__(
             task_name,
@@ -35,6 +37,8 @@ class FormatRewardFunction(RewardFunction):
             reasoning_template=reasoning_template,
         )
         self.allow_explanation_between_tags = allow_explanation_between_tags
+        self.min_think_chars = min_think_chars
+        self.short_think_score = short_think_score
 
     def initialize(self):
         self.initialized = True
@@ -69,9 +73,7 @@ class FormatRewardFunction(RewardFunction):
                     score=0.0,
                     info=f"No </{self.think_tag}> closing tag found.",
                 )
-            # Content is everything before </think>
-            close_index = task.model_output.find(think_close)
-            raw_content = task.model_output[:close_index].strip()
+            raw_content = self.extract_think_content(task.model_output or "")
             # Check there's actual reasoning content
             if not raw_content:
                 return RewardFunctionScore(
@@ -113,7 +115,7 @@ class FormatRewardFunction(RewardFunction):
                         score=0.0,
                         info=f"<{self.answer_tag}> tag found inside reasoning section. Tags cannot be nested.",
                     )
-            return RewardFunctionScore(score=1.0, info=f"Valid {self.target_tag} format (reasoning template).")
+            return self._score_think_content(raw_content, reasoning_template=True)
 
         # Note: Do NOT use re.escape() on tag_start/end since they are literal tags, not regex patterns
         pattern = f"{tag_start}(.*?){tag_end}"
@@ -211,6 +213,9 @@ class FormatRewardFunction(RewardFunction):
                     info=f"<{forbidden_tag}> tag found inside <{self.target_tag}> tag. Tags cannot be nested.",
                 )
 
+        if self.target_tag == self.think_tag:
+            return self._score_think_content(raw_content, reasoning_template=False)
+
         # For math tasks, check if content has code blocks (should not)
         if self.task_name == "math":
             if "```" in raw_content:
@@ -253,6 +258,35 @@ class FormatRewardFunction(RewardFunction):
             return RewardFunctionScore(score=1.0, info="Valid tag with content.")
         else:
             return RewardFunctionScore(score=0.0, info="Empty answer tag.")
+
+    def _score_think_content(
+        self,
+        raw_content: str,
+        reasoning_template: bool,
+    ) -> RewardFunctionScore:
+        content = raw_content.strip()
+        if not content:
+            return RewardFunctionScore(
+                score=0.0,
+                info=f"Empty reasoning content in <{self.think_tag}>.",
+            )
+
+        length = len(content)
+        if length < self.min_think_chars:
+            suffix = " (reasoning template)" if reasoning_template else ""
+            return RewardFunctionScore(
+                score=float(self.short_think_score),
+                info=(
+                    f"Short {self.think_tag} content: {length} chars "
+                    f"(< {self.min_think_chars}){suffix}."
+                ),
+            )
+
+        suffix = " (reasoning template)" if reasoning_template else ""
+        return RewardFunctionScore(
+            score=1.0,
+            info=f"Valid {self.think_tag} format with {length} chars{suffix}.",
+        )
 
     def _check_code_block_for_puzzle(self, task: "Task") -> RewardFunctionScore:
         """Check for code blocks directly (without <answer> tags) for puzzle tasks.

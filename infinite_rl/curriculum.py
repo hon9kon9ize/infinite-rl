@@ -262,7 +262,10 @@ class CurriculumLearning:
 
         if self.use_length:
             try:
-                from .reward_functions import LengthRewardFunction
+                from .reward_functions import (
+                    LengthRewardFunction,
+                    ThinkingLengthRewardFunction,
+                )
 
                 self.aux_reward_functions["length"] = LengthRewardFunction(
                     task_name="length",
@@ -271,6 +274,15 @@ class CurriculumLearning:
                     think_tag=self.think_tag,
                     reasoning_template=self.reasoning_template,
                     **self.length_kwargs,
+                )
+                self.aux_reward_functions["thinking_length"] = (
+                    ThinkingLengthRewardFunction(
+                        task_name="thinking_length",
+                        timeout=self.timeout,
+                        answer_tag=self.answer_tag,
+                        think_tag=self.think_tag,
+                        reasoning_template=self.reasoning_template,
+                    )
                 )
             except Exception as e:
                 print(f"Warning: Could not initialize LengthRewardFunction: {e}")
@@ -383,12 +395,8 @@ class CurriculumLearning:
         """
         Evaluate multiple completions for a task and compute rewards in batch.
 
-        Accumulates all generations first, then finalizes batch once:
-        - Computes LLM Judge scores
-        - Computes combined scores for all generations
-        - Tracks curriculum success
-        - Updates difficulty level
-        - Logs completed task
+        All completions are evaluated concurrently (primary + aux rewards), then
+        generations are accumulated serially, and the batch is finalised once.
 
         Args:
             task_id: Task identifier
@@ -397,31 +405,45 @@ class CurriculumLearning:
         Returns:
             List of reward scores corresponding to each completion
         """
-        # Accumulate all generations (don't finalize yet)
-        for completion in model_outputs:
-            task = self.session.get_task(task_id)
-            if task is None:
-                raise ValueError(f"Unknown task_id: {task_id}")
-            task.model_output = completion
+        import copy
+        from concurrent.futures import ThreadPoolExecutor
 
-            # Dispatch to task-type-specific handler
+        task = self.session.get_task(task_id)
+        if task is None:
+            raise ValueError(f"Unknown task_id: {task_id}")
+
+        def _eval_one(completion: str):
+            # Shallow-copy the task so each thread gets its own model_output
+            # without stomping on the shared task object.  Only model_output
+            # differs; all other fields (expected_answer, level, …) are shared
+            # read-only refs.  generations is reset to [] so no thread sees or
+            # mutates the shared list.
+            snap = copy.copy(task)
+            snap.model_output = completion
+            snap.generations = []
             if task.task_type == "truthy":
-                score, is_correct, task_rewards, aux_score_dict = (
-                    self._compute_reward_truthy(task)
-                )
+                return self._compute_reward_truthy(snap)
             else:
-                score, is_correct, task_rewards, aux_score_dict = (
-                    self._compute_reward_standard(task)
-                )
+                return self._compute_reward_standard(snap)
 
-            # Accumulate generation without finalization
+        # Evaluate all completions concurrently.  For puzzle tasks this means
+        # all subprocess calls run in parallel (wall-clock ≈ one subprocess
+        # instead of N × one subprocess).  For math/aux tasks the GIL limits
+        # true parallelism but the overhead is negligible.
+        n = max(1, len(model_outputs))
+        with ThreadPoolExecutor(max_workers=n) as ex:
+            results = list(ex.map(_eval_one, model_outputs))
+
+        # Accumulate generations serially — task state is mutated here.
+        for (score, is_correct, task_rewards, _), completion in zip(results, model_outputs):
+            task.model_output = completion
             if len(task.generations) < self.num_generations:
                 task.add_generation(completion, task_rewards, score, is_correct)
             else:
                 print(
-                    f"Warning: Task {task_id} already has {len(task.generations)} generations, not adding more (num_generations={self.num_generations})"
+                    f"Warning: Task {task_id} already has {len(task.generations)} generations, "
+                    f"not adding more (num_generations={self.num_generations})"
                 )
-
             task.is_correct = is_correct
 
         # After all generations accumulated, finalize batch once
@@ -509,7 +531,7 @@ class CurriculumLearning:
         - Primary score defaults to 0.0 (LLM Judge computed in batch via get_rewards())
         - is_correct always False (truthy never affects curriculum)
         - Reward functions: format_think (optional), lang_consistency, repetition, whitespace
-        - No format gates applied (format_think is informational only)
+        - Final combined score is format-gated when use_format=True
         - LLM Judge is deferred to batch processing for efficiency
 
         Args:
@@ -536,8 +558,8 @@ class CurriculumLearning:
         task_rewards = [primary_reward]
         aux_score_dict = {}
 
-        # Compute auxiliary rewards (format_think, lang consistency, repetition, whitespace)
-        # Format does not gate truthy tasks, just informational
+        # Compute auxiliary rewards (format_think, lang consistency, repetition, whitespace).
+        # The hard format gate is applied later when computing the combined score.
         other_aux_scores = self.get_aux_reward_scores(task, is_correct=False)
 
         # Add all auxiliary rewards without capping (truthy is continuous)
@@ -656,22 +678,18 @@ class CurriculumLearning:
             if "format_think" in self.aux_reward_functions:
                 format_fn = self.aux_reward_functions["format_think"]
                 format_result = format_fn.compute_reward(task, is_correct=False)
-                if format_result.score < 1.0:
+                if format_result.score <= 0.0:
                     format_think_valid = False
                     failure_reason = format_result.info
 
-            if (
-                "format_answer" in self.aux_reward_functions
-                and task.task_type != "truthy"
-            ):
+            if "format_answer" in self.aux_reward_functions:
                 format_fn = self.aux_reward_functions["format_answer"]
                 format_result = format_fn.compute_reward(task, is_correct=False)
-                if format_result.score < 1.0:
+                if format_result.score <= 0.0:
                     format_answer_valid = False
                     if not failure_reason:
                         failure_reason = format_result.info
             else:
-                # Truthy tasks do not require answer tag format validation
                 format_answer_valid = True
 
             return format_think_valid and format_answer_valid, failure_reason
@@ -1103,7 +1121,8 @@ class CurriculumLearning:
 
         for aux_name, aux_fn in self.aux_reward_functions.items():
             if is_truthy_task and aux_name == "format_answer":
-                # Skip format_answer for truthy tasks
+                # For truthy tasks, format_answer is checked by the hard
+                # combined-score gate, but is not blended as an auxiliary score.
                 continue
 
             if aux_name == "llm_judge":
@@ -1259,7 +1278,8 @@ class CurriculumLearning:
         For math/puzzle tasks, correctness gating applies: if generation is incorrect,
         length and llm_judge scores are set to 0.0, and their RewardFunctionScore
         objects are updated to reflect the gating.
-        Format validity is extracted from generation rewards (format_think, format_answer).
+        Format validity is checked against generation.output using format_think
+        and format_answer when format validation is enabled.
 
         Args:
             task: The task
@@ -1268,6 +1288,10 @@ class CurriculumLearning:
         Returns:
             Combined score in [0, 1]
         """
+        format_valid, _ = self._check_format_validity(task, generation)
+        if not format_valid:
+            return 0.0
+
         primary_score = generation.primary_score
         aux_scores = {}
         judge_score = 0.0

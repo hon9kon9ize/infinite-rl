@@ -1875,11 +1875,11 @@ class TestCurriculumLearning(unittest.TestCase):
                 "truthy_format_test", response_invalid_format
             )
 
-            # Score should be the judge score (format gate removed)
+            # Score should be zeroed by the hard format gate.
             self.assertEqual(
                 primary_reward,
-                0.9,
-                "Judge reward should NOT be gated when format is invalid (format gate removed)",
+                0.0,
+                "Judge reward should be gated when format is invalid",
             )
 
     def test_batch_llm_judge_validates_request_payload(self):
@@ -2353,7 +2353,7 @@ class TestCurriculumLearning(unittest.TestCase):
         output = "<answer>4</answer>"
         gen = Generation(output=output, rewards=[], primary_score=1.0)
 
-        # Mock format_think to return < 1.0 (invalid)
+        # Mock format_think to return zero (invalid)
         with patch.object(
             cl.aux_reward_functions["format_think"], "compute_reward"
         ) as mock_think:
@@ -2374,6 +2374,118 @@ class TestCurriculumLearning(unittest.TestCase):
 
                 self.assertFalse(valid, "Format should be invalid")
                 self.assertIn("think", reason, "Reason should mention think tag")
+
+    def test_compute_combined_score_gates_empty_think(self):
+        """Invalid think format zeroes the combined score even when primary is correct."""
+        from infinite_rl.generation import Generation
+
+        cl = CurriculumLearning(
+            use_format=True,
+            use_lang_consistency=False,
+            use_reasoning_steps=False,
+            use_response_content=False,
+            use_length=False,
+            use_llm_judge=False,
+            aux_weight=0.5,
+        )
+        task = Task(
+            task_id="test",
+            task_name="Test",
+            task_type="math",
+            level=0,
+            prompt="Test",
+            expected_answer="4",
+        )
+
+        output = "<think>\n\n</think>\n<answer>4</answer>"
+        gen = Generation(
+            output=output,
+            rewards=[
+                RewardFunctionScore(1.0, "primary", "Correct"),
+                RewardFunctionScore(0.0, "format_think", "Empty reasoning"),
+                RewardFunctionScore(1.0, "format_answer", "Valid answer"),
+            ],
+            primary_score=1.0,
+            is_correct=True,
+        )
+
+        self.assertEqual(cl._compute_combined_score(task, gen), 0.0)
+
+    def test_compute_combined_score_gates_missing_answer(self):
+        """Invalid answer format zeroes the combined score."""
+        from infinite_rl.generation import Generation
+
+        cl = CurriculumLearning(
+            use_format=True,
+            use_lang_consistency=False,
+            use_reasoning_steps=False,
+            use_response_content=False,
+            use_length=False,
+            use_llm_judge=False,
+            aux_weight=0.5,
+        )
+        task = Task(
+            task_id="test",
+            task_name="Test",
+            task_type="math",
+            level=0,
+            prompt="Test",
+            expected_answer="4",
+        )
+
+        reasoning = (
+            "First I compute the arithmetic carefully. Then I verify the result "
+            "against the requested final numeric value before answering."
+        )
+        output = f"<think>{reasoning}</think>"
+        gen = Generation(
+            output=output,
+            rewards=[
+                RewardFunctionScore(1.0, "primary", "Correct"),
+                RewardFunctionScore(1.0, "format_think", "Valid think"),
+                RewardFunctionScore(0.0, "format_answer", "Missing answer"),
+            ],
+            primary_score=1.0,
+            is_correct=True,
+        )
+
+        self.assertEqual(cl._compute_combined_score(task, gen), 0.0)
+
+    def test_compute_combined_score_keeps_partial_think_shaping(self):
+        """Short non-empty think is not hard-gated, but keeps its lower aux score."""
+        from infinite_rl.generation import Generation
+
+        cl = CurriculumLearning(
+            use_format=True,
+            use_lang_consistency=False,
+            use_reasoning_steps=False,
+            use_response_content=False,
+            use_length=False,
+            use_llm_judge=False,
+            aux_weight=0.5,
+        )
+        task = Task(
+            task_id="test",
+            task_name="Test",
+            task_type="math",
+            level=0,
+            prompt="Test",
+            expected_answer="4",
+        )
+
+        output = "<think>short reasoning</think>\n<answer>4</answer>"
+        gen = Generation(
+            output=output,
+            rewards=[
+                RewardFunctionScore(1.0, "primary", "Correct"),
+                RewardFunctionScore(0.5, "format_think", "Short think"),
+                RewardFunctionScore(1.0, "format_answer", "Valid answer"),
+            ],
+            primary_score=1.0,
+            is_correct=True,
+        )
+
+        self.assertAlmostEqual(cl._compute_combined_score(task, gen), 0.875)
 
     def test_finalize_reward_batch_single_generation(self):
         """Test compute_reward with single generation (no GRPO batching)."""

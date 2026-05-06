@@ -416,6 +416,7 @@ def setup_training_args(
     max_prompt_length: int = 2048,
     gradient_accumulation_steps: int = 1,
     warmup_steps: int = 0,
+    beta: float = 0.1,
     vllm_mode: str = "colocate",
     vllm_server_base_url: Optional[str] = None,
     **kwargs,
@@ -451,7 +452,7 @@ def setup_training_args(
         warmup_steps=warmup_steps,
         temperature=0.9,
         top_p=0.9,
-        beta=0.04,
+        beta=beta,
         repetition_penalty=1.0,  # CRITICAL: Must be 1.0 to match base policy logprobs
         # vLLM configuration
         use_vllm=True,
@@ -582,6 +583,12 @@ def main():
         type=int,
         default=2048,
         help="Maximum prompt length (for vLLM context sizing - limits vLLM KV cache allocation)",
+    )
+    parser.add_argument(
+        "--beta",
+        type=float,
+        default=0.1,
+        help="KL penalty coefficient for GRPO. Use 0.1-0.2 to slow empty-think drift.",
     )
     parser.add_argument(
         "--num_train_samples",
@@ -762,6 +769,11 @@ def main():
         action="store_true",
         help="Use DAPO (Decoupled Advantage Policy Optimization) loss",
     )
+    parser.add_argument(
+        "--enable_thinking",
+        action="store_true",
+        help="Enable thinking mode via chat_template_kwargs (e.g. for Qwen3 thinking template)",
+    )
 
     # Training control arguments
     parser.add_argument(
@@ -842,6 +854,8 @@ def main():
             "batch_size": args.per_device_train_batch_size,
             "num_generations": args.num_generations,
             "max_completion_length": args.max_completion_length,
+            "max_prompt_length": args.max_prompt_length,
+            "beta": args.beta,
             "use_dapo": args.dapo,
             "use_lora": args.use_lora,
             "use_vllm": True,  # Always enabled for train2.py
@@ -993,15 +1007,20 @@ def main():
         max_prompt_length=args.max_prompt_length,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         warmup_steps=args.warmup_step,
+        beta=args.beta,
         vllm_mode=args.vllm_mode,
         vllm_server_base_url=args.vllm_server_base_url,
         **grpo_kwargs,
     )
+    if args.enable_thinking:
+        training_args.chat_template_kwargs = {"enable_thinking": True}
+
     print(f"   ✓ Training configuration ready")
     print(f"   - Batch size (per device): {training_args.per_device_train_batch_size}")
     print(f"   - Number of generations: {training_args.num_generations}")
     print(f"   - Max completion length: {training_args.max_completion_length}")
     print(f"   - Max prompt length: {args.max_prompt_length}")
+    print(f"   - KL beta: {training_args.beta}")
     print(
         f"   - vLLM max_model_len: {args.max_prompt_length + args.max_completion_length} tokens (overrides model default)"
     )

@@ -34,6 +34,7 @@ def create_reasoning_language_system_prompt(
     lang_name = LANG_MAP.get(reasoning_language, reasoning_language)
     return f"You are a helpful assistant. When you think/reason, you MUST write your entire reasoning process in {lang_name}. " \
            f"Your reasoning should be natural and fluent in {lang_name}, with proper spaces and punctuation. " \
+           f"Do NOT leave the <{think_tag}> reasoning block empty; write substantive reasoning before answering. " \
            f"Do NOT switch to English or any other language during reasoning."
 
 

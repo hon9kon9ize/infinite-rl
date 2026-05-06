@@ -76,6 +76,7 @@ class ResponseContentRewardFunction(RewardFunction):
         sweet_start: int = 30,
         sweet_end: int = 500,
         max_len: int = 1000,
+        require_non_empty_think: bool = True,
         **kwargs,
     ):
         super().__init__(
@@ -89,6 +90,7 @@ class ResponseContentRewardFunction(RewardFunction):
         self.sweet_start = sweet_start
         self.sweet_end = sweet_end
         self.max_len = max_len
+        self.require_non_empty_think = require_non_empty_think
 
     def initialize(self):
         self.initialized = True
@@ -126,6 +128,17 @@ class ResponseContentRewardFunction(RewardFunction):
         """Compute response content length reward."""
         if not self.initialized:
             self.initialize()
+
+        if self.require_non_empty_think:
+            think_content = self.extract_think_content(
+                task.model_output or "",
+                tag=self.think_tag,
+            )
+            if not think_content.strip():
+                return RewardFunctionScore(
+                    score=0.0,
+                    info="No response_content reward because reasoning content is empty.",
+                )
 
         content = self._extract_response_content(task.model_output or "")
 

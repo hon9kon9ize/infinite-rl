@@ -126,26 +126,8 @@ class ReasoningStepsRewardFunction(RewardFunction):
         return _EN_INDICATORS
 
     def _extract_thinking_content(self, model_output: str) -> str:
-        """Extract reasoning content from model output.
-
-        Handles both tag formats:
-        - Standard <think>...</think> (XML comment style)
-        - <think>...</think> (reasoning template: no opening tag)
-        """
-        output = model_output or ""
-
-        # Try standard <think>...</think> format first
-        if "</think>" in output and "</think>" in output:
-            start = output.index("</think>")
-            end = output.index("</think>", start)
-            if start < end:
-                return output[start:end].strip()
-
-        # Fallback: reasoning_template mode — everything before </think>
-        if "</think>" in output:
-            return output.split("</think>")[0].strip()
-
-        return ""
+        """Extract reasoning content using the shared RewardFunction parser."""
+        return self.extract_think_content(model_output or "", tag=self.target_tag)
 
     def compute_reward(
         self,

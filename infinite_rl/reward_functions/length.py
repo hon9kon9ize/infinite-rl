@@ -46,6 +46,15 @@ def reasoning_friendly_length_reward(
     return float(decay)
 
 
+def thinking_length_ramp_reward(length: int, target_len: int = 500) -> float:
+    """Directly reward non-empty thinking length up to a cap."""
+    if length <= 0:
+        return 0.0
+    if target_len <= 0:
+        return 1.0
+    return float(max(0.0, min(length / target_len, 1.0)))
+
+
 class LengthRewardFunction(RewardFunction):
     """Reward function that scores response length using `reasoning_friendly_length_reward`.
 
@@ -110,3 +119,58 @@ class LengthRewardFunction(RewardFunction):
         )
 
         return RewardFunctionScore(score=float(len_reward))
+
+
+class ThinkingLengthRewardFunction(RewardFunction):
+    """Reward function that linearly rewards thinking length up to a cap.
+
+    This is intentionally simple: empty thinking gets 0.0, and the reward ramps
+    to 1.0 at `target_len` characters. It is meant to counter empty-think
+    collapse directly, while LengthRewardFunction can still model broader
+    response-length preferences.
+    """
+
+    def __init__(
+        self,
+        task_name: str = "thinking_length",
+        timeout: int = 5,
+        target_len: int = 500,
+        reasoning_template: bool = False,
+        **kwargs,
+    ):
+        if "target_tag" not in kwargs:
+            kwargs["target_tag"] = "think"
+        super().__init__(
+            task_name,
+            timeout=timeout,
+            reasoning_template=reasoning_template,
+            **kwargs,
+        )
+        self.target_len = target_len
+
+    def initialize(self):
+        self.initialized = True
+
+    def compute_reward(
+        self,
+        task: "Task",
+        **kwargs,
+    ) -> RewardFunctionScore:
+        if not self.initialized:
+            self.initialize()
+
+        thought_content = self.extract_think_content(
+            task.model_output or "",
+            tag=self.target_tag,
+        )
+        length = len(thought_content.strip())
+        score = thinking_length_ramp_reward(length, self.target_len)
+
+        return RewardFunctionScore(
+            score=score,
+            info=(
+                f"thinking_length: {length}/{self.target_len} chars"
+                if length > 0
+                else f"No content found in the <{self.target_tag}> tag."
+            ),
+        )

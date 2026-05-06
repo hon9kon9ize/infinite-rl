@@ -10,7 +10,12 @@ everything before the closing tag rather than requiring both opening and closing
 import unittest
 from infinite_rl.reward_functions.format import FormatRewardFunction
 from infinite_rl.reward_functions.reasoning_steps import ReasoningStepsRewardFunction
-from infinite_rl.reward_functions.length import LengthRewardFunction
+from infinite_rl.reward_functions.length import (
+    LengthRewardFunction,
+    ThinkingLengthRewardFunction,
+    thinking_length_ramp_reward,
+)
+from infinite_rl.reward_functions.response_content import ResponseContentRewardFunction
 from infinite_rl.reward_functions.reward_function import RewardFunction
 from infinite_rl.task import Task
 
@@ -30,6 +35,10 @@ class TestReasoningTemplateFormatReward(unittest.TestCase):
             reasoning_template=True,
         )
         fn.initialize()
+        reasoning = (
+            "Let me solve this step by step. First I identify the values, "
+            "then I calculate carefully, and finally I verify the result."
+        )
         task = Task(
             task_id="t1",
             task_name="test",
@@ -38,11 +47,55 @@ class TestReasoningTemplateFormatReward(unittest.TestCase):
             prompt="Test",
             expected_answer="60",
             language="en",
-            model_output="Let me solve this step by step." + THINK_CLOSE + "\n<answer>60</answer>",
+            model_output=reasoning + THINK_CLOSE + "\n<answer>60</answer>",
         )
         score = fn.compute_reward(task)
         self.assertEqual(score.score, 1.0)
         self.assertIn("reasoning template", score.info)
+
+    def test_literal_open_tag_with_empty_content_is_rejected(self):
+        """A generated <think> tag alone must not count as reasoning content."""
+        fn = FormatRewardFunction(
+            task_name="format_think",
+            target_tag="think",
+            reasoning_template=True,
+        )
+        fn.initialize()
+        task = Task(
+            task_id="t1b",
+            task_name="test",
+            task_type="math",
+            level=0,
+            prompt="Test",
+            expected_answer="60",
+            language="en",
+            model_output=THINK_OPEN + "\n\n" + THINK_CLOSE + "\n<answer>60</answer>",
+        )
+        score = fn.compute_reward(task)
+        self.assertEqual(score.score, 0.0)
+        self.assertIn("empty", score.info.lower())
+
+    def test_short_think_gets_partial_credit(self):
+        """Short non-empty thinking gets partial, not full, format_think credit."""
+        fn = FormatRewardFunction(
+            task_name="format_think",
+            target_tag="think",
+            reasoning_template=True,
+        )
+        fn.initialize()
+        task = Task(
+            task_id="t1c",
+            task_name="test",
+            task_type="math",
+            level=0,
+            prompt="Test",
+            expected_answer="60",
+            language="en",
+            model_output="short reasoning" + THINK_CLOSE + "\n<answer>60</answer>",
+        )
+        score = fn.compute_reward(task)
+        self.assertEqual(score.score, 0.5)
+        self.assertIn("short", score.info.lower())
 
     def test_valid_answer_format_with_reasoning_content(self):
         """Content before close tag is treated as valid reasoning for answer tag."""
@@ -212,7 +265,13 @@ class TestReasoningTemplateFormatReward(unittest.TestCase):
             prompt="Test",
             expected_answer="60",
             language="en",
-            model_output=THINK_OPEN + "\nReasoning content\n" + THINK_CLOSE + "\n<answer>60</answer>",
+            model_output=(
+                THINK_OPEN
+                + "\nThis is substantive reasoning content. First I inspect the problem, "
+                "then I calculate the intermediate values, and finally I verify the answer.\n"
+                + THINK_CLOSE
+                + "\n<answer>60</answer>"
+            ),
         )
         score = fn.compute_reward(task)
         self.assertEqual(score.score, 1.0)
@@ -281,7 +340,7 @@ class TestReasoningTemplateReasoningSteps(unittest.TestCase):
         self.assertAlmostEqual(score.score, 0.0, places=5)
 
     def test_standard_mode_rejected_without_open_tag(self):
-        """Without reasoning_template missing open tag falls back to content before close tag."""
+        """Without reasoning_template missing open tag is rejected."""
         fn = ReasoningStepsRewardFunction(reasoning_template=False)
         fn.initialize()
         task = Task(
@@ -298,9 +357,8 @@ class TestReasoningTemplateReasoningSteps(unittest.TestCase):
             ),
         )
         score = fn.compute_reward(task)
-        # Falls back to content before close tag, finds 0 indicators
         self.assertAlmostEqual(score.score, 0.0, places=5)
-        self.assertIn("indicators", score.info.lower())
+        self.assertIn("no reasoning", score.info.lower())
 
     def test_standard_mode_works_with_both_tags(self):
         """Standard mode works with full open and close tags."""
@@ -378,6 +436,96 @@ class TestReasoningTemplateLength(unittest.TestCase):
         score = fn.compute_reward(task)
         self.assertAlmostEqual(score.score, 0.0, places=5)
 
+
+class TestThinkingLengthReward(unittest.TestCase):
+    """Test direct thinking-length ramp reward."""
+
+    def test_ramp_function(self):
+        self.assertEqual(thinking_length_ramp_reward(0, 500), 0.0)
+        self.assertEqual(thinking_length_ramp_reward(250, 500), 0.5)
+        self.assertEqual(thinking_length_ramp_reward(500, 500), 1.0)
+        self.assertEqual(thinking_length_ramp_reward(800, 500), 1.0)
+
+    def test_reasoning_template_empty_literal_open_tag_gets_zero(self):
+        fn = ThinkingLengthRewardFunction(reasoning_template=True)
+        fn.initialize()
+        task = Task(
+            task_id="tl1",
+            task_name="test",
+            task_type="math",
+            level=0,
+            prompt="Test",
+            expected_answer="60",
+            language="en",
+            model_output=THINK_OPEN + "\n\n" + THINK_CLOSE + "\n<answer>60</answer>",
+        )
+        score = fn.compute_reward(task)
+        self.assertEqual(score.score, 0.0)
+
+    def test_reasoning_template_ramps_to_cap(self):
+        fn = ThinkingLengthRewardFunction(reasoning_template=True, target_len=500)
+        fn.initialize()
+        task = Task(
+            task_id="tl2",
+            task_name="test",
+            task_type="math",
+            level=0,
+            prompt="Test",
+            expected_answer="60",
+            language="en",
+            model_output=("x" * 250) + THINK_CLOSE + "\n<answer>60</answer>",
+        )
+        score = fn.compute_reward(task)
+        self.assertEqual(score.score, 0.5)
+
+
+class TestResponseContentBypassGuard(unittest.TestCase):
+    """Test that response_content cannot reward empty-think bypasses."""
+
+    def test_response_content_zero_when_think_empty(self):
+        fn = ResponseContentRewardFunction(reasoning_template=True)
+        fn.initialize()
+        task = Task(
+            task_id="rc1",
+            task_name="test",
+            task_type="math",
+            level=0,
+            prompt="Test",
+            expected_answer="60",
+            language="en",
+            model_output=(
+                THINK_OPEN
+                + "\n\n"
+                + THINK_CLOSE
+                + "\nThis is reasoning placed outside the think block."
+                + "\n<answer>60</answer>"
+            ),
+        )
+        score = fn.compute_reward(task)
+        self.assertEqual(score.score, 0.0)
+        self.assertIn("reasoning content is empty", score.info)
+
+    def test_response_content_allowed_when_think_non_empty(self):
+        fn = ResponseContentRewardFunction(reasoning_template=True)
+        fn.initialize()
+        task = Task(
+            task_id="rc2",
+            task_name="test",
+            task_type="math",
+            level=0,
+            prompt="Test",
+            expected_answer="60",
+            language="en",
+            model_output=(
+                "First I solve inside the think block."
+                + THINK_CLOSE
+                + "\nBrief explanation before answer."
+                + "\n<answer>60</answer>"
+            ),
+        )
+        score = fn.compute_reward(task)
+        self.assertGreater(score.score, 0.0)
+
     def test_standard_mode_works_with_both_tags(self):
         """Standard mode works with full open and close tags."""
         fn = LengthRewardFunction(task_name="length", reasoning_template=False)
@@ -432,6 +580,17 @@ class TestExtractThinkContent(unittest.TestCase):
         self.assertIn("second step", content)
         self.assertNotIn(THINK_CLOSE, content)
         self.assertNotIn("<answer>", content)
+
+    def test_reasoning_template_strips_literal_open_tag(self):
+        """A literal generated open tag is not counted as think content."""
+        rf = RewardFunction(
+            task_name="test",
+            reasoning_template=True,
+            think_tag="think",
+        )
+        output = THINK_OPEN + "\n\n" + THINK_CLOSE + "\n<answer>42</answer>"
+        content = rf.extract_think_content(output)
+        self.assertEqual(content, "")
 
     def test_standard_mode(self):
         """Extracts between open and close tags."""

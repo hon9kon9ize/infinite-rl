@@ -10,6 +10,7 @@ Tests for:
 
 import unittest
 from infinite_rl.prompt_templates import (
+    create_reasoning_language_system_prompt,
     format_math_prompt,
     format_puzzle_prompt,
     LANG_MAP,
@@ -69,6 +70,16 @@ class TestFormatMathPrompt(unittest.TestCase):
         result = format_math_prompt("")
         self.assertIn("<think>", result)
         self.assertIn("<answer>", result)
+
+
+class TestReasoningSystemPrompt(unittest.TestCase):
+    """Test system prompt guidance for reasoning behavior."""
+
+    def test_system_prompt_requires_non_empty_thinking(self):
+        result = create_reasoning_language_system_prompt("en")
+        self.assertIn("Do NOT leave", result)
+        self.assertIn("<think>", result)
+        self.assertIn("substantive reasoning", result)
 
 
 class TestFormatPuzzlePrompt(unittest.TestCase):

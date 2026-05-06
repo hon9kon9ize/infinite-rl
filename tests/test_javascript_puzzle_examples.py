@@ -8,6 +8,8 @@ inputs ({}) is caught in CI.
 import unittest
 import json
 import os
+import shutil
+import subprocess
 
 
 class TestJavaScriptPuzzleExamples(unittest.TestCase):
@@ -154,6 +156,52 @@ class TestJavaScriptPuzzleExamples(unittest.TestCase):
                 self.assertGreater(
                     len(inputs), 0, f"{puzzle_name}: inputs dict is empty"
                 )
+
+    def test_all_javascript_sat_sources_parse(self):
+        """Verify packaged JavaScript SAT functions are complete JS functions."""
+        if shutil.which("node") is None:
+            self.skipTest("node is required to parse JavaScript SAT sources")
+
+        import infinite_rl
+
+        package_dir = os.path.dirname(infinite_rl.__file__)
+        puzzles_json_path = os.path.join(package_dir, "runtimes", "puzzles.json")
+
+        if not os.path.exists(puzzles_json_path):
+            repo_root = os.path.dirname(os.path.dirname(__file__))
+            puzzles_json_path = os.path.join(repo_root, "assets", "puzzles.json")
+
+        with open(puzzles_json_path, "r") as f:
+            puzzles_data = json.load(f)
+
+        payload = [
+            {"name": name, "sat": info.get("sat", "")}
+            for name, info in puzzles_data.get("javascript", {}).items()
+        ]
+        js = """
+import fs from 'node:fs';
+const payload = JSON.parse(fs.readFileSync(0, 'utf8'));
+const invalid = [];
+for (const item of payload) {
+  try {
+    new Function(item.sat + '\\n; return typeof sat;')();
+  } catch (err) {
+    invalid.push({ name: item.name, error: String(err) });
+  }
+}
+console.log(JSON.stringify(invalid));
+"""
+        proc = subprocess.run(
+            ["node", "--input-type=module", "-e", js],
+            input=json.dumps(payload),
+            text=True,
+            capture_output=True,
+            timeout=20,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        invalid = json.loads(proc.stdout)
+        self.assertEqual(invalid, [])
 
 
 if __name__ == "__main__":

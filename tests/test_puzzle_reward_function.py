@@ -1,4 +1,6 @@
 import unittest
+from unittest.mock import patch
+
 from infinite_rl.reward_functions.puzzle import PuzzleRewardFunction
 from infinite_rl.task import Task
 
@@ -124,6 +126,50 @@ function sol(inputs) { return "19"; }
         )
         score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 0.0)
+
+    def test_javascript_pool_receives_configured_timeout(self):
+        class FakePool:
+            def __init__(self):
+                self.calls = []
+
+            def evaluate(self, data, timeout):
+                self.calls.append((data, timeout))
+                return {"isCorrect": False}
+
+        fake_pool = FakePool()
+        reward_fn = PuzzleRewardFunction(
+            task_name="puzzle", language="javascript", timeout=1
+        )
+        model_output = """<answer>
+```javascript
+function sol(inputs) { return "18"; }
+```
+</answer>"""
+        expected_output = {
+            "puzzle": "SumOfDigits",
+            "inputs": {"s": 10},
+            "language": "javascript",
+        }
+        task = Task(
+            task_id="test_js_timeout",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="javascript",
+            model_output=model_output,
+        )
+
+        with patch(
+            "infinite_rl.reward_functions.puzzle._get_pool",
+            return_value=fake_pool,
+        ):
+            score = reward_fn.compute_reward(task)
+
+        self.assertEqual(score.score, 0.0)
+        self.assertEqual(fake_pool.calls[0][1], 1)
+        self.assertEqual(fake_pool.calls[0][0]["timeout"], 1)
 
     def test_missing_puzzle_name(self):
         model_output = """<answer>
@@ -264,6 +310,33 @@ function sol(inputs) {
         }
         task = Task(
             task_id="test_11",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="javascript",
+            model_output=model_output,
+        )
+        score = self.reward_fn.compute_reward(task)
+        self.assertEqual(score.score, 1.0)
+
+    def test_valid_js_quine_uses_javascript_sat(self):
+        """Quine differs across languages, so JS answers must use the JS SAT."""
+        model_output = """<answer>
+```javascript
+function sol() {
+    return "\\"Q\\"";
+}
+```
+</answer>"""
+        expected_output = {
+            "puzzle": "Quine",
+            "inputs": {},
+            "language": "javascript",
+        }
+        task = Task(
+            task_id="test_js_quine",
             task_name="test",
             task_type="puzzle",
             level=1,
@@ -501,6 +574,115 @@ def sol(v, d):
         )
         score = self.reward_fn.compute_reward(task)
         self.assertEqual(score.score, 1.0)
+
+    def test_python_submission_cannot_patch_sat_checker(self):
+        model_output = """<answer>
+```python
+def sol(s):
+    import infinite_rl.python_puzzles.generators.basic as basic
+    basic.SumOfDigits.sat = staticmethod(lambda x, s=679: True)
+    return "0"
+```
+</answer>"""
+        expected_output = {
+            "puzzle": "SumOfDigits",
+            "inputs": {"s": 10},
+            "language": "python",
+        }
+        task = Task(
+            task_id="test_python_patch_sat",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="python",
+            model_output=model_output,
+        )
+
+        score = self.reward_fn.compute_reward(task)
+        self.assertEqual(score.score, 0.0)
+
+        followup_output = """<answer>
+```python
+def sol(s):
+    return "0"
+```
+</answer>"""
+        followup_task = Task(
+            task_id="test_python_patch_sat_followup",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="python",
+            model_output=followup_output,
+        )
+        followup_score = self.reward_fn.compute_reward(followup_task)
+        self.assertEqual(followup_score.score, 0.0)
+
+    def test_python_stderr_is_drained(self):
+        model_output = """<answer>
+```python
+def sol(s):
+    import sys
+    sys.stderr.write("x" * 1000000)
+    sys.stderr.flush()
+    return "19"
+```
+</answer>"""
+        expected_output = {
+            "puzzle": "SumOfDigits",
+            "inputs": {"s": 10},
+            "language": "python",
+        }
+        task = Task(
+            task_id="test_python_stderr_drained",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="python",
+            model_output=model_output,
+        )
+
+        score = self.reward_fn.compute_reward(task)
+        self.assertEqual(score.score, 1.0)
+
+    def test_python_timeout_respects_configured_value(self):
+        reward_fn = PuzzleRewardFunction(
+            task_name="puzzle", language="python", timeout=1
+        )
+        reward_fn.initialize()
+        model_output = """<answer>
+```python
+def sol(s):
+    import time
+    time.sleep(2)
+    return "19"
+```
+</answer>"""
+        expected_output = {
+            "puzzle": "SumOfDigits",
+            "inputs": {"s": 10},
+            "language": "python",
+        }
+        task = Task(
+            task_id="test_python_timeout",
+            task_name="test",
+            task_type="puzzle",
+            level=1,
+            prompt="Test",
+            expected_answer=expected_output,
+            language="python",
+            model_output=model_output,
+        )
+
+        score = reward_fn.compute_reward(task)
+        self.assertEqual(score.score, 0.0)
+        self.assertIn("timed out after 1s", score.info)
 
     def test_no_answer_tags_code_after_think_close(self):
         """Code block without <answer> tags should work if after </think>."""

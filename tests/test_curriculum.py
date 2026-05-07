@@ -2560,6 +2560,42 @@ class TestCurriculumLearning(unittest.TestCase):
 
         self.assertAlmostEqual(cl._compute_combined_score(task, gen), 0.875)
 
+    def test_curriculum_tracking_requires_usable_combined_score(self):
+        """Primary-correct empty-think batches must not advance curriculum."""
+        cl = CurriculumLearning(
+            num_generations=2,
+            use_format=True,
+            use_lang_consistency=False,
+            use_reasoning_steps=False,
+            use_response_content=False,
+            use_length=False,
+            use_llm_judge=False,
+            aux_weight=0.5,
+        )
+        task = Task(
+            task_id="math_test",
+            task_name="Math Test",
+            task_type="math",
+            level=0,
+            prompt="What is 2+2?",
+            expected_answer="4",
+        )
+        cl.session.add_task(task)
+
+        with patch.object(
+            cl.reward_functions["math"], "compute_reward"
+        ) as mock_compute:
+            mock_result = MagicMock()
+            mock_result.score = 1.0
+            mock_result.info = "Correct"
+            mock_compute.return_value = mock_result
+
+            output = "<think>\n\n</think>\n<answer>4</answer>"
+            scores = cl.compute_rewards("math_test", [output, output])
+
+        self.assertEqual(scores, [0.0, 0.0])
+        self.assertEqual(list(cl.success_windows[0]), [0])
+
     def test_finalize_reward_batch_single_generation(self):
         """Test compute_reward with single generation (no GRPO batching)."""
         cl = CurriculumLearning(num_generations=1, aux_weight=0.0, use_format=False)

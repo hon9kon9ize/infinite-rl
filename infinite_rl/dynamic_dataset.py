@@ -7,6 +7,7 @@ completions share the same prompt.
 """
 
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from copy import deepcopy
 import json
 
 if TYPE_CHECKING:
@@ -146,18 +147,21 @@ class DynamicCurriculumDataset(_BaseDataset):
         # Format as TRL expects: list of message dicts
         # Add system prompt with reasoning language instruction when enabled
         # and reasoning language is not English (default)
-        messages = []
-        if (getattr(self.curriculum, 'use_system_prompt', True)
-                and task.reasoning_language
-                and task.task_type in ("math", "puzzle")):
-            from .prompt_templates import create_reasoning_language_system_prompt
-            system_prompt = create_reasoning_language_system_prompt(
-                task.reasoning_language,
-                self.curriculum.think_tag,
-            )
-            messages.append({"role": "system", "content": system_prompt})
+        if isinstance(task.prompt, list):
+            messages = deepcopy(task.prompt)
+        else:
+            messages = []
+            if (getattr(self.curriculum, 'use_system_prompt', True)
+                    and task.reasoning_language
+                    and task.task_type in ("math", "puzzle")):
+                from .prompt_templates import create_reasoning_language_system_prompt
+                system_prompt = create_reasoning_language_system_prompt(
+                    task.reasoning_language,
+                    self.curriculum.think_tag,
+                )
+                messages.append({"role": "system", "content": system_prompt})
 
-        messages.append({"role": "user", "content": task.prompt})
+            messages.append({"role": "user", "content": task.prompt})
         prompt = messages
 
         # Metadata for reward function

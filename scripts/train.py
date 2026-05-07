@@ -78,6 +78,9 @@ class InfiniteRLConfig:
     level_change_cooldown: int = 10
 
     num_generations: int = 4
+    pre_reasoning_dataset: Optional[str] = None
+    pre_reasoning_split: str = "train"
+    pre_reasoning_learning_rate: float = 0.0
 
     # Reward function parameters
     timeout: int = 40
@@ -148,7 +151,9 @@ def create_curriculum(config: InfiniteRLConfig) -> CurriculumLearning:
         level_change_cooldown=config.level_change_cooldown,
         num_generations=config.num_generations,
         log_file=config.log_file,
-        truthy_learning_rate=0,
+        pre_reasoning_dataset=config.pre_reasoning_dataset,
+        pre_reasoning_split=config.pre_reasoning_split,
+        pre_reasoning_learning_rate=config.pre_reasoning_learning_rate,
     )
     return curriculum
 
@@ -570,7 +575,25 @@ def main():
         "--num_generations",
         type=int,
         default=4,
-        help="Number of completions per prompt",
+        help="Number of completions per prompt. Use 8 for pre-reasoning GRPO.",
+    )
+    parser.add_argument(
+        "--pre_reasoning_dataset",
+        type=str,
+        default=None,
+        help="Hugging Face dataset name or local JSON/JSONL path containing chat-message SFT examples.",
+    )
+    parser.add_argument(
+        "--pre_reasoning_split",
+        type=str,
+        default="train",
+        help="Dataset split when --pre_reasoning_dataset is a Hugging Face dataset name.",
+    )
+    parser.add_argument(
+        "--pre_reasoning_learning_rate",
+        type=float,
+        default=None,
+        help="Probability of sampling pre_reasoning tasks. Defaults to 1.0 when a pre_reasoning dataset is provided, otherwise 0.0.",
     )
     parser.add_argument(
         "--max_completion_length",
@@ -821,6 +844,16 @@ def main():
     if args.vllm_mode == "server" and args.vllm_server_base_url is None:
         parser.error("--vllm_server_base_url is required when --vllm-mode=server")
 
+    if args.pre_reasoning_dataset and not args.use_llm_judge:
+        parser.error(
+            "--pre_reasoning_dataset requires --use_llm_judge because "
+            "pre_reasoning uses LLM Judge as the primary score"
+        )
+
+    pre_reasoning_learning_rate = args.pre_reasoning_learning_rate
+    if pre_reasoning_learning_rate is None:
+        pre_reasoning_learning_rate = 1.0 if args.pre_reasoning_dataset else 0.0
+
     # Calculate dataset size based on training configuration
     # This ensures we generate exactly the number of samples needed
     effective_batch_size = (
@@ -853,6 +886,8 @@ def main():
             "num_train_epochs": args.num_train_epochs,
             "batch_size": args.per_device_train_batch_size,
             "num_generations": args.num_generations,
+            "pre_reasoning_dataset": args.pre_reasoning_dataset,
+            "pre_reasoning_learning_rate": pre_reasoning_learning_rate,
             "max_completion_length": args.max_completion_length,
             "max_prompt_length": args.max_prompt_length,
             "beta": args.beta,
@@ -898,11 +933,18 @@ def main():
         llm_judge_host=args.llm_judge_host,
         llm_judge_port=args.llm_judge_port,
         llm_judge_model=args.llm_judge_model,
+        pre_reasoning_dataset=args.pre_reasoning_dataset,
+        pre_reasoning_split=args.pre_reasoning_split,
+        pre_reasoning_learning_rate=pre_reasoning_learning_rate,
         log_file=str(output_dir / "curriculum_learning_log.jsonl"),
     )
     curriculum = create_curriculum(curriculum_config)
     print(f"   ✓ Curriculum initialized")
     print(f"   - Learning stats: {curriculum.get_learning_stats()}")
+    if args.pre_reasoning_dataset:
+        print(f"   - Pre-reasoning dataset: {args.pre_reasoning_dataset}")
+        print(f"   - Pre-reasoning split: {args.pre_reasoning_split}")
+        print(f"   - Pre-reasoning sampling rate: {pre_reasoning_learning_rate}")
 
     # Load model and tokenizer
     print(f"\n2. Loading model & tokenizer: {args.model_name}...")

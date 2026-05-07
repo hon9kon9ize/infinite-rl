@@ -2,7 +2,7 @@
 ![code coverage](https://img.shields.io/badge/code%20coverage-87%25-green)
 
 
-Infinite-RL is a reward functions toolbox for LLM Reinforcement Learning. It provides modular reward functions for evaluating programming puzzles, mathematical problems, language detection, and auxiliary metrics like length and repetition penalties. The toolbox is designed to integrate with fine-tuning frameworks like Tunix for model training and optimization.
+Infinite-RL is a reward functions toolbox for LLM Reinforcement Learning. It provides modular reward functions for evaluating programming puzzles, mathematical problems, pre-reasoning chat data, language detection, and auxiliary metrics like length and repetition penalties. The toolbox is designed to integrate with fine-tuning frameworks like Tunix for model training and optimization.
 
 The package includes pre-built datasets for math tasks (`math.json` compiled from [OpenAI's GSM8K](https://huggingface.co/datasets/openai/gsm8k)) and programming puzzles (`puzzles.json` compiled from [Microsoft's Python Programming Puzzles](https://github.com/microsoft/PythonProgrammingPuzzles)), along with WASM runtimes for secure JavaScript execution.
 
@@ -163,40 +163,69 @@ result = math_fn.compute_reward(
 print(f"Correctness: {result.score}") 
 ```
 
-### 3. Truthy Task
-Conversation-based quality evaluation using LLM Judge as the primary evaluator. Supports multilingual quality assessment (Cantonese, Chinese, English) from truthy-dpo and yue-truthy datasets.
+### 3. Pre-Reasoning Task
+Chat/SFT-style pre-training objective for teaching non-empty reasoning before the final response. Accepts local JSON/JSONL files or Hugging Face datasets with chat `messages` rows.
 
 **Features:**
-- LLM Judge (Skywork Reward Model) provides continuous quality score (0.0-1.0)
-- Conversation format: system prompt + user prompt + model response
-- Distributed across all difficulty levels (not rating-limited)
-- Configurable weight in task selection during training (default: 10%)
+- Native chat message format: system/user turns are preserved and the final assistant turn is used as the reference answer
+- Primary score is the LLM Judge score; the SFT reference answer is passed into the judge context when available
+- Same auxiliary reward stack as math/puzzle tasks: format, reasoning steps, response content, length, and language consistency
+- Does not update math/puzzle curriculum level
+- Configurable sampling rate; set to 1.0 for a dedicated pre-reasoning phase
 - Multilingual support (yue, zh, en)
-- **Format gate on judge**: If response format is invalid (missing `<answer>` tag), judge reward is gated to zero
+- **Format gate**: blank `<think>` content, including `<think>blank</think>`, gates the final combined training reward to zero
 
 **Requirements:**
-- Running sglang server with Skywork Reward Model
-- `use_llm_judge=True` with `api_host`, `api_port`, `model_name` configured
+- For Hugging Face datasets: install the optional `datasets` package
+- Run the sglang Skywork Reward Model server and enable `use_llm_judge=True`
+
+**Accepted dataset rows:**
+```jsonl
+{"messages":[{"role":"system","content":"Be concise."},{"role":"user","content":"Write a polite refusal."},{"role":"assistant","content":"I can't help with that, but I can offer a safe alternative."}],"language":"en"}
+{"prompt":"Summarize the paragraph in Cantonese.","response":"呢段文字主要講...","language":"yue"}
+```
+
+For chat rows, `messages`, `conversations`, and `conversation` are accepted. Role/content variants such as ShareGPT `from`/`value` are normalized. For plain rows, use `prompt`, `question`, or `input` plus a reference field such as `reference_answer`, `answer`, `response`, `completion`, `output`, or `chosen`.
 
 **Example:**
 ```python
 from infinite_rl import CurriculumLearning
 
-# Initialize with truthy task support
 cl = CurriculumLearning(
+    pre_reasoning_dataset="path/to/sft.jsonl",
+    pre_reasoning_split="train",
+    pre_reasoning_learning_rate=1.0,
+    num_generations=8,
     use_llm_judge=True,
     llm_judge_kwargs={
         "api_host": "localhost",
         "api_port": 8000,
-        "model_name": "Skywork/Skywork-Reward-Llama-3.1-8B"
-    }
+        "model_name": "Skywork/Skywork-Reward-V2-Qwen3-4B",
+    },
 )
 
 task = cl.get_prompt()
-if task.task_type == "truthy":
-    print(f"System: {task.expected_answer['conversation'][0]['content']}")
-    print(f"User: {task.prompt}")
+if task.task_type == "pre_reasoning":
+    print(f"Prompt messages: {task.prompt}")
+    print(f"Reference: {task.expected_answer['reference_answer']}")
 ```
+
+**Training CLI:**
+```bash
+python scripts/train.py \
+  --model_name Qwen/Qwen2.5-1.5B-Instruct \
+  --pre_reasoning_dataset path/to/sft.jsonl \
+  --pre_reasoning_split train \
+  --pre_reasoning_learning_rate 1.0 \
+  --num_generations 8 \
+  --use_llm_judge \
+  --llm_judge_host localhost \
+  --llm_judge_port 8000
+```
+
+When `--pre_reasoning_dataset` is set, `--use_llm_judge` is required because the pre-reasoning primary score is the judge score. If `--pre_reasoning_learning_rate` is omitted, `scripts/train.py` defaults it to `1.0` when a pre-reasoning dataset is provided.
+
+### 4. Reasoning Steps Reward
 A small encouragement reward that detects explicit chain-of-thought style reasoning placed inside a `<think>...</think>` block. The `ReasoningStepsRewardFunction` looks for common reasoning indicators (e.g., "first", "second", "finally", "therefore") and awards a modest bonus when multiple indicators are present.
 
 **Behavior:**
@@ -216,7 +245,7 @@ score = reason_fn.compute_reward(model_out, expected_output=None)
 print(f"Reasoning bonus: {score.score}")
 ```
 
-### 4. LLM Judge (Remote Quality Evaluation)
+### 5. LLM Judge (Remote Quality Evaluation)
 Uses a remote LLM-based reward model to evaluate response quality continuously. The `LLMJudgeRewardFunction` integrates with sglang server running the Skywork Reward Model (V2-Qwen3-4B) to score responses on a continuous scale.
 
 **Requirements:**
@@ -225,6 +254,8 @@ Uses a remote LLM-based reward model to evaluate response quality continuously. 
 
 **Features:**
 - Continuous quality scoring (not binary correct/incorrect)
+- Primary scorer for `pre_reasoning` tasks
+- Auxiliary quality signal for math and puzzle tasks
 - Flexible score normalization (raw or tanh-based [0, 1] mapping)
 - Configurable API endpoint, timeout, and score thresholds
 - Graceful error handling when API unavailable
@@ -264,7 +295,7 @@ The `CurriculumLearning` class provides adaptive task difficulty progression bas
 - **Per-Task-Type Windows**: Maintains independent sliding windows for math and puzzle tasks
 - **Simplified Task Management**: Clean separation between GRPO batches with automatic diversity weighting
 - **Inverse Task Weighting**: Uses inverse weighting based on task distribution (weight = 1.0 / num_tasks_at_level) to ensure balanced sampling across difficulty levels, giving higher priority to underrepresented levels. The current level receives an additional 2x weight multiplier to focus training on the active difficulty level.
-- **Multi-Task Support**: Works with math problems and programming puzzles
+- **Multi-Task Support**: Works with math problems, programming puzzles, and optional pre-reasoning chat data
 - **Automatic Judge Score Computation**: `get_judge_scores()` computes missing LLM Judge scores on-demand for accurate statistics during training
 
 This ensures the model has truly *mastered* a difficulty level rather than just "catching up" with lucky guesses.
@@ -286,7 +317,15 @@ cl = CurriculumLearning(
     demote_threshold=0.4,        # Demote if success rate falls below 40%
     variance_threshold=0.05,     # Require low variance for consistency
     level_change_cooldown=5,     # Minimum steps between level changes
-    truthy_learning_rate=0.1,    # 10% chance of truthy tasks
+    pre_reasoning_learning_rate=0.0,  # Set to 1.0 for pre-reasoning-only training
+    pre_reasoning_dataset=None,       # JSONL/HF chat dataset path or name
+    pre_reasoning_split="train",      # HF split when using a dataset name
+    use_llm_judge=True,               # Required when pre_reasoning_dataset is set
+    llm_judge_kwargs={
+        "api_host": "localhost",
+        "api_port": 8000,
+        "model_name": "Skywork/Skywork-Reward-V2-Qwen3-4B",
+    },
 )
 ```
 
@@ -338,7 +377,7 @@ def compute_reward(task_id: str, model_output: str) -> float
 - **Complete Batches** (>= `num_generations` completions): 
   1. Triggers batch LLM Judge evaluation (if enabled and not already computed)
   2. Recomputes combined score with auxiliary metrics blended in
-  3. Updates curriculum tracking for non-truthy tasks
+  3. Updates curriculum tracking for math/puzzle tasks
   4. Returns final combined score
 
 **Design Benefits:**
@@ -350,8 +389,10 @@ def compute_reward(task_id: str, model_output: str) -> float
 **Task Types & Scoring:**
 - **Math Tasks** (Level 0): Binary correctness (0.0 or 1.0) + optional LLM Judge auxiliary score
 - **Puzzle Tasks** (Levels 1-5): Binary correctness (0.0 or 1.0) + optional LLM Judge auxiliary score
-- **Truthy Tasks** (All Levels): Primary score = LLM Judge score (continuous 0.0-1.0), deferred to batch completion
-  - **Format Gate**: If format is invalid (missing `<answer>` tag), primary score is gated to 0.0 regardless of judge quality
+- **Pre-Reasoning Tasks**: LLM Judge primary score, deferred to batch completion
+  - Requires `use_llm_judge=True`
+  - Does not update curriculum success windows
+  - **Format Gate**: If format is invalid or reasoning is blank, final combined reward is gated to 0.0
 
 **Score Composition:**
 When all auxiliary functions are enabled, the combined score is:
@@ -360,9 +401,9 @@ combined_score = primary_weight * primary_score + aux_weight * avg(auxiliary_sco
 ```
 
 Where:
-- `primary_score`: Task-specific correctness (binary for math/puzzle, continuous for truthy)
-- `auxiliary_scores`: Optional metrics like format validity, repetition penalty, reasoning steps bonus, language consistency (truthy tasks only)
-- `judge_contribution`: Normalized LLM Judge score (0.0 when `llm_judge_weight=0.0`)
+- `primary_score`: Task-specific correctness (binary for math/puzzle, LLM Judge score for pre_reasoning)
+- `auxiliary_scores`: Optional metrics like format validity, repetition penalty, reasoning steps bonus, and language consistency
+- `judge_contribution`: Normalized LLM Judge score for math/puzzle auxiliary evaluation (for pre_reasoning, the judge score is already the primary score)
 
 **Configuration:**
 ```python
@@ -422,15 +463,20 @@ for batch_idx in range(num_batches):
    # Returns: 0.0-1.0 blending correctness + auxiliary scores
    ```
 
-3. **With LLM Judge for Truthy Tasks**:
+3. **With Pre-Reasoning Chat Data**:
    ```python
    cl = CurriculumLearning(
+       pre_reasoning_dataset="path/to/sft.jsonl",
+       pre_reasoning_split="train",
+       pre_reasoning_learning_rate=1.0,
+       num_generations=8,
        use_llm_judge=True,
-       llm_judge_kwargs={"api_host": "localhost", "api_port": 8000, ...}
+       llm_judge_kwargs={"api_host": "localhost", "api_port": 8000, ...},
    )
    reward = cl.compute_reward(task_id, model_output)
-   # For truthy: returns 0.0-1.0 LLM Judge score (deferred to batch completion)
-   # For math/puzzle: returns 0.0 or 1.0 correctness
+   # For pre_reasoning: returns judge-primary reward blended with auxiliary rewards
+   # and gated to 0.0 if <think> or <answer> format is invalid.
+   # For math/puzzle: returns correctness blended with auxiliary rewards
    ```
 
 **Removed Methods:**
@@ -588,6 +634,13 @@ infinite_rl/
 - **Reward Function**: `PuzzleRewardFunction`
 - **Difficulty**: Rated 1-5 per puzzle
 
+**3. Pre-Reasoning Tasks**
+- **Source**: Optional local JSON/JSONL path or Hugging Face dataset configured with `pre_reasoning_dataset`
+- **Input format**: Native chat `messages`/`conversations` rows or plain prompt/reference rows
+- **Evaluation**: LLM Judge primary score, plus auxiliary format/reasoning/content checks
+- **Curriculum**: Sampling-rate controlled and excluded from math/puzzle level advancement
+- **Reward Function**: LLM Judge primary scoring through `CurriculumLearning`; there is no separate local pre-reasoning primary reward function
+
 ## Architecture
 
 ### Standardized Format
@@ -703,4 +756,3 @@ url={https://arxiv.org/abs/2106.05784}
 
 **Python Programming Puzzles Repository** (Implementation source):
 We borrowed puzzle implementation code from [Microsoft's Python Programming Puzzles](https://github.com/microsoft/PythonProgrammingPuzzles) repository and implemented a JavaScript version for WASM-based execution.
-

@@ -9,6 +9,8 @@ import random
 from .task import Task
 from .prompt_templates import (
     format_math_prompt,
+    format_pre_reasoning_judge_system_prompt,
+    format_pre_reasoning_prompt,
     format_puzzle_prompt,
     format_truthy_judge_system_prompt,
     format_truthy_user_prompt,
@@ -25,19 +27,217 @@ class Session:
         think_tag: str = "think",
         reasoning_language: str = "en",
         reasoning_template: bool = False,
+        pre_reasoning_dataset: Optional[str] = None,
+        pre_reasoning_split: str = "train",
     ):
         self.answer_tag = answer_tag
         self.think_tag = think_tag
         self.reasoning_language = reasoning_language
         self.reasoning_template = reasoning_template
+        self.pre_reasoning_dataset = pre_reasoning_dataset
+        self.pre_reasoning_split = pre_reasoning_split
         self.task_instance_counter: int = 0
         self.tasks: Dict[str, Task] = {}
         self.task_history: List[str] = []  # task_ids in order of addition
         self.tasks_by_level: Dict[int, List[Dict[str, Any]]] = {
             i: [] for i in range(0, 7)  # 0-6 level
         }
-        self.truthy_tasks: List[Dict[str, Any]] = []
+        self.pre_reasoning_tasks: List[Dict[str, Any]] = []
+        # Backward-compatible alias for older callers/tests. New code should use
+        # pre_reasoning_tasks and task_type="pre_reasoning".
+        self.truthy_tasks = self.pre_reasoning_tasks
         self._load_available_tasks()
+
+    @property
+    def truthy_tasks(self) -> List[Dict[str, Any]]:
+        """Deprecated alias for pre_reasoning_tasks."""
+        return self.pre_reasoning_tasks
+
+    @truthy_tasks.setter
+    def truthy_tasks(self, value: List[Dict[str, Any]]) -> None:
+        self.pre_reasoning_tasks = value
+
+    def _load_pre_reasoning_source(self, source: str) -> List[Dict[str, Any]]:
+        """Load pre-reasoning rows from a JSON/JSONL file or HF dataset name."""
+        if not source:
+            return []
+
+        source_path = Path(source).expanduser()
+        if source_path.exists():
+            if source_path.suffix.lower() == ".jsonl":
+                rows = []
+                with open(source_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            rows.append(json.loads(line))
+                return rows
+
+            with open(source_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                return data
+            if isinstance(data, dict):
+                for key in ("data", "train", "rows", "examples"):
+                    value = data.get(key)
+                    if isinstance(value, list):
+                        return value
+                return list(data.values())
+            return []
+
+        try:
+            from datasets import load_dataset
+        except ImportError as exc:
+            raise ImportError(
+                "Loading pre_reasoning from Hugging Face requires the "
+                "'datasets' package."
+            ) from exc
+
+        dataset = load_dataset(source, split=self.pre_reasoning_split)
+        return [dict(row) for row in dataset]
+
+    def _message_role(self, message: Dict[str, Any]) -> str:
+        role = (
+            message.get("role")
+            or message.get("from")
+            or message.get("speaker")
+            or message.get("author")
+            or ""
+        )
+        role = str(role).lower()
+        if role in {"human", "user"}:
+            return "user"
+        if role in {"gpt", "assistant", "bot", "model"}:
+            return "assistant"
+        if role == "system":
+            return "system"
+        return role or "user"
+
+    def _message_content(self, message: Dict[str, Any]) -> str:
+        value = (
+            message.get("content")
+            or message.get("value")
+            or message.get("text")
+            or message.get("message")
+            or ""
+        )
+        return str(value)
+
+    def _normalize_messages(self, messages: Any) -> List[Dict[str, str]]:
+        if not isinstance(messages, list):
+            return []
+
+        normalized = []
+        for message in messages:
+            if not isinstance(message, dict):
+                continue
+            content = self._message_content(message)
+            if not content:
+                continue
+            normalized.append(
+                {
+                    "role": self._message_role(message),
+                    "content": content,
+                }
+            )
+        return normalized
+
+    def _normalize_pre_reasoning_item(
+        self,
+        item: Dict[str, Any],
+        idx: int,
+    ) -> Optional[Dict[str, Any]]:
+        """Normalize common SFT/chat schemas into prompt messages + reference."""
+        if not isinstance(item, dict):
+            return None
+
+        messages = (
+            self._normalize_messages(item.get("messages"))
+            or self._normalize_messages(item.get("conversations"))
+            or self._normalize_messages(item.get("conversation"))
+        )
+
+        reference_answer = ""
+        prompt_payload: Any = None
+
+        if messages:
+            assistant_indices = [
+                i for i, message in enumerate(messages) if message["role"] == "assistant"
+            ]
+            if assistant_indices:
+                final_assistant_idx = assistant_indices[-1]
+                reference_answer = messages[final_assistant_idx]["content"]
+                prompt_payload = messages[:final_assistant_idx]
+            else:
+                prompt_payload = messages
+
+        if prompt_payload is None:
+            prompt = item.get("prompt") or item.get("question") or item.get("input")
+            if isinstance(prompt, list):
+                prompt_payload = self._normalize_messages(prompt)
+            elif prompt:
+                system_prompt = item.get("system") or item.get("system_prompt")
+                if system_prompt:
+                    prompt_payload = [
+                        {"role": "system", "content": str(system_prompt)},
+                        {"role": "user", "content": str(prompt)},
+                    ]
+                else:
+                    prompt_payload = str(prompt)
+
+        if not reference_answer:
+            for key in (
+                "reference_answer",
+                "answer",
+                "response",
+                "completion",
+                "output",
+                "chosen",
+            ):
+                value = item.get(key)
+                if isinstance(value, str) and value.strip():
+                    reference_answer = value.strip()
+                    break
+
+        if prompt_payload is None:
+            return None
+
+        language = item.get("lang") or item.get("language") or "en"
+        dataset_id = str(
+            item.get("id")
+            or item.get("task_id")
+            or item.get("conversation_id")
+            or idx
+        )
+
+        return {
+            "id": dataset_id,
+            "prompt": prompt_payload,
+            "reference_answer": reference_answer,
+            "language": language,
+            "raw": item,
+        }
+
+    def _add_pre_reasoning_rows(
+        self,
+        rows: List[Dict[str, Any]],
+        id_prefix: str = "pre_reasoning",
+    ) -> int:
+        count = 0
+        for idx, item in enumerate(rows):
+            normalized = self._normalize_pre_reasoning_item(item, idx)
+            if not normalized:
+                continue
+
+            task_info = {
+                "type": "pre_reasoning",
+                "data": normalized,
+                "rating": None,
+                "id": f"{id_prefix}_{idx}",
+            }
+            self.pre_reasoning_tasks.append(task_info)
+            count += 1
+        return count
 
     def _load_available_tasks(self):
         """Load all available tasks and their ratings."""
@@ -141,40 +341,37 @@ class Session:
 
                 traceback.print_exc()
 
-        # Load truthy tasks
-        truthy_data = load_runtime_json("truthy.json")
-        if truthy_data:
-            try:
-                if isinstance(truthy_data, list):
-                    truthy_list = truthy_data
+        # Load pre-reasoning tasks. Prefer an explicit JSONL/HF dataset when
+        # provided, otherwise fall back to packaged runtime data. The older
+        # truthy.json runtime is treated as pre_reasoning data for compatibility.
+        try:
+            pre_reasoning_count = 0
+            if self.pre_reasoning_dataset:
+                rows = self._load_pre_reasoning_source(self.pre_reasoning_dataset)
+                pre_reasoning_count += self._add_pre_reasoning_rows(rows)
+            else:
+                pre_reasoning_data = load_runtime_json("pre_reasoning.json")
+                if pre_reasoning_data is None:
+                    pre_reasoning_data = load_runtime_json("truthy.json")
+
+                if isinstance(pre_reasoning_data, list):
+                    pre_reasoning_rows = pre_reasoning_data
+                elif isinstance(pre_reasoning_data, dict):
+                    pre_reasoning_rows = list(pre_reasoning_data.values())
                 else:
-                    # If it's a dict, extract the list of items
-                    truthy_list = (
-                        list(truthy_data.values())
-                        if isinstance(truthy_data, dict)
-                        else []
-                    )
+                    pre_reasoning_rows = []
 
-                truthy_count = 0
+                pre_reasoning_count += self._add_pre_reasoning_rows(
+                    pre_reasoning_rows
+                )
 
-                for idx, truthy_item in enumerate(truthy_list):
-                    if isinstance(truthy_item, dict) and "prompt" in truthy_item:
-                        task_info = {
-                            "type": "truthy",
-                            "data": truthy_item,
-                            "rating": None,  # Truthy tasks not limited by rating
-                            "id": f"truthy_{idx}",  # Unique dataset ID
-                        }
-                        # Store truthy tasks separately
-                        self.truthy_tasks.append(task_info)
-                        truthy_count += 1
+            if pre_reasoning_count:
+                print(f"DEBUG: Added {pre_reasoning_count} pre_reasoning tasks")
+        except Exception as e:
+            print(f"Warning: Could not process pre_reasoning tasks: {e}")
+            import traceback
 
-                print(f"DEBUG: Added {truthy_count} truthy tasks")
-            except Exception as e:
-                print(f"Warning: Could not process truthy tasks: {e}")
-                import traceback
-
-                traceback.print_exc()
+            traceback.print_exc()
 
         # Print summary
         math_count = sum(
@@ -189,10 +386,10 @@ class Session:
             for task in level_tasks
             if task["type"] == "puzzle"
         )
-        truthy_count = len(self.truthy_tasks)
-        total_unique = math_count + puzzle_count + truthy_count
+        pre_reasoning_count = len(self.pre_reasoning_tasks)
+        total_unique = math_count + puzzle_count + pre_reasoning_count
         print(
-            f"Loaded {total_unique} unique tasks ({math_count} math, {puzzle_count} puzzles, {truthy_count} truthy)"
+            f"Loaded {total_unique} unique tasks ({math_count} math, {puzzle_count} puzzles, {pre_reasoning_count} pre_reasoning)"
         )
         for level in range(0, 7):
             level_tasks = self.tasks_by_level[level]
@@ -201,6 +398,64 @@ class Session:
             print(
                 f"  Level {level}: {len(level_tasks)} tasks ({math_in_level} math, {puzzle_in_level} puzzles)"
             )
+
+    def create_pre_reasoning_task(self, selected_task: Dict[str, Any]) -> Optional[Task]:
+        """
+        Create a pre-reasoning task from chat/SFT task data.
+
+        Args:
+            selected_task: Task dict with type='pre_reasoning', data, and id
+
+        Returns:
+            Task object for pre-reasoning training, or None on error
+        """
+        try:
+            task_data = selected_task["data"]
+            base_task_id = selected_task["id"]
+            unique_task_id = f"{base_task_id}_{self.task_instance_counter}"
+            self.task_instance_counter += 1
+
+            prompt_payload = task_data["prompt"]
+            reference_answer = task_data.get("reference_answer", "")
+            language = task_data.get("language", "en")
+            prompt = format_pre_reasoning_prompt(
+                prompt_payload,
+                self.answer_tag,
+                self.think_tag,
+                reasoning_language=self.reasoning_language,
+                reasoning_template=self.reasoning_template,
+            )
+
+            judge_system_prompt = None
+            if reference_answer:
+                judge_system_prompt = format_pre_reasoning_judge_system_prompt(
+                    reference_answer,
+                    language,
+                )
+
+            expected_answer = {
+                "reference_answer": reference_answer,
+                "language": language,
+                "raw": task_data.get("raw", {}),
+            }
+
+            task_obj = Task(
+                task_id=unique_task_id,
+                task_name=f"pre_reasoning_{task_data.get('id', '')}",
+                task_type="pre_reasoning",
+                level=-1,
+                prompt=prompt,
+                judge_system_prompt=judge_system_prompt,
+                expected_answer=expected_answer,
+                language=language,
+                reasoning_language=self.reasoning_language,
+                dataset_id=base_task_id,
+            )
+            self.add_task(task_obj)
+            return task_obj
+        except Exception as e:
+            print(f"Error creating pre_reasoning task: {e}")
+            return None
 
     def create_truthy_task(self, selected_task: Dict[str, Any]) -> Optional[Task]:
         """

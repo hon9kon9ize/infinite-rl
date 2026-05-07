@@ -48,6 +48,9 @@ class CurriculumLearning:
         success_rate_threshold: float = 0.7,
         variance_threshold: float = 0.15,
         demote_threshold: float = 0.4,
+        pre_reasoning_learning_rate: Optional[float] = None,
+        pre_reasoning_dataset: Optional[str] = None,
+        pre_reasoning_split: str = "train",
         truthy_learning_rate: float = 0.1,
         level_change_cooldown: int = 5,
         num_generations: int = 4,
@@ -81,7 +84,10 @@ class CurriculumLearning:
             success_rate_threshold: Required success rate for difficulty increase (default: 0.7 = 70%)
             variance_threshold: Maximum variance for success rate stability (default: 0.15)
             demote_threshold: Success rate threshold for difficulty decrease (default: 0.4 = 40%)
-            truthy_learning_rate: Probability of including truthy tasks in the curriculum (default: 0.1). Set to 0 to disable.
+            pre_reasoning_learning_rate: Probability of selecting pre_reasoning tasks. If None, uses truthy_learning_rate for compatibility.
+            pre_reasoning_dataset: Hugging Face dataset name or JSON/JSONL path for chat-format pre_reasoning examples.
+            pre_reasoning_split: Hugging Face dataset split for pre_reasoning_dataset (default: "train").
+            truthy_learning_rate: Deprecated alias for pre_reasoning_learning_rate.
             level_change_cooldown: Minimum steps between level changes to prevent rapid fluctuations (default: 5)
             num_generations: Number of generations per prompt for GRPO batching (default: 4)
             warmup_step: Number of initial steps using only level 0 tasks with leaky gate scoring (default: 32)
@@ -137,13 +143,23 @@ class CurriculumLearning:
 
         self.global_step: int = 0  # Counter for total steps
 
-        # Truthy learning configuration
-        self.truthy_learning_rate = truthy_learning_rate
+        # Pre-reasoning learning configuration. truthy_learning_rate remains as
+        # a deprecated alias so older callers continue to work.
+        if pre_reasoning_learning_rate is None:
+            pre_reasoning_learning_rate = truthy_learning_rate
+        self.pre_reasoning_learning_rate = pre_reasoning_learning_rate
+        self.truthy_learning_rate = pre_reasoning_learning_rate
+        self.pre_reasoning_dataset = pre_reasoning_dataset
+        self.pre_reasoning_split = pre_reasoning_split
 
         # Session management
         self.session = session or Session(
+            answer_tag=answer_tag,
+            think_tag=think_tag,
             reasoning_language=reasoning_language,
             reasoning_template=reasoning_template,
+            pre_reasoning_dataset=pre_reasoning_dataset,
+            pre_reasoning_split=pre_reasoning_split,
         )
         self.log_file = Path(log_file) if log_file is not None else None
 
@@ -340,7 +356,8 @@ class CurriculumLearning:
         Evaluate a single model output and update learning state.
 
         Dispatches to task-type-specific handlers:
-        - Truthy tasks: LLM Judge as primary score
+        - Pre-reasoning tasks: LLM Judge as primary score
+        - Legacy truthy tasks: LLM Judge as primary score
         - Math/Puzzle: Primary task correctness with format gates
 
         Args:
@@ -361,6 +378,10 @@ class CurriculumLearning:
         if task.task_type == "truthy":
             score, is_correct, task_rewards, aux_score_dict = (
                 self._compute_reward_truthy(task)
+            )
+        elif task.task_type == "pre_reasoning":
+            score, is_correct, task_rewards, aux_score_dict = (
+                self._compute_reward_judge_primary(task)
             )
         else:
             score, is_correct, task_rewards, aux_score_dict = (
@@ -423,6 +444,8 @@ class CurriculumLearning:
             snap.generations = []
             if task.task_type == "truthy":
                 return self._compute_reward_truthy(snap)
+            elif task.task_type == "pre_reasoning":
+                return self._compute_reward_judge_primary(snap)
             else:
                 return self._compute_reward_standard(snap)
 
@@ -507,10 +530,13 @@ class CurriculumLearning:
             for gen in task.generations:
                 scores.append(gen.combined_score)
 
-            # Step 3: Track success at prompt level for curriculum
+            # Step 3: Track success at prompt level for curriculum.
+            # Use combined scores so format-gated generations, such as correct
+            # answers with empty <think> blocks, do not advance the curriculum.
             primary_scores = [g.primary_score for g in task.generations]
-            if task.task_type != "truthy":
-                self._track_success_group(task.level, primary_scores)
+            combined_scores = [g.combined_score for g in task.generations]
+            if task.task_type not in ("truthy", "pre_reasoning"):
+                self._track_success_group(task.level, primary_scores, combined_scores)
 
             # Increment step counter ONCE per complete prompt group
             self.global_step += 1
@@ -523,13 +549,13 @@ class CurriculumLearning:
 
         return scores
 
-    def _compute_reward_truthy(self, task: Task) -> tuple:
+    def _compute_reward_judge_primary(self, task: Task) -> tuple:
         """
-        Evaluate a truthy (conversation quality) task.
+        Evaluate a chat-quality task whose primary score comes from LLM Judge.
 
-        Truthy tasks:
-        - Primary score defaults to 0.0 (LLM Judge computed in batch via get_rewards())
-        - is_correct always False (truthy never affects curriculum)
+        Pre-reasoning and legacy truthy tasks:
+        - Primary score defaults to 0.0 (LLM Judge computed in batch)
+        - is_correct always False (chat tasks never affect curriculum)
         - Reward functions: format_think (optional), lang_consistency, repetition, whitespace
         - Final combined score is format-gated when use_format=True
         - LLM Judge is deferred to batch processing for efficiency
@@ -542,7 +568,7 @@ class CurriculumLearning:
         """
         if "llm_judge" not in self.aux_reward_functions:
             raise ValueError(
-                "Truthy tasks require llm_judge. Please set use_llm_judge=True with api_host, api_port, and model_name"
+                f"{task.task_type} tasks require llm_judge. Please set use_llm_judge=True with api_host, api_port, and model_name"
             )
 
         # Primary score defaults to 0.0 (LLM Judge computed in batch)
@@ -562,7 +588,7 @@ class CurriculumLearning:
         # The hard format gate is applied later when computing the combined score.
         other_aux_scores = self.get_aux_reward_scores(task, is_correct=False)
 
-        # Add all auxiliary rewards without capping (truthy is continuous)
+        # Add all auxiliary rewards without capping (judge-primary is continuous)
         for name, data in other_aux_scores.items():
             if name != "llm_judge":  # llm_judge is computed in batch
                 aux_reward = RewardFunctionScore(
@@ -573,11 +599,15 @@ class CurriculumLearning:
                 task_rewards.append(aux_reward)
                 aux_score_dict[name] = data
 
-        # Truthy tasks never affect curriculum (is_correct always False)
+        # Judge-primary chat tasks never affect curriculum (is_correct always False)
         score = primary_score
         is_correct = False
 
         return score, is_correct, task_rewards, aux_score_dict
+
+    def _compute_reward_truthy(self, task: Task) -> tuple:
+        """Backward-compatible wrapper for legacy truthy tests/callers."""
+        return self._compute_reward_judge_primary(task)
 
     def _compute_reward_standard(self, task: Task) -> tuple:
         """
@@ -813,33 +843,39 @@ class CurriculumLearning:
 
         return False
 
-    def _track_success_group(self, level: int, primary_scores: List[float]) -> None:
+    def _track_success_group(
+        self,
+        level: int,
+        primary_scores: List[float],
+        combined_scores: Optional[List[float]] = None,
+    ) -> None:
         """Track success at prompt-level based on group of GRPO responses.
 
         For GRPO: considers the prompt "solved" if:
-        - ANY response achieves perfect PRIMARY score (1.0), OR
-        - Mean PRIMARY score >= 0.7 (70% correctness threshold)
+        - ANY response achieves perfect PRIMARY score (1.0), AND
+        - That response has positive final COMBINED score after format gates
 
-        Uses primary scores (task correctness) for curriculum progression.
-        This separates task-solving ability from formatting/quality issues.
+        This prevents empty-think or otherwise invalid-format correct guesses from
+        advancing the curriculum.
 
         Args:
             level: Difficulty level of the task (0-6)
             primary_scores: List of primary correctness scores (for curriculum)
+            combined_scores: Final combined scores after format/quality gates
         """
         if level not in self.success_windows:
             self.success_windows[level] = deque(maxlen=self.window_size)
 
-        # Group success logic: use PRIMARY scores for curriculum decisions
-        # This separates task-solving ability from formatting/quality
-        mean_primary = (
-            sum(primary_scores) / len(primary_scores) if primary_scores else 0.0
-        )
-        max_primary = max(primary_scores) if primary_scores else 0.0
+        if combined_scores is None:
+            # Backward-compatible behavior for tests and callers that invoke this
+            # helper directly before final combined scores exist.
+            combined_scores = primary_scores
 
-        # Success criteria: count as success if ANY response is perfect (1.0)
-        # This allows curriculum progression when model occasionally gets correct answers
-        group_success = 1 if max_primary == 1.0 else 0
+        group_success = 0
+        for primary_score, combined_score in zip(primary_scores, combined_scores):
+            if primary_score == 1.0 and combined_score is not None and combined_score > 0.0:
+                group_success = 1
+                break
 
         self.success_windows[level].append(group_success)
 
@@ -850,6 +886,8 @@ class CurriculumLearning:
 
         for task in self.session.tasks.values():
             if task.is_correct is None:
+                continue
+            if task.task_type in ("truthy", "pre_reasoning"):
                 continue
 
             window = self.success_windows.setdefault(
@@ -926,8 +964,8 @@ class CurriculumLearning:
         """Get statistics on LLM Judge scores across all task types.
 
         Computes average, min, max, and count of LLM Judge scores for all tasks
-        that have been evaluated with LLM Judge. This includes both truthy tasks
-        (where judge score is primary) and math/puzzle tasks (where judge score is auxiliary).
+        that have been evaluated with LLM Judge. This includes pre_reasoning/truthy
+        tasks (where judge score is primary) and math/puzzle tasks (where judge score is auxiliary).
 
         Returns:
             Dictionary with:
@@ -945,7 +983,7 @@ class CurriculumLearning:
             has_judge = False
             for reward in task.latest_generation.rewards:
                 if reward.reward_function_name == "llm_judge" or (
-                    task.task_type == "truthy"
+                    task.task_type in ("truthy", "pre_reasoning")
                     and reward.reward_function_name == "primary"
                 ):
                     has_judge = True
@@ -971,10 +1009,10 @@ class CurriculumLearning:
                     tasks_with_judge += 1
                     break
                 elif (
-                    task.task_type == "truthy"
+                    task.task_type in ("truthy", "pre_reasoning")
                     and reward.reward_function_name == "primary"
                 ):
-                    # For truthy tasks, primary score IS the judge score
+                    # For judge-primary chat tasks, primary score IS the judge score
                     judge_scores.append(reward.score)
                     tasks_with_judge += 1
                     break
@@ -1000,7 +1038,8 @@ class CurriculumLearning:
         """
         Get a task prompt appropriate for current difficulty level.
 
-        With probability truthy_learning_rate (default 0.1), returns a truthy task for conversation quality evaluation.
+        With probability pre_reasoning_learning_rate, returns a pre_reasoning
+        chat task when such tasks are available.
         Otherwise, returns a new task based on current difficulty level.
 
         For GRPO batching: Each call creates a new task instance. The dataset ensures
@@ -1009,10 +1048,13 @@ class CurriculumLearning:
         Returns:
             Task object with prompt, expected output, etc., or None if no tasks available.
         """
-        # Check for truthy task trigger (20% chance)
-        if random.random() < self.truthy_learning_rate and self.session.truthy_tasks:
-            selected_task = random.choice(self.session.truthy_tasks)
-            return self.session.create_truthy_task(selected_task)
+        # Check for pre_reasoning task trigger.
+        if (
+            random.random() < self.pre_reasoning_learning_rate
+            and self.session.pre_reasoning_tasks
+        ):
+            selected_task = random.choice(self.session.pre_reasoning_tasks)
+            return self.session.create_pre_reasoning_task(selected_task)
 
         # During warmup, only use level 0 tasks
         if self.global_step < self.warmup_step:
@@ -1096,7 +1138,9 @@ class CurriculumLearning:
                 level: len(tasks)
                 for level, tasks in self.session.tasks_by_level.items()
             },
-            "truthy_tasks_count": len(self.session.truthy_tasks),
+            "pre_reasoning_tasks_count": len(self.session.pre_reasoning_tasks),
+            # Deprecated compatibility key.
+            "truthy_tasks_count": len(self.session.pre_reasoning_tasks),
             "aux_reward_functions": list(self.aux_reward_functions.keys()),
             "sliding_window_stats": success_stats,
         }
@@ -1118,6 +1162,7 @@ class CurriculumLearning:
         """
         aux_scores = {}
         is_truthy_task = task.task_type == "truthy"
+        is_pre_reasoning_task = task.task_type == "pre_reasoning"
 
         for aux_name, aux_fn in self.aux_reward_functions.items():
             if is_truthy_task and aux_name == "format_answer":
@@ -1129,8 +1174,8 @@ class CurriculumLearning:
                 # Skip llm_judge as it's computed in batch via get_rewards()
                 continue
             try:
-                if is_truthy_task and aux_name == "lang_consistency":
-                    # For truthy tasks, use lang_consistency with task.language
+                if (is_truthy_task or is_pre_reasoning_task) and aux_name == "lang_consistency":
+                    # For chat-quality tasks, use lang_consistency with task.language
                     aux_result = aux_fn.compute_reward(
                         task, is_correct=is_correct, target_language=task.language
                     )
@@ -1155,11 +1200,11 @@ class CurriculumLearning:
 
         This method is called from get_rewards() before scoring to enable efficient
         batched LLM Judge API calls. Each task's primary reward is updated with the
-        LLM Judge score (for truthy) or added as auxiliary (for math/puzzle).
+        LLM Judge score (for pre_reasoning/truthy) or added as auxiliary (for math/puzzle).
 
         Format gate applies to judge: if format is invalid, final reward is zero.
-        For truthy tasks, language consistency gate applies: if lang_consistency < 1.0,
-        the LLM Judge score is set to 0.0.
+        For chat tasks, language consistency gate applies: if lang_consistency < 1.0,
+        the LLM Judge primary score is set to 0.0.
 
         Modifies task.latest_generation.rewards in place to include LLM Judge results.
 
@@ -1227,15 +1272,15 @@ class CurriculumLearning:
                 if not task:
                     continue
 
-                if task.task_type == "truthy":
-                    # For truthy: replace primary score with LLM Judge score
-                    # Apply language consistency gate: if lang_consistency < 1.0, gate judge reward to 0.0
+                if task.task_type in ("truthy", "pre_reasoning"):
+                    # For judge-primary chat tasks: replace primary score with
+                    # LLM Judge score. Apply language consistency gate when present.
                     for result_idx, gen_idx in enumerate(judged_generation_indices):
                         gen = task.generations[gen_idx]
                         if result_idx < len(judge_scores):
                             judge_score = judge_scores[result_idx]
 
-                            # Check language consistency gate for truthy tasks
+                            # Check language consistency gate for chat tasks
                             lang_consistent = True
                             for reward in gen.rewards:
                                 if reward.reward_function_name == "lang_consistency":
@@ -1324,7 +1369,7 @@ class CurriculumLearning:
 
         # FIX #4: Keep auxiliary signals for incorrect responses
         # Don't zero out length/judge for incorrect responses to maintain variance
-        # Only zero if strictly needed (e.g., for truthy tasks, we gate judge based on language consistency)
+        # Only zero if strictly needed (e.g., for judge-primary chat tasks, we gate judge based on language consistency)
 
         # Normalize aux (assuming aux scores are now in [0, 1])
         if aux_scores:
@@ -1333,15 +1378,15 @@ class CurriculumLearning:
             aux_avg = 0
 
         # FIX #3: Recompute weights to sum to 1.0 based on what actually contributes
-        # Initialize effective_judge_weight to 0.0 to prevent UnboundLocalError for truthy tasks
+        # Initialize effective_judge_weight to 0.0 to prevent UnboundLocalError for judge-primary tasks
         effective_judge_weight = 0.0  # default: judge does not contribute
-        if task.task_type == "truthy":
+        if task.task_type in ("truthy", "pre_reasoning"):
             primary_weight = 1.0 - self.aux_weight
         else:
-            # For non-truthy tasks, only include judge if it actually contributes
+            # For non-judge-primary tasks, only include judge if it actually contributes
             effective_judge_weight = (
                 self.llm_judge_weight
-                if (self.use_llm_judge and task.task_type != "truthy")
+                if (self.use_llm_judge and task.task_type not in ("truthy", "pre_reasoning"))
                 else 0.0
             )
             # Recompute primary_weight so weights always sum to 1.0

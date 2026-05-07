@@ -42,7 +42,7 @@ class LangConsistencyRewardFunction(RewardFunction):
         For standard mode: content inside <think>...</think> tags.
         """
         output = model_output or ""
-        open_tag = "</think>"
+        open_tag = "<think>"
         close_tag = "</think>"
         # Standard mode: look for <think>...</think>
         if open_tag in output and close_tag in output:
@@ -77,10 +77,10 @@ class LangConsistencyRewardFunction(RewardFunction):
         if not self.initialized:
             self.initialize()
 
-        # Get expected language: prefer task.reasoning_language for math/puzzle, task.language for truthy
-        if task.task_type == "truthy":
+        # Get expected language: prefer task.language for chat tasks and
+        # task.reasoning_language for math/puzzle.
+        if task.task_type in ("truthy", "pre_reasoning"):
             expected_output = kwargs.get("target_language", self.target_language)
-            # For truthy tasks, use task.language (the conversation language)
             if task.language:
                 expected_output = task.language
         else:
@@ -88,8 +88,8 @@ class LangConsistencyRewardFunction(RewardFunction):
             expected_output = task.reasoning_language or self.target_language
 
         # Determine which content to check based on task type
-        if task.task_type == "truthy":
-            # For truthy tasks, check content outside <think> tags (the final response)
+        if task.task_type in ("truthy", "pre_reasoning"):
+            # For chat tasks, check content outside <think> tags (the final response)
             content = extract_tag_util(
                 task.model_output or "",
                 tag=self.target_tag,

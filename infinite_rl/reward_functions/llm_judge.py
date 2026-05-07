@@ -1,5 +1,6 @@
 """LLM-as-a-Judge reward function using remote scoring model."""
 
+from copy import deepcopy
 import requests
 import time
 from typing import Optional, TYPE_CHECKING
@@ -103,7 +104,7 @@ class LLMJudgeRewardFunction(RewardFunction):
         self.initialized = True
 
     def _format_conversation(
-        self, prompt: str, response: str, system_prompt: Optional[str] = None
+        self, prompt, response: str, system_prompt: Optional[str] = None
     ) -> list:
         """Format prompt and response as a conversation."""
         conversation = []
@@ -111,12 +112,16 @@ class LLMJudgeRewardFunction(RewardFunction):
         if system_prompt:
             conversation.append({"role": "system", "content": system_prompt})
 
-        conversation.extend(
-            [
-                {"role": "user", "content": prompt},
-                {"role": "assistant", "content": response},
-            ]
-        )
+        if isinstance(prompt, list):
+            conversation.extend(deepcopy(prompt))
+            conversation.append({"role": "assistant", "content": response})
+        else:
+            conversation.extend(
+                [
+                    {"role": "user", "content": prompt},
+                    {"role": "assistant", "content": response},
+                ]
+            )
 
         return conversation
 

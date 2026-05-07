@@ -7,7 +7,7 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 - **Supported task types**: 
   - **Math** (Level 0): Problem-solving using symbolic computation. All math tasks are at level 0, sourced from GSM8K filtered for easy mathematical problems.
   - **Puzzle** (Levels 1-5): Programming challenges in Python (subprocess) and JavaScript (WASM runtime). Difficulty rated 1-5 scale.
-  - **Truthy** (All Levels, 20% weight): Conversation-based quality evaluation with multilingual support (yue, zh, en). Primary score from LLM Judge (Skywork Reward Model).
+  - **Pre-Reasoning** (optional, sampling-rate controlled): Chat/SFT-style examples used to train non-empty reasoning on non-math/non-programming tasks. Supports local JSON/JSONL files and Hugging Face datasets with chat-message rows. Primary score comes from LLM Judge.
 - Key components:
   1. **Reward functions** in `infinite_rl/reward_functions/`:
      - `MathRewardFunction`: Validates mathematical solutions using symbolic equivalence
@@ -29,9 +29,9 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 - Reward functions are designed to integrate with fine-tuning frameworks (e.g., Tunix).
 - **Math tasks**: `MathRewardFunction` expects the answer tag to contain a numeric value or symbolic expression that can be parsed and compared symbolically.
 - **Puzzle tasks**: `PuzzleRewardFunction` expects the answer tag to contain a code block (triple-backtick) with valid Python or JavaScript code. Python code is checked against the Python SAT function; JavaScript code is checked against the JavaScript SAT function inside the WASM runtime. Do not validate JavaScript outputs with Python SAT semantics.
-- **Truthy tasks**: Conversation-based quality evaluation where the **primary score IS the LLM Judge score** (not binary). System prompt + prompt + chosen/rejected are provided in conversation format. Requires `use_llm_judge=True` with `api_host`, `api_port`, and `model_name`. **lang_consistency** is only computed for truthy tasks (checks language consistency outside `<think>` tags).
+- **Pre-reasoning tasks**: Conversation/SFT quality training where the **primary score IS the LLM Judge score** (not binary). Requires `use_llm_judge=True` with `api_host`, `api_port`, and `model_name`. Accepted dataset sources are local `.jsonl`/`.json` files or Hugging Face dataset names via the optional `datasets` package. Accepted row schemas include `messages`, `conversations`, `conversation`, or fallback `prompt`/`question`/`input` plus `reference_answer`/`answer`/`response`/`completion`/`output`/`chosen`. For chat rows, the final assistant turn is removed from the prompt and used as the reference answer for the judge. **lang_consistency** is computed for pre-reasoning tasks and checks language consistency outside `<think>` tags.
 - **LLM Judge** serves two roles:
-  1. **Primary evaluator for truthy tasks**: Rates quality on continuous scale (0.0-1.0)
+  1. **Primary evaluator for pre-reasoning tasks**: Rates quality on continuous scale (0.0-1.0)
   2. **Auxiliary evaluator for math/puzzle tasks**: Provides quality feedback independent of correctness gates
   - Requires sglang server running Skywork model (V2-Qwen3-4B)
   - Supports configurable score normalization
@@ -39,7 +39,7 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
   - Batch evaluation: Deferred until all generations in a batch are accumulated (when `len(task.generations) >= num_generations`)
   - Uses `compute_rewards_batch()` for efficient batch API calls
   - Updated reward scores are recomputed with judge scores included in final combined score
-  - **Format gate applies to judge**: For truthy tasks, if format is invalid (missing `<answer>` tag), the final judge reward is gated to zero regardless of judge quality score
+  - **Format gate applies to final training reward**: For pre-reasoning tasks, invalid format, missing `<answer>`, missing/invalid `</think>`, or placeholder reasoning like `<think>blank</think>` gates the final combined reward to zero regardless of judge quality score.
 - **GRPO Task Management**: Simplified approach with clean batch separation:
   - Each GRPO batch gets a fresh task instance from `get_prompt()`
   - `DynamicCurriculumDataset` handles within-batch reuse automatically
@@ -60,8 +60,14 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
   - Generation accumulation, LLM Judge evaluation, curriculum tracking, and logging all happen within `compute_reward()`
 - **Dataset Uniqueness**: Critical for preventing GRPO batching errors:
   - Each dataset row must have a unique identifier to prevent task collision
-  - Unique IDs use format: `math_{idx}`, `puzzle_{lang}_{name}`, `truthy_{idx}`
+  - Unique IDs use format: `math_{idx}`, `puzzle_{lang}_{name}`, `pre_reasoning_{idx}`
   - Task selection uses full history weighting to ensure diversity across batches
+- **Pre-reasoning sampling**:
+  - Configure with `pre_reasoning_dataset`, `pre_reasoning_split`, and `pre_reasoning_learning_rate`.
+  - `scripts/train.py --pre_reasoning_dataset ...` requires `--use_llm_judge` because there is no local reference-similarity primary reward.
+  - If `--pre_reasoning_learning_rate` is omitted, training defaults it to `1.0` when a pre-reasoning dataset is provided, otherwise `0.0`.
+  - Use `num_generations=8` for the intended GRPO pre-reasoning objective.
+  - Pre-reasoning tasks never advance or demote the math/puzzle curriculum level.
 - **Curriculum learning** uses sliding window success rates:
   - `_track_success_group(level, primary_scores)` records GRPO batch-level success: `group_success = 1 if max_primary == 1.0 else 0`
   - `_update_level()` checks: success_rate > threshold AND variance < variance_threshold for advancement, or success_rate < demote_threshold AND variance < variance_threshold for demotion
@@ -124,7 +130,7 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 
 ## Project-specific conventions & patterns
 - Strict output format: the parser looks for `<answer>` tags; changing parsing requires updating tests.
-- **Prompt generation**: Use `format_puzzle_prompt()` and `format_math_prompt()` from `infinite_rl.prompt_templates` to create prompts.
+- **Prompt generation**: Use `format_puzzle_prompt()`, `format_math_prompt()`, and `format_pre_reasoning_prompt()` from `infinite_rl.prompt_templates` to create prompts.
 - **Puzzle data access**: Use `get_puzzle_data()` and `get_available_puzzles()` from `infinite_rl.puzzles` to access puzzle metadata.
 - **Auxiliary reward functions**: Additional metrics blended with primary rewards via `CurriculumLearning._initialize_aux_reward_functions()`:
   - `FormatRewardFunction`: Validates `<answer>` and `<think>/</think>` tag structure. Key behaviors:
@@ -132,7 +138,8 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
     - Nested tag detection skips placeholder patterns like `<answer>[Final numeric result]</answer>` and `<answer>...</answer>` (model echoing prompt instructions)
     - Only counts `<answer>` tags AFTER `</think>` for "Multiple tags" check — reasoning section echoes are ignored
     - Real nested tags (e.g., `<answer>315</answer>` in CoT) still rejected by `format_think` (0.0)
-  - `LangConsistencyRewardFunction`: Only for truthy tasks — checks language consistency outside `<think>` tags
+    - Placeholder reasoning content such as `<think>blank</think>`, `<think>empty</think>`, `<think>none</think>`, and `<think>no reasoning</think>` scores `format_think=0.0` and gates the final combined reward to zero.
+  - `LangConsistencyRewardFunction`: For pre-reasoning tasks — checks language consistency outside `<think>` tags
   - `ReasoningStepsRewardFunction`: Rewards structured reasoning with indicators (English: "First", "Then", "Finally", "Therefore"; Cantonese/Chinese: "首先", "然後", "最後", "所以", etc. — 40+ keywords). Minimum score is 0.0 (no longer -1.0 penalty). Empty reasoning returns 0.0.
   - `ResponseContentRewardFunction`: Rewards brief explanations between `</think>` and `<answer>` tags. Sweet-spot curve: 30-500 chars = 1.0, empty = 0.0, verbose >1000 chars decays to 0.4. Default: enabled (`use_response_content=True`).
   - `LLMJudgeRewardFunction`: Remote LLM-based quality scoring via sglang API
@@ -146,6 +153,7 @@ Purpose: Short, actionable guidance to help AI coding agents be productive in th
 - When adding a new task type:
   - Add a reward function class under `infinite_rl/reward_functions/` and expose it in `get_reward_functions()` for primary tasks.
   - For auxiliary metrics, add to `_initialize_aux_reward_functions()` in curriculum.py and add configuration handling.
+  - Do not add a local primary reward for pre-reasoning; its primary score is LLM Judge.
 
 ## Integration points & dependencies
 - Code execution: `wasmtime` + packaged WASM runtimes (`puzzle_js.wasm`) in `infinite_rl/runtimes`. The `Executor` exposes `javascript` for puzzles; Python puzzles use local subprocess execution via `infinite_rl/runner.py`.
@@ -181,6 +189,7 @@ RUNTIME_RELEASE_TAG=v1.2.3 RUNTIME_GITHUB_REPO=owner/repo python -m pip install 
 - `infinite_rl/runner.py` — Python puzzle evaluation via local subprocess
 - `scripts/train.py` — GRPO training integration using simplified `compute_reward()` API
   - `--reasoning-template` flag: Enable when model chat template auto-injects `<think>` tag (see reasoning template mode above)
+  - `--pre_reasoning_dataset`, `--pre_reasoning_split`, and `--pre_reasoning_learning_rate`: Configure chat/SFT pre-reasoning training. `--pre_reasoning_dataset` requires `--use_llm_judge`.
 
 ## References
 

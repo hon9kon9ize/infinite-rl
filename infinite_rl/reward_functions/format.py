@@ -271,6 +271,22 @@ class FormatRewardFunction(RewardFunction):
                 info=f"Empty reasoning content in <{self.think_tag}>.",
             )
 
+        normalized = re.sub(r"[\W_]+", " ", content, flags=re.UNICODE).strip().lower()
+        if normalized in {
+            "blank",
+            "empty",
+            "none",
+            "n a",
+            "na",
+            "null",
+            "no reasoning",
+            "no thoughts",
+        }:
+            return RewardFunctionScore(
+                score=0.0,
+                info=f"Placeholder reasoning content in <{self.think_tag}>.",
+            )
+
         length = len(content)
         if length < self.min_think_chars:
             suffix = " (reasoning template)" if reasoning_template else ""

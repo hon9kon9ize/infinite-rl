@@ -16,7 +16,7 @@ class Task:
         task_name: str,
         task_type: str,
         level: int,
-        prompt: str,
+        prompt: Union[str, List[Dict[str, str]]],
         expected_answer: Union[str, dict],
         judge_system_prompt: Optional[str] = None,
         model_output: Optional[str] = None,

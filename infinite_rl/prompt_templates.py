@@ -5,7 +5,8 @@ This module provides functions to format task prompts for both math and puzzle t
 ensuring consistent structure across all generated tasks.
 """
 
-from typing import Dict, Any, Optional
+from copy import deepcopy
+from typing import Dict, Any, Optional, List, Union
 
 # Language code to full language name mapping
 LANG_MAP = {
@@ -251,4 +252,84 @@ def format_truthy_user_prompt(
 **User Input Language:** {LANG_MAP.get(language, 'Unknown')}
 
 **User Input:** {question}
+"""
+
+
+def pre_reasoning_format_instruction(
+    answer_tag: str = "answer",
+    think_tag: str = "think",
+    reasoning_language: Optional[str] = None,
+    reasoning_template: bool = False,
+) -> str:
+    """Create output-format instructions for pre-reasoning chat tasks."""
+    reasoning_lang_name = LANG_MAP.get(reasoning_language or "en", "English")
+    if reasoning_template:
+        return (
+            f"Before the final response, write substantive reasoning in "
+            f"{reasoning_lang_name} and close it with </{think_tag}>. "
+            f"Then put the final response inside <{answer_tag}>...</{answer_tag}>. "
+            f"Do not leave the reasoning blank."
+        )
+    return (
+        f"First write substantive reasoning in {reasoning_lang_name} inside "
+        f"<{think_tag}>...</{think_tag}>. Then put the final response inside "
+        f"<{answer_tag}>...</{answer_tag}>. Do not leave the reasoning blank."
+    )
+
+
+def format_pre_reasoning_prompt(
+    prompt: Union[str, List[Dict[str, str]]],
+    answer_tag: str = "answer",
+    think_tag: str = "think",
+    reasoning_language: Optional[str] = None,
+    reasoning_template: bool = False,
+) -> Union[str, List[Dict[str, str]]]:
+    """Format a pre-reasoning SFT prompt.
+
+    The input may be a plain prompt string or a chat `messages` list. For chat
+    prompts, the output-format instruction is appended to the latest user turn so
+    TRL can receive the prompt in native chat-message format.
+    """
+    instruction = pre_reasoning_format_instruction(
+        answer_tag=answer_tag,
+        think_tag=think_tag,
+        reasoning_language=reasoning_language,
+        reasoning_template=reasoning_template,
+    )
+
+    if isinstance(prompt, str):
+        return f"{prompt.rstrip()}\n\n{instruction}"
+
+    messages = deepcopy(prompt)
+    last_user_idx = None
+    for idx, message in enumerate(messages):
+        if message.get("role") == "user":
+            last_user_idx = idx
+
+    if last_user_idx is None:
+        messages.append({"role": "user", "content": instruction})
+    else:
+        content = messages[last_user_idx].get("content", "")
+        messages[last_user_idx]["content"] = f"{content.rstrip()}\n\n{instruction}"
+
+    return messages
+
+
+def format_pre_reasoning_judge_system_prompt(
+    reference_answer: str,
+    language: str = "en",
+) -> str:
+    """Format an optional judge prompt for pre-reasoning SFT examples."""
+    return f"""You are evaluating whether an assistant response is useful and aligned with the reference answer.
+
+## Evaluation Criteria
+1. The response should directly address the user request.
+2. The final answer should be semantically close to the reference answer.
+3. The response language should match the user/request language when applicable.
+
+## Response Language
+{LANG_MAP.get(language, language)}
+
+## Reference Answer
+{reference_answer}
 """

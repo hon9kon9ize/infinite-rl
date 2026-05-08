@@ -1,4 +1,8 @@
 [run]
 omit =
-    infinite_rl/python_puzzles/*
-    infinite_rl/runtimes/*
+    */infinite_rl/python_puzzles/*
+    */infinite_rl/runtimes/*
+    */infinite_rl/dynamic_dataset.py
+    */infinite_rl/executor.py
+    */infinite_rl/puzzles.py
+    */emulator/*

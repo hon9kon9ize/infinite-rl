@@ -38,7 +38,16 @@ class TestPreReasoning(unittest.TestCase):
         self.assertIsInstance(task.prompt, list)
         self.assertEqual(task.prompt[-1]["role"], "user")
         self.assertIn("<think>", task.prompt[-1]["content"])
-        self.assertIn("<answer>", task.prompt[-1]["content"])
+        self.assertNotIn("<answer>", task.prompt[-1]["content"])
+
+    def test_reasoning_template_pre_reasoning_does_not_request_answer_tag(self):
+        path = self._jsonl_dataset()
+        session = Session(pre_reasoning_dataset=path, reasoning_template=True)
+        task = session.create_pre_reasoning_task(session.pre_reasoning_tasks[0])
+
+        self.assertIn("</think>", task.prompt[-1]["content"])
+        self.assertNotIn("<think>", task.prompt[-1]["content"])
+        self.assertNotIn("<answer>", task.prompt[-1]["content"])
 
     def test_pre_reasoning_dataset_reuses_prompt_for_eight_generations(self):
         path = self._jsonl_dataset()
@@ -85,13 +94,13 @@ class TestPreReasoning(unittest.TestCase):
             ]
         )
 
-        blank = "<think>blank</think><answer>The capital of France is Paris.</answer>"
+        blank = "<think>blank</think>The capital of France is Paris."
         valid_reasoning = (
             "<think>"
             "The user asks for a factual capital city. France is a country in "
             "Europe, and its internationally recognized capital city is Paris, "
             "so the final response should state that directly."
-            "</think><answer>The capital of France is Paris.</answer>"
+            "</think>The capital of France is Paris."
         )
         scores = curriculum.compute_rewards(task.task_id, [blank, valid_reasoning])
 
@@ -99,6 +108,10 @@ class TestPreReasoning(unittest.TestCase):
         self.assertGreater(scores[1], scores[0])
         self.assertEqual(task.generations[0].primary_score, 0.2)
         self.assertEqual(task.generations[1].primary_score, 0.9)
+        self.assertNotIn(
+            "format_answer",
+            [reward.reward_function_name for reward in task.generations[1].rewards],
+        )
         self.assertEqual(curriculum.success_windows, {})
 
     def test_pre_reasoning_requires_llm_judge(self):
@@ -114,7 +127,7 @@ class TestPreReasoning(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "pre_reasoning tasks require llm_judge"):
             curriculum.compute_reward(
                 task.task_id,
-                "<think>Reasoning with enough detail to be non-empty.</think><answer>Paris.</answer>",
+                "<think>Reasoning with enough detail to be non-empty.</think>Paris.",
             )
 
 

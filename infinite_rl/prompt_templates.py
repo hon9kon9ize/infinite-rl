@@ -267,13 +267,13 @@ def pre_reasoning_format_instruction(
         return (
             f"Before the final response, write substantive reasoning in "
             f"{reasoning_lang_name} and close it with </{think_tag}>. "
-            f"Then put the final response inside <{answer_tag}>...</{answer_tag}>. "
+            f"Then write the final response normally. "
             f"Do not leave the reasoning blank."
         )
     return (
         f"First write substantive reasoning in {reasoning_lang_name} inside "
-        f"<{think_tag}>...</{think_tag}>. Then put the final response inside "
-        f"<{answer_tag}>...</{answer_tag}>. Do not leave the reasoning blank."
+        f"<{think_tag}>...</{think_tag}>. Then write the final response normally. "
+        f"Do not leave the reasoning blank."
     )
 
 

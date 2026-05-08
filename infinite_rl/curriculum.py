@@ -557,6 +557,7 @@ class CurriculumLearning:
         - Primary score defaults to 0.0 (LLM Judge computed in batch)
         - is_correct always False (chat tasks never affect curriculum)
         - Reward functions: format_think (optional), lang_consistency, repetition, whitespace
+        - Pre-reasoning tasks do not require or reward <answer> tags
         - Final combined score is format-gated when use_format=True
         - LLM Judge is deferred to batch processing for efficiency
 
@@ -684,7 +685,8 @@ class CurriculumLearning:
         """
         Check format validity for a specific generation.
 
-        Both think and answer tags must be valid for format_valid=True.
+        For pre_reasoning tasks, only the think tag is format-gated. Other task
+        types keep their existing answer-format requirements.
 
         Args:
             task: Task object (used only for task_type and auxiliary functions)
@@ -712,7 +714,9 @@ class CurriculumLearning:
                     format_think_valid = False
                     failure_reason = format_result.info
 
-            if "format_answer" in self.aux_reward_functions:
+            if task.task_type == "pre_reasoning":
+                format_answer_valid = True
+            elif "format_answer" in self.aux_reward_functions:
                 format_fn = self.aux_reward_functions["format_answer"]
                 format_result = format_fn.compute_reward(task, is_correct=False)
                 if format_result.score <= 0.0:
@@ -1165,6 +1169,12 @@ class CurriculumLearning:
         is_pre_reasoning_task = task.task_type == "pre_reasoning"
 
         for aux_name, aux_fn in self.aux_reward_functions.items():
+            if is_pre_reasoning_task and aux_name == "format_answer":
+                # Pre-reasoning only trains the model to emit non-empty
+                # reasoning before the final response; it does not use an
+                # <answer> wrapper.
+                continue
+
             if is_truthy_task and aux_name == "format_answer":
                 # For truthy tasks, format_answer is checked by the hard
                 # combined-score gate, but is not blended as an auxiliary score.

@@ -190,7 +190,8 @@ class CurriculumLearning:
             try:
                 from .reward_functions import LangConsistencyRewardFunction
 
-                # Additional lang_consistency for truthy tasks: check language outside <think> tags
+                # Lang consistency is task-aware: pre_reasoning checks CoT
+                # language, while legacy truthy checks the final response.
                 self.aux_reward_functions["lang_consistency"] = (
                     LangConsistencyRewardFunction(
                         "lang_consistency",
@@ -200,6 +201,7 @@ class CurriculumLearning:
                         tag_excluded=True,
                         target_tag=self.think_tag,
                         target_language="en",  # placeholder, will be overridden per task
+                        reasoning_template=self.reasoning_template,
                         **self.lang_consistency_kwargs,
                     )
                 )
@@ -1184,8 +1186,15 @@ class CurriculumLearning:
                 # Skip llm_judge as it's computed in batch via get_rewards()
                 continue
             try:
-                if (is_truthy_task or is_pre_reasoning_task) and aux_name == "lang_consistency":
-                    # For chat-quality tasks, use lang_consistency with task.language
+                if aux_name == "lang_consistency" and is_pre_reasoning_task:
+                    # Pre-reasoning only cares about CoT language.
+                    aux_result = aux_fn.compute_reward(
+                        task,
+                        is_correct=is_correct,
+                        target_language=task.reasoning_language,
+                    )
+                elif aux_name == "lang_consistency" and is_truthy_task:
+                    # Legacy truthy checks final response language.
                     aux_result = aux_fn.compute_reward(
                         task, is_correct=is_correct, target_language=task.language
                     )

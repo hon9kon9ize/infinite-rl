@@ -148,7 +148,7 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
 
         # English text outside <think> should score 0.0, not 1.0
         self.assertEqual(score.score, 0.0)
-        self.assertIn("does not match expected", score.info)
+        self.assertIn("not classified as Cantonese", score.info)
 
     def test_cantonese_outside_think_tags_yue_expected(self):
         """Test that Cantonese text outside <think> tags scores 1.0 when expected language is 'yue'.
@@ -224,4 +224,95 @@ class TestLangConsistencyRewardFunction(unittest.TestCase):
         score_puzzle = reward_fn.compute_reward(task_puzzle)
         # CoT is in English but reasoning_language is "yue", so should not match
         self.assertEqual(score_puzzle.score, 0.0)
-        self.assertIn("does not match expected", score_puzzle.info)
+        self.assertIn("not classified as Cantonese", score_puzzle.info)
+
+    def test_pre_reasoning_checks_cot_not_final_response_language(self):
+        """Pre-reasoning ignores final-response language and checks CoT only."""
+        reward_fn = LangConsistencyRewardFunction(
+            task_name="lang_consistency",
+            tag_excluded=True,
+            target_tag="think",
+            target_language="en",
+        )
+        reward_fn.initialize()
+
+        task = Task(
+            task_id="pre_reasoning_yue_cot",
+            task_name="Pre Reasoning Yue CoT",
+            task_type="pre_reasoning",
+            level=-1,
+            prompt="Translate this title.",
+            expected_answer={"reference_answer": ""},
+            language="en",
+            reasoning_language="yue",
+            model_output=(
+                "<think>我首先會拆開法文標題入面嘅關鍵詞，然後搵返最自然嘅英文公共衛生講法。</think>"
+                "呢度有幾個選擇，視乎你想要幾正式。"
+            ),
+        )
+
+        score = reward_fn.compute_reward(task, target_language="yue")
+
+        self.assertEqual(score.score, 1.0)
+        self.assertEqual(score.info, "")
+
+    def test_pre_reasoning_rejects_wrong_cot_language_even_if_final_is_cantonese(self):
+        """Pre-reasoning language consistency is about CoT, not final response."""
+        reward_fn = LangConsistencyRewardFunction(
+            task_name="lang_consistency",
+            tag_excluded=True,
+            target_tag="think",
+            target_language="en",
+        )
+        reward_fn.initialize()
+
+        task = Task(
+            task_id="pre_reasoning_wrong_cot",
+            task_name="Pre Reasoning Wrong CoT",
+            task_type="pre_reasoning",
+            level=-1,
+            prompt="Translate this title.",
+            expected_answer={"reference_answer": ""},
+            language="en",
+            reasoning_language="yue",
+            model_output=(
+                "<think>I will parse the French title and produce the most natural English translation.</think>"
+                "呢度有幾個選擇，視乎你想要幾正式。"
+            ),
+        )
+
+        score = reward_fn.compute_reward(task, target_language="yue")
+
+        self.assertEqual(score.score, 0.0)
+        self.assertIn("not classified as Cantonese", score.info)
+
+    def test_yue_pre_reasoning_bypasses_cld2_for_mixed_source_text(self):
+        """French source text inside Cantonese CoT should not fail CLD2 prefiltering."""
+        reward_fn = LangConsistencyRewardFunction(
+            task_name="lang_consistency",
+            tag_excluded=True,
+            target_tag="think",
+            target_language="en",
+        )
+        reward_fn.initialize()
+
+        task = Task(
+            task_id="pre_reasoning_french_source",
+            task_name="Pre Reasoning French Source",
+            task_type="pre_reasoning",
+            level=-1,
+            prompt="Translate this title.",
+            expected_answer={"reference_answer": ""},
+            language="en",
+            reasoning_language="yue",
+            model_output=(
+                "<think>Répertoire des initiatives canadiennes de prévention des chutes chez les aînés "
+                "呢句係法文標題，我會先拆開每個詞組，再搵返自然嘅英文講法。</think>"
+                "Directory of Canadian Fall Prevention Initiatives for Seniors - 2005"
+            ),
+        )
+
+        score = reward_fn.compute_reward(task, target_language="yue")
+
+        self.assertEqual(score.score, 1.0)
+        self.assertEqual(score.info, "")

@@ -35,6 +35,18 @@ class LangConsistencyRewardFunction(RewardFunction):
         judgement = self.yue_detector(text)
         return judgement in ["cantonese", "mixed", "neutral"]
 
+    def _is_cantonese_without_cld2(self, text: str) -> bool:
+        """Check Cantonese directly without CLD2 source-language prefiltering."""
+        judgement = self.yue_detector(text)
+        if judgement in ["cantonese", "mixed"]:
+            return True
+        if judgement == "neutral":
+            # `neutral` is useful for short Cantonese snippets such as common
+            # phrases, but English/French text can also be neutral. Require at
+            # least some CJK signal when accepting neutral as Cantonese-like.
+            return any("\u4e00" <= char <= "\u9fff" for char in text)
+        return False
+
     def _extract_reasoning_content(self, model_output: str) -> str:
         """Extract reasoning/CoT content from model output.
 
@@ -49,7 +61,7 @@ class LangConsistencyRewardFunction(RewardFunction):
             start = output.index(open_tag)
             end = output.index(close_tag, start)
             if start < end:
-                return output[start:end].strip()
+                return output[start + len(open_tag):end].strip()
         # Reasoning template mode (closing tag only): everything before </think>
         if close_tag in output:
             return output.split(close_tag)[0].strip()
@@ -77,9 +89,13 @@ class LangConsistencyRewardFunction(RewardFunction):
         if not self.initialized:
             self.initialize()
 
-        # Get expected language: prefer task.language for chat tasks and
-        # task.reasoning_language for math/puzzle.
-        if task.task_type in ("truthy", "pre_reasoning"):
+        # Get expected language. Pre-reasoning trains CoT language only; the
+        # final response can be multilingual, so ignore task.language there.
+        if task.task_type == "pre_reasoning":
+            expected_output = task.reasoning_language or kwargs.get(
+                "target_language", self.target_language
+            )
+        elif task.task_type == "truthy":
             expected_output = kwargs.get("target_language", self.target_language)
             if task.language:
                 expected_output = task.language
@@ -88,8 +104,12 @@ class LangConsistencyRewardFunction(RewardFunction):
             expected_output = task.reasoning_language or self.target_language
 
         # Determine which content to check based on task type
-        if task.task_type in ("truthy", "pre_reasoning"):
-            # For chat tasks, check content outside <think> tags (the final response)
+        if task.task_type == "pre_reasoning":
+            # For pre-reasoning, only check the CoT language. The content after
+            # </think> may legitimately be any language in multilingual data.
+            content = self._extract_reasoning_content(task.model_output or "")
+        elif task.task_type == "truthy":
+            # For legacy truthy tasks, check content outside <think> tags.
             content = extract_tag_util(
                 task.model_output or "",
                 tag=self.target_tag,
@@ -116,6 +136,19 @@ class LangConsistencyRewardFunction(RewardFunction):
                 info=f"Skipping language check for '{norm_expected}' (not a natural language target)",
             )
 
+        # Cantonese detection should not be gated by CLD2. Translation and
+        # multilingual prompts often quote source text in French/English/etc.,
+        # which can cause CLD2 to report the source language even when the CoT
+        # itself is Cantonese.
+        if norm_expected == "yue":
+            is_cantonese = self._is_cantonese_without_cld2(content)
+            if is_cantonese:
+                return RewardFunctionScore(score=1.0, info="")
+            return RewardFunctionScore(
+                score=0.0,
+                info="Expected Cantonese but content was not classified as Cantonese.",
+            )
+
         # Get detected language (CLD2) details
         _, _, details = cld2.detect(content.encode("utf-8"))
         norm_detected = details[0][1].lower() if details else None
@@ -126,18 +159,7 @@ class LangConsistencyRewardFunction(RewardFunction):
                 info="Failed to detect language of the content.",
             )
 
-        # Check if Cantonese is expected and detected
-        if norm_expected == "yue" and norm_detected in ["zh", "yue", "zh-hant"]:
-            is_cantonese = self._is_cantonese(content)
-
-            if is_cantonese:
-                final_score = 1.0
-                info_msg = ""
-            else:
-                final_score = 0.0
-                info_msg = f"Expected Cantonese but detected '{norm_detected}' which is not Cantonese."
-
-        elif norm_expected == norm_detected:
+        if norm_expected == norm_detected:
             # Simple binary scoring: 1.0 if match, -1.0 if mismatch
             final_score = 1.0
             info_msg = ""

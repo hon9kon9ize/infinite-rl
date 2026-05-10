@@ -14,9 +14,16 @@ Integrates:
 - Custom reward functions from Infinite-RL for task evaluation
 """
 
-# import unsloth
-import json
 import argparse
+import atexit
+import faulthandler
+import json
+import logging
+import os
+import signal
+import sys
+import threading
+import time
 from pathlib import Path
 from typing import Optional, List, Callable
 from dataclasses import dataclass, asdict
@@ -36,6 +43,246 @@ from peft import LoraConfig, get_peft_model, TaskType
 from infinite_rl.curriculum import CurriculumLearning
 from infinite_rl.dynamic_dataset import DynamicCurriculumDataset
 import functools
+
+
+logger = logging.getLogger("infinite_rl.train")
+_FAULTHANDLER_FILES = []
+
+
+def _get_env_value(*names: str, default: str = "unknown") -> str:
+    """Return the first non-empty environment variable value."""
+    for name in names:
+        value = os.environ.get(name)
+        if value:
+            return value
+    return default
+
+
+class _RankLogFilter(logging.Filter):
+    """Add distributed/HPC context fields to every log record."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.rank = _get_env_value("RANK", "SLURM_PROCID", "LOCAL_RANK")
+        record.local_rank = _get_env_value("LOCAL_RANK", "SLURM_LOCALID")
+        record.world_size = _get_env_value("WORLD_SIZE", "SLURM_NTASKS")
+        record.job_id = _get_env_value("SLURM_JOB_ID", "JOB_ID")
+        return True
+
+
+def setup_training_logging(
+    output_dir: Path,
+    train_log_file: Optional[str] = None,
+    log_level: str = "INFO",
+) -> Path:
+    """Configure flushed file logging for HPC jobs."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    rank = _get_env_value("RANK", "SLURM_PROCID", default="")
+    local_rank = _get_env_value("LOCAL_RANK", "SLURM_LOCALID", default="")
+
+    if train_log_file:
+        log_path = Path(train_log_file)
+        if not log_path.is_absolute():
+            log_path = output_dir / log_path
+    else:
+        rank_suffix = f".rank{rank}" if rank else ""
+        local_suffix = f".local{local_rank}" if local_rank and local_rank != rank else ""
+        log_path = output_dir / f"train{rank_suffix}{local_suffix}.log"
+
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    numeric_level = getattr(logging, log_level.upper(), logging.INFO)
+    formatter = logging.Formatter(
+        "%(asctime)s %(levelname)s "
+        "[pid=%(process)d rank=%(rank)s local_rank=%(local_rank)s "
+        "world=%(world_size)s job=%(job_id)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    rank_filter = _RankLogFilter()
+    stream_handler = logging.StreamHandler(sys.stderr)
+    stream_handler.setFormatter(formatter)
+    stream_handler.addFilter(rank_filter)
+
+    file_handler = logging.FileHandler(log_path, mode="a", encoding="utf-8")
+    file_handler.setFormatter(formatter)
+    file_handler.addFilter(rank_filter)
+
+    logging.basicConfig(
+        level=numeric_level,
+        handlers=[stream_handler, file_handler],
+        force=True,
+    )
+    logging.captureWarnings(True)
+    _install_exception_logging()
+    _install_faulthandler(log_path)
+
+    logger.info("Logging initialized. train_log_file=%s", log_path)
+    logger.info(
+        "Runtime context: pid=%s rank=%s local_rank=%s world_size=%s slurm_job_id=%s cwd=%s",
+        os.getpid(),
+        _get_env_value("RANK", "SLURM_PROCID"),
+        _get_env_value("LOCAL_RANK", "SLURM_LOCALID"),
+        _get_env_value("WORLD_SIZE", "SLURM_NTASKS"),
+        _get_env_value("SLURM_JOB_ID", "JOB_ID"),
+        Path.cwd(),
+    )
+    return log_path
+
+
+def _install_exception_logging() -> None:
+    """Log uncaught exceptions from the main thread and background threads."""
+
+    def log_excepthook(exc_type, exc_value, exc_traceback):
+        logger.critical(
+            "Uncaught exception",
+            exc_info=(exc_type, exc_value, exc_traceback),
+        )
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+
+    sys.excepthook = log_excepthook
+
+    if hasattr(threading, "excepthook"):
+        original_threading_excepthook = threading.excepthook
+
+        def log_thread_excepthook(args):
+            logger.critical(
+                "Uncaught exception in thread %s",
+                args.thread.name if args.thread else "<unknown>",
+                exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
+            )
+            original_threading_excepthook(args)
+
+        threading.excepthook = log_thread_excepthook
+
+
+def _install_faulthandler(log_path: Path) -> None:
+    """Enable low-level Python traceback dumps into the training log."""
+    try:
+        fh = open(log_path, "a", encoding="utf-8", buffering=1)
+        _FAULTHANDLER_FILES.append(fh)
+        faulthandler.enable(file=fh, all_threads=True)
+        if hasattr(signal, "SIGUSR1"):
+            faulthandler.register(signal.SIGUSR1, file=fh, all_threads=True)
+            logger.info(
+                "Faulthandler enabled. Send SIGUSR1 to pid=%s to dump all Python thread stacks.",
+                os.getpid(),
+            )
+        atexit.register(_close_faulthandler_files)
+    except Exception:
+        logger.warning("Could not enable faulthandler logging", exc_info=True)
+
+
+def _close_faulthandler_files() -> None:
+    try:
+        faulthandler.disable()
+    except Exception:
+        pass
+    for fh in _FAULTHANDLER_FILES:
+        try:
+            fh.close()
+        except Exception:
+            pass
+
+
+def _runtime_diagnostics() -> str:
+    """Return compact CPU/GPU memory diagnostics for heartbeat logs."""
+    parts = []
+    try:
+        import resource
+
+        # macOS reports ru_maxrss in bytes; Linux reports KiB. HPC is almost
+        # always Linux, but keep the value labelled to avoid false precision.
+        parts.append(f"maxrss={resource.getrusage(resource.RUSAGE_SELF).ru_maxrss}")
+    except Exception:
+        pass
+
+    try:
+        if torch.cuda.is_available():
+            device = torch.cuda.current_device()
+            allocated_gb = torch.cuda.memory_allocated(device) / (1024**3)
+            reserved_gb = torch.cuda.memory_reserved(device) / (1024**3)
+            parts.append(
+                f"cuda_device={device} cuda_allocated_gb={allocated_gb:.2f} "
+                f"cuda_reserved_gb={reserved_gb:.2f}"
+            )
+        else:
+            parts.append("cuda_available=False")
+    except Exception as exc:
+        parts.append(f"cuda_diagnostics_error={exc}")
+
+    return " ".join(parts)
+
+
+class TrainingProgressState:
+    """Thread-safe state shared by callbacks, reward code, and heartbeat logs."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.phase = "starting"
+        self.event = "init"
+        self.trainer_step = 0
+        self.curriculum_step = 0
+        self.last_reward_task = None
+        self.last_event_monotonic = time.monotonic()
+
+    def update(self, **kwargs) -> None:
+        with self._lock:
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+            self.last_event_monotonic = time.monotonic()
+
+    def snapshot(self) -> dict:
+        with self._lock:
+            return {
+                "phase": self.phase,
+                "event": self.event,
+                "trainer_step": self.trainer_step,
+                "curriculum_step": self.curriculum_step,
+                "last_reward_task": self.last_reward_task,
+                "idle_seconds": time.monotonic() - self.last_event_monotonic,
+            }
+
+
+class TrainingHeartbeat:
+    """Periodic alive/progress log for long HPC jobs."""
+
+    def __init__(self, state: TrainingProgressState, interval_seconds: int):
+        self.state = state
+        self.interval_seconds = interval_seconds
+        self._stop_event = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+
+    def start(self) -> None:
+        if self.interval_seconds <= 0:
+            logger.info("Heartbeat logging disabled")
+            return
+        self._thread = threading.Thread(
+            target=self._run,
+            name="training-heartbeat",
+            daemon=True,
+        )
+        self._thread.start()
+        logger.info("Heartbeat logging started. interval_seconds=%s", self.interval_seconds)
+
+    def stop(self) -> None:
+        self._stop_event.set()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=5)
+        logger.info("Heartbeat logging stopped")
+
+    def _run(self) -> None:
+        while not self._stop_event.wait(self.interval_seconds):
+            snapshot = self.state.snapshot()
+            logger.info(
+                "heartbeat phase=%s event=%s trainer_step=%s curriculum_step=%s "
+                "last_reward_task=%s idle_seconds=%.1f %s",
+                snapshot["phase"],
+                snapshot["event"],
+                snapshot["trainer_step"],
+                snapshot["curriculum_step"],
+                snapshot["last_reward_task"],
+                snapshot["idle_seconds"],
+                _runtime_diagnostics(),
+            )
 
 
 def make_json_serializable(obj):
@@ -63,6 +310,21 @@ def make_json_serializable(obj):
             return str(obj)
     else:
         return obj
+
+
+def _summarize_scores(scores: List[float]) -> str:
+    if not scores:
+        return "count=0"
+    numeric_scores = [float(score) for score in scores]
+    preview = ", ".join(f"{score:.4f}" for score in numeric_scores[:8])
+    if len(numeric_scores) > 8:
+        preview += ", ..."
+    return (
+        f"count={len(numeric_scores)} min={min(numeric_scores):.4f} "
+        f"max={max(numeric_scores):.4f} "
+        f"avg={sum(numeric_scores) / len(numeric_scores):.4f} "
+        f"values=[{preview}]"
+    )
 
 
 @dataclass
@@ -174,18 +436,25 @@ def build_dynamic_dataset(
     Returns:
         DynamicCurriculumDataset instance
     """
+    learning_stats = curriculum.get_learning_stats()
+    logger.info(
+        "Creating dynamic dataset. num_samples=%s current_level=%s num_generations=%s",
+        num_samples,
+        learning_stats.get("current_level"),
+        curriculum.num_generations,
+    )
     print(f"\n[DEBUG] Creating dynamic dataset:")
     print(f"  - Virtual size: {num_samples} samples")
     print(f"  - Prompts generated on-demand from curriculum")
-    print(
-        f"  - Current curriculum level: {curriculum.get_learning_stats()['current_level']}"
-    )
+    print(f"  - Current curriculum level: {learning_stats['current_level']}")
 
     return DynamicCurriculumDataset(curriculum, num_samples)
 
 
 def create_curriculum_reward_func(
     curriculum: CurriculumLearning,
+    progress_state: Optional[TrainingProgressState] = None,
+    log_reward_batches: bool = True,
 ) -> Callable:
     """Create a reward function compatible with GRPOTrainer.
 
@@ -218,6 +487,21 @@ def create_curriculum_reward_func(
         task_metadata = kwargs.get("task_metadata")
         from collections import defaultdict
 
+        reward_batch_started = time.monotonic()
+        if progress_state is not None:
+            progress_state.update(
+                phase="reward_batch",
+                event="reward_batch_start",
+                curriculum_step=curriculum.global_step,
+            )
+        if log_reward_batches:
+            logger.info(
+                "reward_batch_start completions=%s metadata_present=%s curriculum_step=%s",
+                len(completions),
+                bool(task_metadata),
+                curriculum.global_step,
+            )
+
         # CRITICAL: Preserve original completion order by storing (index, completion) pairs
         # This prevents rewards from being assigned to wrong generations
         indexed_completions = []  # List of (original_index, task_id, completion)
@@ -233,11 +517,19 @@ def create_curriculum_reward_func(
             indexed_completions.append((i, task_id, completion))
             grouped[task_id].append((i, completion))
 
+        if log_reward_batches:
+            logger.info(
+                "reward_batch_grouped task_count=%s task_ids=%s",
+                len(grouped),
+                list(grouped.keys())[:20],
+            )
+
         # Collect all rewards with their original indices
         reward_with_index = {}  # original_index -> reward_score
 
         # Process each task's completions in batch
         for task_id, index_completion_list in grouped.items():
+            task_started = time.monotonic()
             try:
                 # Extract content from TRL's chat format for all completions
                 completion_texts = []
@@ -261,6 +553,29 @@ def create_curriculum_reward_func(
                     else:
                         completion_texts.append(completion_text)
 
+                output_lengths = [len(text) for text in completion_texts]
+                task = curriculum.session.get_task(task_id)
+                task_type = getattr(task, "task_type", "unknown")
+                task_level = getattr(task, "level", "unknown")
+                if progress_state is not None:
+                    progress_state.update(
+                        phase="reward_task",
+                        event="reward_task_start",
+                        curriculum_step=curriculum.global_step,
+                        last_reward_task=task_id,
+                    )
+                if log_reward_batches:
+                    logger.info(
+                        "reward_task_start task_id=%s task_type=%s level=%s "
+                        "completion_count=%s output_len_min=%s output_len_max=%s",
+                        task_id,
+                        task_type,
+                        task_level,
+                        len(completion_texts),
+                        min(output_lengths) if output_lengths else 0,
+                        max(output_lengths) if output_lengths else 0,
+                    )
+
                 # Compute rewards for all completions in batch
                 # Returns combined_scores (includes LLM Judge if batch complete)
                 batch_scores = curriculum.compute_rewards(task_id, completion_texts)
@@ -269,7 +584,29 @@ def create_curriculum_reward_func(
                 for idx, score in zip(indices, batch_scores):
                     reward_with_index[idx] = float(score)
 
+                if progress_state is not None:
+                    progress_state.update(
+                        phase="reward_task",
+                        event="reward_task_end",
+                        curriculum_step=curriculum.global_step,
+                        last_reward_task=task_id,
+                    )
+                if log_reward_batches:
+                    logger.info(
+                        "reward_task_end task_id=%s duration_sec=%.2f "
+                        "curriculum_step=%s scores=%s",
+                        task_id,
+                        time.monotonic() - task_started,
+                        curriculum.global_step,
+                        _summarize_scores(batch_scores),
+                    )
+
             except Exception as e:
+                logger.exception(
+                    "reward_task_failed task_id=%s duration_sec=%.2f",
+                    task_id,
+                    time.monotonic() - task_started,
+                )
                 print(f"Warning: Error computing reward for task {task_id}: {e}")
                 # Add zero scores for all completions in this task
                 for idx, _ in index_completion_list:
@@ -277,6 +614,19 @@ def create_curriculum_reward_func(
 
         # Reconstruct rewards in original order
         rewards_list = [reward_with_index.get(i, 0.0) for i in range(len(completions))]
+        if progress_state is not None:
+            progress_state.update(
+                phase="reward_batch",
+                event="reward_batch_end",
+                curriculum_step=curriculum.global_step,
+            )
+        if log_reward_batches:
+            logger.info(
+                "reward_batch_end duration_sec=%.2f curriculum_step=%s rewards=%s",
+                time.monotonic() - reward_batch_started,
+                curriculum.global_step,
+                _summarize_scores(rewards_list),
+            )
         return rewards_list
 
     return reward_func
@@ -305,6 +655,20 @@ class CurriculumLoggingCallback(TrainerCallback):
         if state.global_step - self.last_log_step >= self.log_every_n_steps:
             stats = self.curriculum.get_learning_stats()
             current_level = stats.get("current_level", 0)
+            judge_stats = (
+                self.curriculum.get_judge_scores()
+                if self.curriculum.use_llm_judge and wandb.run is not None
+                else {"enabled": self.curriculum.use_llm_judge}
+            )
+            logger.info(
+                "curriculum_stats trainer_step=%s curriculum_step=%s current_level=%s "
+                "sliding_window=%s judge=%s",
+                state.global_step,
+                self.curriculum.global_step,
+                current_level,
+                make_json_serializable(stats.get("sliding_window_stats", {})),
+                make_json_serializable(judge_stats),
+            )
 
             # Log to wandb
             if wandb.run is not None:
@@ -341,17 +705,16 @@ class CurriculumLoggingCallback(TrainerCallback):
 
                 # Log judge scores (if LLM Judge enabled)
                 if self.curriculum.use_llm_judge:
-                    truthy_stats = self.curriculum.get_judge_scores()
-                    wandb_logs["curriculum/judge/avg_judge_score"] = truthy_stats.get(
+                    wandb_logs["curriculum/judge/avg_judge_score"] = judge_stats.get(
                         "avg_judge_score", 0.0
                     )
-                    wandb_logs["curriculum/judge/min_judge_score"] = truthy_stats.get(
+                    wandb_logs["curriculum/judge/min_judge_score"] = judge_stats.get(
                         "min_judge_score", 0.0
                     )
-                    wandb_logs["curriculum/judge/max_judge_score"] = truthy_stats.get(
+                    wandb_logs["curriculum/judge/max_judge_score"] = judge_stats.get(
                         "max_judge_score", 0.0
                     )
-                    wandb_logs["curriculum/judge/count"] = truthy_stats.get(
+                    wandb_logs["curriculum/judge/count"] = judge_stats.get(
                         "judge_score_count", 0
                     )
 
@@ -409,6 +772,124 @@ class CurriculumLoggingCallback(TrainerCallback):
                 wandb.log(wandb_logs)
 
             self.last_log_step = state.global_step
+
+
+class TrainingDiagnosticsCallback(TrainerCallback):
+    """File-backed trainer progress logs for detecting hangs."""
+
+    def __init__(
+        self,
+        progress_state: TrainingProgressState,
+        curriculum: CurriculumLearning,
+        log_every_n_steps: int = 1,
+    ):
+        self.progress_state = progress_state
+        self.curriculum = curriculum
+        self.log_every_n_steps = max(1, log_every_n_steps)
+
+    def _should_log(self, step: int) -> bool:
+        return step <= 1 or step % self.log_every_n_steps == 0
+
+    def on_train_begin(self, args, state, control, **kwargs):
+        self.progress_state.update(
+            phase="training",
+            event="train_begin",
+            trainer_step=state.global_step,
+            curriculum_step=self.curriculum.global_step,
+        )
+        logger.info(
+            "train_begin max_steps=%s num_train_epochs=%s train_batch_size=%s "
+            "gradient_accumulation_steps=%s %s",
+            state.max_steps,
+            args.num_train_epochs,
+            args.per_device_train_batch_size,
+            args.gradient_accumulation_steps,
+            _runtime_diagnostics(),
+        )
+
+    def on_step_begin(self, args, state, control, **kwargs):
+        next_step = state.global_step + 1
+        self.progress_state.update(
+            phase="training_step",
+            event="step_begin",
+            trainer_step=next_step,
+            curriculum_step=self.curriculum.global_step,
+        )
+        if self._should_log(next_step):
+            logger.info(
+                "step_begin step=%s epoch=%s curriculum_step=%s %s",
+                next_step,
+                state.epoch,
+                self.curriculum.global_step,
+                _runtime_diagnostics(),
+            )
+
+    def on_step_end(self, args, state, control, **kwargs):
+        self.progress_state.update(
+            phase="training_step",
+            event="step_end",
+            trainer_step=state.global_step,
+            curriculum_step=self.curriculum.global_step,
+        )
+        if self._should_log(state.global_step):
+            logger.info(
+                "step_end step=%s epoch=%s curriculum_step=%s should_save=%s "
+                "should_log=%s should_evaluate=%s %s",
+                state.global_step,
+                state.epoch,
+                self.curriculum.global_step,
+                control.should_save,
+                control.should_log,
+                control.should_evaluate,
+                _runtime_diagnostics(),
+            )
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        self.progress_state.update(
+            phase="training",
+            event="trainer_log",
+            trainer_step=state.global_step,
+            curriculum_step=self.curriculum.global_step,
+        )
+        logger.info(
+            "trainer_log step=%s logs=%s",
+            state.global_step,
+            json.dumps(make_json_serializable(logs or {}), sort_keys=True),
+        )
+
+    def on_save(self, args, state, control, **kwargs):
+        self.progress_state.update(
+            phase="checkpoint",
+            event="save_begin_or_end",
+            trainer_step=state.global_step,
+            curriculum_step=self.curriculum.global_step,
+        )
+        logger.info(
+            "checkpoint_event step=%s output_dir=%s curriculum_step=%s",
+            state.global_step,
+            args.output_dir,
+            self.curriculum.global_step,
+        )
+
+    def on_epoch_begin(self, args, state, control, **kwargs):
+        logger.info("epoch_begin epoch=%s step=%s", state.epoch, state.global_step)
+
+    def on_epoch_end(self, args, state, control, **kwargs):
+        logger.info("epoch_end epoch=%s step=%s", state.epoch, state.global_step)
+
+    def on_train_end(self, args, state, control, **kwargs):
+        self.progress_state.update(
+            phase="training",
+            event="train_end",
+            trainer_step=state.global_step,
+            curriculum_step=self.curriculum.global_step,
+        )
+        logger.info(
+            "train_end step=%s curriculum_step=%s %s",
+            state.global_step,
+            self.curriculum.global_step,
+            _runtime_diagnostics(),
+        )
 
 
 def setup_training_args(
@@ -704,6 +1185,37 @@ def main():
         default=10,
         help="Log curriculum stats to W&B every N training steps (default: 10)",
     )
+    parser.add_argument(
+        "--train_log_file",
+        type=str,
+        default=None,
+        help="Detailed training log file. Relative paths are written under output_dir. "
+        "Defaults to output_dir/train[.rankN].log.",
+    )
+    parser.add_argument(
+        "--log_level",
+        type=str,
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Python logging level for the detailed training log (default: INFO).",
+    )
+    parser.add_argument(
+        "--log_train_steps",
+        type=int,
+        default=1,
+        help="Write trainer step begin/end diagnostics every N steps (default: 1).",
+    )
+    parser.add_argument(
+        "--log_heartbeat_seconds",
+        type=int,
+        default=120,
+        help="Write an alive/progress heartbeat every N seconds. Set 0 to disable.",
+    )
+    parser.add_argument(
+        "--disable_reward_batch_logging",
+        action="store_true",
+        help="Disable detailed reward batch start/end timing logs.",
+    )
 
     # LLM Judge arguments
     parser.add_argument(
@@ -834,6 +1346,25 @@ def main():
 
     args = parser.parse_args()
 
+    output_dir = Path(args.output_dir)
+    train_log_path = setup_training_logging(
+        output_dir=output_dir,
+        train_log_file=args.train_log_file,
+        log_level=args.log_level,
+    )
+    progress_state = TrainingProgressState()
+    progress_state.update(phase="startup", event="args_parsed")
+    heartbeat = TrainingHeartbeat(
+        progress_state,
+        interval_seconds=args.log_heartbeat_seconds,
+    )
+    heartbeat.start()
+    logger.info(
+        "Parsed CLI arguments: %s",
+        json.dumps(make_json_serializable(vars(args)), sort_keys=True),
+    )
+    print(f"\nDetailed training log: {train_log_path}")
+
     # Validate quantization arguments
     if args.load_in_4bit and args.load_in_8bit:
         parser.error(
@@ -863,6 +1394,12 @@ def main():
     if args.max_steps is not None:
         # Use max_steps to calculate total samples needed
         num_train_samples = args.max_steps * effective_batch_size
+        logger.info(
+            "Calculated dataset size from max_steps. num_train_samples=%s max_steps=%s effective_batch_size=%s",
+            num_train_samples,
+            args.max_steps,
+            effective_batch_size,
+        )
         print(f"\nCalculated dataset size: {num_train_samples} samples")
         print(
             f"  (max_steps={args.max_steps} * effective_batch={effective_batch_size})"
@@ -872,6 +1409,13 @@ def main():
         # Default to a reasonable number of steps per epoch (e.g., 100)
         steps_per_epoch = 100
         num_train_samples = steps_per_epoch * effective_batch_size
+        logger.info(
+            "Calculated dataset size from epochs. num_train_samples=%s steps_per_epoch=%s effective_batch_size=%s epochs=%s",
+            num_train_samples,
+            steps_per_epoch,
+            effective_batch_size,
+            args.num_train_epochs,
+        )
         print(f"\nCalculated dataset size: {num_train_samples} samples per epoch")
         print(
             f"  (steps_per_epoch={steps_per_epoch} * effective_batch={effective_batch_size})"
@@ -880,6 +1424,13 @@ def main():
 
     # Initialize W&B if enabled
     if args.use_wandb:
+        progress_state.update(phase="wandb_init", event="wandb_init_start")
+        logger.info(
+            "Initializing W&B. project=%s entity=%s run_name=%s",
+            args.wandb_project,
+            args.wandb_entity,
+            args.wandb_run_name,
+        )
         wandb_config = {
             "model": args.model_name,
             "learning_rate": args.learning_rate,
@@ -907,17 +1458,21 @@ def main():
             config=wandb_config,
             tags=["grpo", "curriculum", "infinite-rl", "vllm-colocate"],
         )
+        progress_state.update(phase="wandb_init", event="wandb_init_end")
+        logger.info("W&B initialized")
         print("\n✓ W&B initialized for run tracking")
 
     # Setup paths
-    output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 80)
     print("Infinite-RL + GRPO Training (vLLM Colocate Mode)")
     print("=" * 80)
+    logger.info("Starting Infinite-RL + GRPO training setup")
 
     # Initialize curriculum
+    progress_state.update(phase="curriculum_init", event="curriculum_init_start")
+    logger.info("Initializing curriculum")
     print("\n1. Initializing Infinite-RL curriculum...")
     curriculum_config = InfiniteRLConfig(
         warmup_step=args.warmup_step,
@@ -939,6 +1494,16 @@ def main():
         log_file=str(output_dir / "curriculum_learning_log.jsonl"),
     )
     curriculum = create_curriculum(curriculum_config)
+    progress_state.update(
+        phase="curriculum_init",
+        event="curriculum_init_end",
+        curriculum_step=curriculum.global_step,
+    )
+    logger.info(
+        "Curriculum initialized. stats=%s config=%s",
+        make_json_serializable(curriculum.get_learning_stats()),
+        make_json_serializable(asdict(curriculum_config)),
+    )
     print(f"   ✓ Curriculum initialized")
     print(f"   - Learning stats: {curriculum.get_learning_stats()}")
     if args.pre_reasoning_dataset:
@@ -947,6 +1512,12 @@ def main():
         print(f"   - Pre-reasoning sampling rate: {pre_reasoning_learning_rate}")
 
     # Load model and tokenizer
+    progress_state.update(phase="model_load", event="model_load_start")
+    logger.info(
+        "Loading model and tokenizer. model_name=%s quantized=%s device_map_pending=True",
+        args.model_name,
+        args.load_in_4bit or args.load_in_8bit,
+    )
     print(f"\n2. Loading model & tokenizer: {args.model_name}...")
 
     # Prepare quantization config if requested
@@ -988,6 +1559,15 @@ def main():
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    progress_state.update(phase="model_load", event="model_load_end")
+    logger.info(
+        "Model and tokenizer loaded. model_type=%s parameter_count=%s vocab_size=%s tokenizer_size=%s %s",
+        model.config.model_type,
+        sum(p.numel() for p in model.parameters()),
+        model.config.vocab_size,
+        len(tokenizer),
+        _runtime_diagnostics(),
+    )
     print(f"   ✓ Model loaded: {model.config.model_type}")
     print(f"   - Parameters: {sum(p.numel() for p in model.parameters()):,}")
     if args.load_in_4bit or args.load_in_8bit:
@@ -997,6 +1577,11 @@ def main():
 
     # # Verify vocab consistency
     if len(tokenizer) != model.config.vocab_size:
+        logger.warning(
+            "Vocab size mismatch. tokenizer_size=%s model_config_vocab_size=%s",
+            len(tokenizer),
+            model.config.vocab_size,
+        )
         print(f"\n   ⚠️  WARNING: Vocab size mismatch!")
         print(
             f"     Tokenizer: {len(tokenizer)}, Model config: {model.config.vocab_size}"
@@ -1005,6 +1590,13 @@ def main():
 
     # Apply LoRA if requested
     if args.use_lora:
+        progress_state.update(phase="lora_init", event="lora_init_start")
+        logger.info(
+            "Applying LoRA. r=%s alpha=%s dropout=%s",
+            args.lora_r,
+            args.lora_alpha,
+            args.lora_dropout,
+        )
         print(f"\n   Applying LoRA (Parameter-Efficient Fine-Tuning)...")
         lora_config = create_lora_config(
             lora_r=args.lora_r,
@@ -1013,25 +1605,44 @@ def main():
         )
         model = get_peft_model(model, lora_config)
         model.print_trainable_parameters()
+        progress_state.update(phase="lora_init", event="lora_init_end")
+        logger.info("LoRA applied. %s", _runtime_diagnostics())
         print(f"   ✓ LoRA applied successfully")
 
     # Build dynamic dataset that generates prompts on-demand
+    progress_state.update(phase="dataset_init", event="dataset_init_start")
+    logger.info("Creating dynamic curriculum dataset. num_train_samples=%s", num_train_samples)
     print(f"\n3. Creating dynamic curriculum dataset...")
     train_dataset = build_dynamic_dataset(
         curriculum,
         num_samples=num_train_samples,
     )
+    progress_state.update(phase="dataset_init", event="dataset_init_end")
+    logger.info("Dynamic dataset created. len=%s", len(train_dataset))
     print(f"   ✓ Dynamic dataset created (size: {len(train_dataset)} samples)")
     print(f"   - Prompts generated on-demand from current curriculum level")
     print(f"   - Dataset size matches training batch configuration")
     print(f"   - No pre-generation or refresh needed!")
 
     # Create reward function
+    progress_state.update(phase="reward_func_init", event="reward_func_init_start")
+    logger.info(
+        "Creating reward function. reward_batch_logging=%s",
+        not args.disable_reward_batch_logging,
+    )
     print("\n4. Creating Infinite-RL-based reward function...")
-    reward_func = create_curriculum_reward_func(curriculum)
+    reward_func = create_curriculum_reward_func(
+        curriculum,
+        progress_state=progress_state,
+        log_reward_batches=not args.disable_reward_batch_logging,
+    )
+    progress_state.update(phase="reward_func_init", event="reward_func_init_end")
+    logger.info("Reward function created")
     print(f"   ✓ Reward function created")
 
     # Setup training configuration
+    progress_state.update(phase="training_args_init", event="training_args_init_start")
+    logger.info("Setting up GRPO training configuration")
     print("\n5. Setting up GRPO training configuration (vLLM colocate mode)...")
     grpo_kwargs = {}
     if args.dapo:
@@ -1057,6 +1668,11 @@ def main():
     if args.enable_thinking:
         training_args.chat_template_kwargs = {"enable_thinking": True}
 
+    progress_state.update(phase="training_args_init", event="training_args_init_end")
+    logger.info(
+        "Training configuration ready. config=%s",
+        json.dumps(make_json_serializable(training_args.to_dict()), sort_keys=True),
+    )
     print(f"   ✓ Training configuration ready")
     print(f"   - Batch size (per device): {training_args.per_device_train_batch_size}")
     print(f"   - Number of generations: {training_args.num_generations}")
@@ -1080,10 +1696,26 @@ def main():
         print(f"   - Loss type: DAPO (Decoupled Advantage Policy Optimization)")
 
     # Initialize trainer
+    progress_state.update(phase="trainer_init", event="trainer_init_start")
+    logger.info("Initializing GRPO trainer")
     print("\n6. Initializing GRPO trainer...")
 
     # Setup callbacks for curriculum logging
     callbacks = []
+    diagnostics_callback = TrainingDiagnosticsCallback(
+        progress_state=progress_state,
+        curriculum=curriculum,
+        log_every_n_steps=args.log_train_steps,
+    )
+    callbacks.append(diagnostics_callback)
+    print(
+        f"   - Added training diagnostics callback (log every {args.log_train_steps} steps)"
+    )
+    logger.info(
+        "Added training diagnostics callback. log_train_steps=%s",
+        args.log_train_steps,
+    )
+
     curriculum_callback = CurriculumLoggingCallback(
         curriculum=curriculum,
         log_every_n_steps=args.log_curriculum_steps,
@@ -1101,6 +1733,8 @@ def main():
         processing_class=tokenizer,
         callbacks=callbacks if callbacks else None,
     )
+    progress_state.update(phase="trainer_init", event="trainer_init_end")
+    logger.info("Trainer initialized. %s", _runtime_diagnostics())
     print(f"   ✓ Trainer initialized")
 
     # Save configuration
@@ -1134,20 +1768,46 @@ def main():
 
     with open(output_dir / "training_config.json", "w") as f:
         json.dump(config_dict, f, indent=2)
+    logger.info("Training configuration saved to %s", output_dir / "training_config.json")
     print(f"   ✓ Configuration saved to {output_dir / 'training_config.json'}")
 
     # Start training
+    progress_state.update(phase="training", event="trainer_train_start")
+    logger.info("Starting trainer.train()")
     print("\n7. Starting GRPO training...")
     print("=" * 80)
 
-    trainer.train()
+    try:
+        trainer.train()
+    except Exception:
+        logger.exception(
+            "trainer.train() failed at trainer_step=%s curriculum_step=%s",
+            progress_state.snapshot()["trainer_step"],
+            curriculum.global_step,
+        )
+        raise
+    progress_state.update(
+        phase="training",
+        event="trainer_train_end",
+        curriculum_step=curriculum.global_step,
+    )
+    logger.info("trainer.train() finished. curriculum_step=%s", curriculum.global_step)
     print("=" * 80)
+    progress_state.update(phase="model_save", event="final_model_save_start")
+    logger.info("Saving final model to %s", output_dir / "final_model")
     trainer.save_model(str(output_dir / "final_model"))
+    progress_state.update(phase="model_save", event="final_model_save_end")
+    logger.info("Final model saved to %s", output_dir / "final_model")
     print(f"✓ Final model saved to {output_dir / 'final_model'}")
 
     # Print final curriculum stats
     final_stats = curriculum.get_learning_stats()
     judge_stats = curriculum.get_judge_scores()
+    logger.info(
+        "Final curriculum statistics. stats=%s judge_stats=%s",
+        make_json_serializable(final_stats),
+        make_json_serializable(judge_stats),
+    )
     print(f"\nFinal Curriculum Statistics:")
     print(f"  - Current level: {final_stats['current_level']}")
     print(f"  - Sliding window stats: {final_stats['sliding_window_stats']}")
@@ -1206,12 +1866,15 @@ def main():
 
         wandb.log(final_wandb_logs)
         wandb.finish()
+        logger.info("Final stats logged to W&B")
         print(f"\n✓ Final stats logged to W&B")
 
     # Save final stats
     final_stats_with_judge = {**final_stats, "judge_scores": judge_stats}
     with open(output_dir / "final_stats.json", "w") as f:
         json.dump(final_stats_with_judge, f, indent=2, default=str)
+    logger.info("Final stats saved to %s", output_dir / "final_stats.json")
+    heartbeat.stop()
     print(f"✓ Final stats saved to {output_dir / 'final_stats.json'}")
 
 
